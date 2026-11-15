@@ -2,13 +2,19 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 
 namespace fs = std::filesystem;
 static void expect(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
-template<class F> static void rejects(F f, const char* message) {
-    bool failed = false; try { f(); } catch (const std::exception&) { failed = true; }
-    expect(failed, message);
+template<class F> static std::string rejects(F f, const char* message) {
+    try { f(); } catch (const std::exception& e) { return e.what(); }
+    throw std::runtime_error(message);
+}
+static std::string read_file(const std::string& path) {
+    std::ifstream file(path, std::ios::binary);
+    expect(bool(file), "Expected extracted payload or fixture is missing.");
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
 }
 struct RecordingBackend : moader::Backend {
     moader::RuntimeStatus state;
@@ -83,6 +89,24 @@ int main(int argc, char** argv) {
             expect(!fs::exists(root + "/library/" + title + '/' + name), "Failed import must stay outside library.");
         }
         expect(!fs::exists(root + "/escape"), "Traversal must not escape extraction directory.");
+        moader::Library boundaries(root + "/boundary-tests", backend);
+        for (const char* name : {"boundary", "boundary-repeated", "boundary-empty-final", "boundary-final"}) {
+            const auto mod = boundaries.import_zip(title, name, fixtures + '/' + name + ".zip", name);
+            expect(!mod.requested && mod.has_romfs && mod.files.size() == 1,
+                   "A valid boundary ZIP must import as one disabled payload.");
+            expect(read_file(root + "/boundary-tests/library/" + title + '/' + name + "/romfs/boundary.bin") ==
+                   read_file(fixtures + '/' + name + ".bin"), "Boundary ZIP must extract the exact original bytes.");
+        }
+        for (const char* name : {"boundary-truncated", "boundary-no-end", "boundary-trailing", "boundary-trailing-unread", "boundary-corrupt", "boundary-crc", "boundary-underdeclared"}) {
+            const auto error = rejects([&] { boundaries.import_zip(title, name, fixtures + '/' + name + ".zip", name); },
+                                       "Malformed boundary ZIP must reject.");
+            expect(!fs::exists(root + "/boundary-tests/library/" + title + '/' + name),
+                   "Failed boundary import must stay outside the active library.");
+            if (std::string(name) == "boundary-corrupt" || std::string(name) == "boundary-no-end") {
+                expect(error.find("romfs/boundary.bin") != std::string::npos && error.find("zlib ") != std::string::npos,
+                       "Decoder failure must identify the entry and zlib status.");
+            }
+        }
         library.remove(title, "collision");
         expect(fs::exists(root + "/library/" + title + "/collision/.removed"), "Removed mod must be hidden without invalidating mounted paths.");
         expect(fs::exists(root + "/library/" + title + "/collision/romfs/config.txt"), "An older mounted generation must still be able to open its payload.");
@@ -97,6 +121,6 @@ int main(int argc, char** argv) {
         rejects([] { moader::checked_relative_path("a/../b"); }, "Parent traversal must reject.");
         rejects([] { moader::checked_relative_path("a\\b"); }, "Windows separator must reject.");
         rejects([&] { library.remove(title, "../escape"); }, "Mod ID traversal must reject.");
-        std::cout << "PASS: import, conflicts, publication states, recovery, persistence and hostile ZIP fixtures\n";
+        std::cout << "PASS: import, 32 KiB DEFLATE boundaries, conflicts, publication states, recovery, persistence and hostile ZIP fixtures\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

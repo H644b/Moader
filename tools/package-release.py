@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the recorded prerelease from committed public source and tested binaries."""
+"""Package the recorded prerelease from committed source and pinned binaries."""
 from pathlib import Path, PurePosixPath
 import argparse
 import datetime
@@ -131,7 +131,8 @@ def main():
         'Start with README.md and docs/INSTALLATION.md in this folder.\n'
         'Keep this folder on your computer; do not copy the whole kit to the SD.\n'
         'For ordinary SD installation, use the separate Moader app ZIP.\n\n'
-        'The kit includes the tested Moader app/service and patched HEN.\n'
+        'The kit includes the matched Moader app/service and tested patched HEN.\n'
+        'See docs/VALIDATION.md for host checks and console-test coverage.\n'
         'Preparation fetches pinned official HEN components and upstream host source.\n'
         'It needs Node 24, Python 3.10+ and internet access, not a compiler/SDK.\n'
         'For SmileBASIC, use kurumuz ns2jb on Linux/WSL, or ns2jb/mac2jb on macOS.\n'
@@ -147,7 +148,10 @@ def main():
     (output / 'release-manifest.json').write_text(json.dumps({
         'schema': 1, 'version': spec['version'], 'tag': tag, 'prerelease': spec['prerelease'],
         'repository': spec['repository'], 'sourceCommit': commit,
-        'appAndResidentMatchTestedManifest': True, 'patchedHenSha256': sha(hen),
+        'appAndResidentMatchRecordedManifest': True,
+        'appAndResidentMatchTestedManifest': spec['appAndResidentHardwareTested'],
+        'appAndResidentHardwareTested': spec['appAndResidentHardwareTested'],
+        'patchedHenSha256': sha(hen),
         'upstreamHostSourceBundled': False, 'officialHenArchiveBundled': False,
         'assets': records, 'validation': 'docs/VALIDATION.md',
     }, indent=2) + '\n')

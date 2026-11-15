@@ -43,9 +43,9 @@ The app and browser show native report/event output from closed, bounded snapsho
 
 Use **ZL** in the app or the browser debug panel. Shared settings and requested-state events are useful context, but native operations, acknowledged routing and visible game behavior remain separate observations.
 
-## Hardware validation for this prerelease
+## Original hardware validation
 
-Real-console testing covered resident HTTP, browser ZIP management, shared settings, controller controls and native debug display in both interfaces.
+Real-console testing of the original app/resident pair covered resident HTTP, browser ZIP management, shared settings, controller controls and native debug display in both interfaces. The rebuilt v0.1.0-dev.3 pair fixes ZIP decoding and has host validation only; these console checks have not been repeated on it. HEN and native FS runtime bytes are unchanged.
 
 A bounded Mario Kart 8 Deluxe test used **one equal-sized existing course-preview texture**. In the same running game process, the observed sequence was:
 
@@ -73,4 +73,4 @@ A normal **game-only** software error is expected to leave the resident service 
 
 The catalogue/receipt checks, retained routing objects and snapshot diagnostics have host regression coverage, including sanitizer tests. Host checks complement the bounded hardware validation above; they do not establish compatibility with an untested console environment or mod.
 
-See [Building](BUILDING.md) for the toolchain/tests and [Maintaining](MAINTAINING.md) for backend/release maintenance. End users can use the matched precompiled [release downloads](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2).
+See [Building](BUILDING.md) for the toolchain/tests and [Maintaining](MAINTAINING.md) for backend/release maintenance. End users can use the matched precompiled [release downloads](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3).

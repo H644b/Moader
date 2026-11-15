@@ -6,13 +6,13 @@ The public source includes Moader source, tests, scripts, documentation, licensi
 
 ## Release layout
 
-Use the explicit prerelease tag `v0.1.0-dev.2`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.2/…` or the tag page.
+Use the explicit prerelease tag `v0.1.0-dev.3`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.3/…` or the tag page.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.0-dev.2.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.0-dev.2.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev.2` folder includes `START_HERE.txt` |
+| `Moader-v0.1.0-dev.3.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.1.0-dev.3.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev.3` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the tested app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -26,7 +26,7 @@ The minimal host kit has no `research/` content and does not bundle the full off
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-v0.1.0-dev.3.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
@@ -39,7 +39,7 @@ This descriptor is optional for the populated host kit and for `--build`. Do not
 
 ## Package the committed public source
 
-`config/release.json` records the version/tag, exact tested app/resident/HEN sizes and SHA-256 digests, and the validation document. It describes the tested release inputs. A fresh source rebuild can have different app/resident hashes because of debug paths; do not replace the release pins merely to make packaging pass.
+`config/release.json` records the version/tag, exact app/resident/HEN sizes and SHA-256 digests, and the validation document. Its `appAndResidentHardwareTested` flag records whether the exact app/resident pair has console validation. The v0.1.0-dev.3 pair is rebuilt for the ZIP fix and has host validation only; HEN retains its existing tested digest. A fresh source rebuild can have different app/resident hashes because of debug paths. Record an intentional build and its validation boundary before updating pins; do not replace them merely to make packaging pass.
 
 Finish the intended build and checks, audit the public source, and commit all release source/documentation/config changes before packaging:
 
@@ -47,7 +47,7 @@ Finish the intended build and checks, audit the public source, and commit all re
 python3 tools/package-release.py
 ```
 
-The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.2.zip`, `Moader-backend-v0.1.0-dev.2.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
+The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.3.zip`, `Moader-backend-v0.1.0-dev.3.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
 
 ## Native changes
 

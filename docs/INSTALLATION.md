@@ -1,6 +1,6 @@
 # Install Moader
 
-Use **[v0.1.0-dev.2](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2)** for the host integration update. This updates the host installer and guides: app/service/HEN bytes are unchanged and the app version remains `0.1.0-dev`. The [original release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) and its app ZIP remain available.
+Use **[v0.1.0-dev.3](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3)** for the compressed ZIP import fix. The app and resident service have been rebuilt; HEN and the native filesystem runtime are unchanged. The app version remains `0.1.0-dev`. Host tests pass; these rebuilt binaries have not been console-tested. The [original release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) and its app ZIP remain available.
 
 | Situation | What to do |
 | --- | --- |
@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download the unchanged [Moader-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip).
+1. Download [Moader-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-v0.1.0-dev.3.zip).
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.
@@ -21,7 +21,7 @@ If the matching resident service is running, the app connects to it. Otherwise i
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-backend-v0.1.0-dev.2.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+Download and extract [Moader-backend-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-backend-v0.1.0-dev.3.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
 
 Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
 
@@ -129,6 +129,8 @@ In WSL, `node -p 'process.platform'` must print `linux`. Keep acquisition and in
 
 ## Updating
 
-`v0.1.0-dev.2` changes the host kit/docs only; existing app/service/HEN bytes and app display version stay `0.1.0-dev`. Keep matched components. A later backend update needs its own qualified bootstrap; copying a new NSO does not hot-reload it.
+`v0.1.0-dev.3` fixes compressed ZIP imports in both the app and resident service. Keep the NRO and NSO matched. **Resident browser uploads need the updated service running:** copying only the NRO does not update the older service, and copying an NSO to SD does not hot-reload it. Use the updated backend kit for the next supported per-boot setup. A foreground app uses its own ZIP reader.
+
+HEN and native FS runtime inputs are unchanged. This update does not establish a cause or fix for a separate game/system crash. The new app/service build has host validation only; see [Validation](VALIDATION.md#zip-import-fix-in-v010-dev3). The displayed app version remains `0.1.0-dev`; use the release archive or recorded hashes to identify this update.
 
 Preserve user mods and preferences. Recoverable removal retains payloads for older open game objects; do not manually purge them during the boot. See [Troubleshooting](TROUBLESHOOTING.md), [Building](BUILDING.md) and [Maintaining](MAINTAINING.md).

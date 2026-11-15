@@ -6,6 +6,16 @@ The first public prerelease is **v0.1.0-dev**. Its app and resident-service bina
 
 **v0.1.0-dev.2** adds the experimental Civ7 host integration and documentation with unchanged app/service/HEN bytes and app display version `0.1.0-dev`. Host qualification is separate from console acceptance; no new Civ7 console validation is claimed.
 
+**v0.1.0-dev.3** fixes the compressed ZIP reader and rebuilds the app/resident. HEN and the native filesystem runtime are unchanged. The new app/resident binaries have **host validation only**. The console results below were obtained with the original binaries used through v0.1.0-dev.2; they have not been repeated on this rebuilt pair.
+
+## ZIP import fix in v0.1.0-dev.3
+
+[Issue #4](https://github.com/H644b/Moader/issues/4) identified a valid DEFLATE stream that Moader rejected when compressed input and expanded output exhausted their 32 KiB buffers together. A following empty-input pump returned `Z_BUF_ERROR`. The reader now refills only when that call made no input/output progress and declared compressed input remains. Actual EOF still requires `Z_STREAM_END`; bounds, CRC, length, trailing-data and path checks remain enforced. Decoder failures include the entry name and numeric zlib status.
+
+The synthetic regression failed against the old production reader. After the fix, both AddressSanitizer/UndefinedBehaviorSanitizer core variants pass: valid first/repeated boundaries, an empty final block and exact-boundary completion extract byte-for-byte as disabled imports. Truncated streams, missing final blocks, trailing compressed data in buffered or unread input, invalid blocks, bad CRCs and underdeclared sizes reject without publishing a library entry. Existing core and real HTTP regressions pass as well. Native NRO/NSO builds succeed with the pinned SDK.
+
+No console installation or reproduction of the ZIP boundary fix has been performed for this build. This import failure is separate from the reported Z-A game/system crash; no fix for that crash is claimed.
+
 ## On a Switch 2
 
 - kaiHEN launched hbmenu and the graphical Moader app. Native Settings, controller navigation, screenshot/report export, six-digit pairing and browser management were exercised.
