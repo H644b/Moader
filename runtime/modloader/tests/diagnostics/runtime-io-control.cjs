@@ -1,6 +1,9 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const repo=path.resolve(__dirname,'../..'),root=fs.mkdtempSync(path.join(os.tmpdir(),'runtime-io-control-'));
+const repo=path.resolve(__dirname,'../..'),temporary=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'runtime-io-control-'))),root=path.join(temporary,'runtime/modloader');
+fs.mkdirSync(root,{recursive:true});fs.mkdirSync(path.join(temporary,'tools'));fs.mkdirSync(path.join(temporary,'config'));
+for(const name of ['host-session.cjs','host-source-pins.cjs'])fs.copyFileSync(path.join(repo,'../../tools',name),path.join(temporary,'tools',name));
+fs.copyFileSync(path.join(repo,'../../config/civ7-provider.json'),path.join(temporary,'config/civ7-provider.json'));
 fs.copyFileSync(path.join(repo,'install.cjs'),path.join(root,'install.cjs'));fs.symlinkSync(path.join(repo,'lib'),path.join(root,'lib'),'dir');
 function mock(name,exports){const id=require.resolve(name);require(id);require.cache[id].exports=exports;}
 let sdReports=0,installs=0,fail=false,mode='off',loggingCompatible=true;
@@ -40,4 +43,4 @@ async function run(session,automatic=false){
  const logs=fs.readdirSync(path.join(root,'logs')).filter(n=>n.endsWith('.install.json')).map(n=>JSON.parse(fs.readFileSync(path.join(root,'logs',n))));
  assert.equal(logs.length,3);assert(logs.some(log=>log.status==='complete'));
  console.log('Default normal logs, opt-in trace context, no-log control, unchanged mod identity and automatic PC setup reports: passed');
-}finally{fs.rmSync(root,{recursive:true,force:true});}})().catch(error=>{console.error(error.stack);process.exitCode=1;});
+}finally{fs.rmSync(temporary,{recursive:true,force:true});}})().catch(error=>{console.error(error.stack);process.exitCode=1;});

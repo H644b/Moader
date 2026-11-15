@@ -1,6 +1,9 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const repo=path.resolve(__dirname,'../..'),root=fs.mkdtempSync(path.join(os.tmpdir(),'install-timeout-')),run=path.join(root,'switch2-timeouttest'),directory=path.join(root,'state',path.basename(run));
+const repo=path.resolve(__dirname,'../..'),temporary=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'install-timeout-'))),root=path.join(temporary,'runtime/modloader'),run=path.join(root,'switch2-timeouttest'),directory=path.join(root,'state',path.basename(run));
+fs.mkdirSync(root,{recursive:true});fs.mkdirSync(path.join(temporary,'tools'));fs.mkdirSync(path.join(temporary,'config'));
+for(const name of ['host-session.cjs','host-source-pins.cjs'])fs.copyFileSync(path.join(repo,'../../tools',name),path.join(temporary,'tools',name));
+fs.copyFileSync(path.join(repo,'../../config/civ7-provider.json'),path.join(temporary,'config/civ7-provider.json'));
 fs.copyFileSync(path.join(repo,'install.cjs'),path.join(root,'install.cjs'));fs.symlinkSync(path.join(repo,'lib'),path.join(root,'lib'),'dir');
 fs.rmSync(run,{recursive:true,force:true});fs.rmSync(directory,{recursive:true,force:true});fs.mkdirSync(path.join(run,'switch2'),{recursive:true});
 fs.writeFileSync(path.join(run,'result.json'),JSON.stringify({verified:true,rpc:{state:'listening'},completed:false}));fs.writeFileSync(path.join(run,'switch2/fs-execution-current.json'),JSON.stringify({verified:true,file:'proof.json'}));fs.writeFileSync(path.join(run,'proof.json'),JSON.stringify({verified:true,session:path.basename(run)}));
@@ -14,4 +17,4 @@ const diagnostics=require('../../lib/diagnostics.cjs');mock('../../lib/diagnosti
  const status=JSON.parse(fs.readFileSync(path.join(run,'ns2jb-modloader-install.json')));assert.equal(status.status,'stopped');
  const log=fs.readdirSync(path.join(root,'logs')).find(n=>n.endsWith('switch2-timeouttest.install.json'));const report=JSON.parse(fs.readFileSync(path.join(root,'logs',log)));assert.equal(report.stage,'creating SD reports');assert.equal(report.requiresInspectionOrReboot,true);fs.unlinkSync(path.join(root,'logs',log));
  console.log('Installer timeout retains its exact stage and does not continue, replay or clean up uncertain native requests: passed');
-}finally{fs.rmSync(run,{recursive:true,force:true});fs.rmSync(root,{recursive:true,force:true});}})().catch(e=>{console.error(e.stack);process.exitCode=1;});
+}finally{fs.rmSync(temporary,{recursive:true,force:true});}})().catch(e=>{console.error(e.stack);process.exitCode=1;});
