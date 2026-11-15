@@ -77,7 +77,7 @@ RuntimeStatus RuntimeBackend::status() const {
 }
 void RuntimeBackend::publish(uint64_t generation, const std::vector<Mod>& mods) {
     std::vector<Entry> entries;
-    for (const auto& mod : mods) if (mod.requested) {
+    for (const auto& mod : mods) if (mod.requested && mod.load_allowed) {
         if (!valid_title_id(mod.title_id) || !valid_mod_id(mod.id)) throw std::runtime_error("Invalid mod catalogue identity.");
         if (!mod.valid_source) throw std::runtime_error(mod.detail);
         for (const auto& path : mod.files) {

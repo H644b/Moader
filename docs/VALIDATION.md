@@ -8,6 +8,20 @@ The first public prerelease is **v0.1.0-dev**. Its app and resident-service bina
 
 **v0.1.0-dev.3** fixes the compressed ZIP reader and rebuilds the app/resident. HEN and the native filesystem runtime are unchanged. The new app/resident binaries have **host validation only**. The console results below were obtained with the original binaries used through v0.1.0-dev.2; they have not been repeated on this rebuilt pair.
 
+**v0.1.0-dev.4** rebuilds the app/resident for cached inventory, scan recovery, native error separation and game-card gating. It retains dev.3's ZIP fix. The new app/resident have **host validation only**; original console results below are not evidence for this new pair or cartridge insertion/removal behavior.
+
+## Library recovery and game-card checks in v0.1.0-dev.4
+
+Actual production Library/ZIP code runs under AddressSanitizer and UndefinedBehaviorSanitizer with deterministic injected stat, directory-open and directory-read faults. An 800-file synthetic library remains available without payload stat calls during state polling. A decoder pause verifies snapshots, settings and busy-write rejection complete before extraction resumes. An already-enabled cartridge request is withdrawn while the decoder remains paused; the completed import merges the current cache and does not resurrect the withdrawn route. Failed complete scans retain the prior list/generation without publishing partial routing; initial unavailability is distinct from an empty library. Manual external additions invalidate old selections, and stable rescans avoid redundant publication.
+
+Actual native dispatcher and renderer checks cover stale selection errors versus healthy/genuine runtime results, retained and initially unavailable inventory, controller copy selection, persistence and input/generation bounds. Real loopback HTTP checks cover authenticated source selection and rescan, cross-origin rejection, retained state during a failed scan and recovery. ZIP inputs cannot set the title-level copy choice.
+
+The production availability provider uses real SDK declarations with fake NS/NCM calls. Fixtures cover absent/matching/wrong/multi-title cards, key-card data, explicit Digital mode, update-only/missing/partial base content, Program presence, service failures, count limits, changing snapshots, exact application IDs and bounded NX/Ounce/validated Edition identity mapping, including the Z-A relationship. Lifecycle checks balance service/database/storage cleanup. No real service permission, game-card response, digital license, title launch or console test is implied by these fixtures.
+
+Blocked mods are omitted before backend payload validation. Composed regressions cover an SD scan error followed by failed routing withdrawal, retry with unchanged availability, retention of the inventory warning and recovery only after a full successful scan. Withdrawal details remain qualified by publication/receipt state. The supported installer initializes an empty catalogue before attaching the FS runtime and admits no separate legacy mod plan. Already open mounts, preexisting loaded code and a card removed immediately after an observation remain outside a universal instantaneous-revocation guarantee. [Policy and source references](CARTRIDGES.md).
+
+The fatal Minecraft/hbmenu system restart remains unconfirmed. Reproducing manager defects and fixing them does not establish that fatal's cause. No card contents, game payloads, device captures, pairing values or personal data are published with these tests.
+
 ## ZIP import fix in v0.1.0-dev.3
 
 [Issue #4](https://github.com/H644b/Moader/issues/4) identified a valid DEFLATE stream that Moader rejected when compressed input and expanded output exhausted their 32 KiB buffers together. A following empty-input pump returned `Z_BUF_ERROR`. The reader now refills only when that call made no input/output progress and declared compressed input remains. Actual EOF still requires `Z_STREAM_END`; bounds, CRC, length, trailing-data and path checks remain enforced. Decoder failures include the entry name and numeric zlib status.

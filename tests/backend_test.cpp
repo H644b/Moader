@@ -52,6 +52,16 @@ int main(int argc,char** argv) {
         moader::atomic_write(root + "/runtime/log1.bin",std::string(MOADER_LOG_CAPACITY,'\0'));
         expect(backend.events().size() == 2 && library.events_json().find("Runtime: RomFS mounted") != std::string::npos,"Native diagnostic output must reach the debug API.");
         moader::RuntimeBackend next(root,{33,44}); expect(!next.status().connected,"Restarted service must require a fresh native receipt.");
+        moader::RuntimeBackend gated(root + "/gated-backend",{55,66});
+        moader::Mod blocked; blocked.title_id = title; blocked.id = "blocked";
+        blocked.requested = true; blocked.load_allowed = false; blocked.valid_source = false;
+        blocked.detail = "This unavailable payload must not be opened or validated.";
+        blocked.files = {"romfs/missing.bin"};
+        gated.publish(1,{blocked});
+        std::ifstream gated_file(root + "/gated-backend/runtime/catalogue.bin",std::ios::binary);
+        MoaderCatalogueHeader gated_header{};
+        expect(bool(gated_file.read(reinterpret_cast<char*>(&gated_header),sizeof(gated_header))) && gated_header.rows == 0,
+               "An unavailable requested mod must be omitted before source validation or file access.");
         std::cout << "PASS: catalogue publication, epoch and CRC receipts, native errors, disable semantics and runtime logs\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

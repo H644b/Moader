@@ -71,7 +71,7 @@ Moader stores each mod separately under `/moader/library/`, grouped by the game'
 
 For manual copies, use a lowercase Title ID and mod folder names of at most 48 characters containing only lowercase letters, digits, `-` or `_`. Spell the payload folder **`romfs`** in lowercase. `exefs/`, `exefs_patches/`, `romfs.bin` and `exefs.nsp` go at the same level as `romfs/` inside the mod folder.
 
-Enable copied mods through Moader. Let the app manage its state files; do not move, edit or delete an enabled payload while a game is using it. Recoverable removal retains payloads for older open filesystem objects, as described below.
+Choose **Refresh** in the browser after a manual SD copy; the resident also rescans in its background loop. Enable copied mods through Moader. Let the app manage its state files; do not move, edit or delete an enabled payload while a game is using it. Recoverable removal retains payloads for older open filesystem objects, as described below.
 
 ## Enable, disable and remove
 
@@ -84,10 +84,27 @@ Select a mod and switch its requested state, or press **A** in the app. Read the
 | Reopen content | Routing is accepted; make the game read/reopen the relevant content |
 | Relaunch game | Close and reopen the game for executable or other launch-time changes |
 | Error | Read the detail/debug message before trying another change |
+| Game unavailable | Insert the matching cartridge, select the actual digital copy, or resolve the stated verification problem |
 
 Same-sized replacements of existing loose RomFS files can affect later reads in a running game. That does not flush the game's asset cache. In the tested MK8 preview, returning only to character selection was insufficient; **start a race → pause/quit to the main menu → VS Race/course selection** refreshed the image without closing the game.
 
 To remove a mod in the browser, select **Remove from library**, then confirm **Remove mod**. On the controller, use **X**, then **X** again. Removal updates the library and requested routing. Its payload is retained for recovery and older open filesystem objects; it is **not a physical disk purge**. Loaded executable changes require a game relaunch even after disable/removal.
+
+## Game copy and cartridges
+
+Select the game, open **Settings → Game copy**, and choose the copy you actually use. The setting saves immediately and is shared by both interfaces.
+
+- **Unspecified / Check inserted card:** the conservative default. A matching inserted card and available base Program are required.
+- **Cartridge / Cartridge or game-key card:** require this game's physical card, including for downloaded game-key data.
+- **Digital / My digital copy:** check installed noncard base Program data using your explicit selection. Choose this only for a copy you can play without the card. Moader does not verify ownership or infer it from downloaded updates.
+
+A missing or different card leaves enabled requests saved and shows **Game unavailable** with a reason. Those replacements are omitted from newly published routing. The resident checks availability in its background loop; the foreground app checks while open. Inspect the per-mod detail to see whether FS has acknowledged the updated routing. Already open mounts and loaded changes may still need content or the game to reopen. [Game-card details and verification limits](CARTRIDGES.md).
+
+## Refresh and scan failures
+
+Normal polling uses the last complete library inventory, including while a ZIP is being extracted. Another mutation during an import reports that it is busy. It does not start another concurrent import or wait behind the decompression lock.
+
+**Refresh** in the browser explicitly scans SD. The resident also retries a scan after approximately 30 loop ticks (normally about 30 seconds, plus any work in progress). If reading a directory or file fails, the previous list stays visible with an inventory warning. Mod changes pause until a complete scan succeeds. An unreadable initial inventory is labeled unavailable, rather than inviting you to upload into an apparently empty library. Do not delete saved mods to resolve this warning; check SD access and retry Refresh.
 
 ## Settings
 

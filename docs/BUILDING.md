@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-For installation, use the [v0.1.0-dev.3 ZIP import fix](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3) and `Moader-backend-v0.1.0-dev.3.zip`. App and resident binaries are rebuilt; HEN and native filesystem runtime bytes are unchanged. The rebuilt programs have host validation only, and the app still displays `0.1.0-dev`. The separate [Moader-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-v0.1.0-dev.3.zip) supplies the SD app/plugin files, not a complete host kit.
+For installation, use the [v0.1.0-dev.4 library recovery and game-card update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4) and `Moader-backend-v0.1.0-dev.4.zip`. App and resident binaries are rebuilt; HEN and native filesystem runtime bytes are unchanged. The rebuilt programs have host validation only, and the app still displays `0.1.0-dev`. The separate [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) supplies the SD app/plugin files, not a complete host kit.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
@@ -106,6 +106,6 @@ python3 tools/test-setup-backend.py
 node tools/test-installers.cjs
 ```
 
-The main Makefile includes the SDK CPU fragment at parse time; `make check` therefore requires an installed SDK. SDK-free CI should invoke individual compatible test scripts directly. `tools/test-core.py` and `tools/test-web.py` require `clang++`, zlib headers/libraries and AddressSanitizer/UBSan; the web-worker test also needs the SDK headers. Do not label the entire native suite SDK-free.
+The main Makefile includes the SDK CPU fragment at parse time; `make check` therefore requires an installed SDK. SDK-free CI should invoke individual compatible test scripts directly. `tools/test-core.py`, `tools/test-library-refresh.py`, `tools/test-native-ui.py` and `tools/test-web.py` require `clang++`, zlib headers/libraries and AddressSanitizer/UBSan; the web-worker test also needs the SDK headers. Do not label the entire native suite SDK-free.
 
 The portable runtime templates and `zbic.wasm` are shipped in `runtime/modloader/native/prebuilt`. Their manifest verifies both source hashes and generated files. End users need Node, not Zig. Maintainers rebuilding these assets use Zig **0.15.2** and `node runtime/modloader/tools/build.cjs`; see [MAINTAINING.md](MAINTAINING.md) before changing them.

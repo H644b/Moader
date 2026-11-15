@@ -71,13 +71,16 @@ dist/moader-diagnostics.nro: build/native/diagnostics.elf build/native/diagnosti
 
 check: build/generated/web_assets.hpp
 	python3 tools/test-core.py
+	python3 tools/test-library-refresh.py
 	python3 tools/test-web.py
 	python3 tools/test-web-worker.py
 	python3 tools/test-runtime.py
 	python3 tools/test-runtime-logs.py
 	python3 tools/test-metadata-names.py
 	python3 tools/test-game-names.py
+	python3 tools/test-game-availability.py
 	python3 tools/test-resident.py
+	python3 tools/test-native-ui.py
 
 -include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/ui.d build/native/service.d
 .PHONY: all check

@@ -19,7 +19,7 @@ for notice in sorted((root / 'native/third_party/licenses').glob('*.txt')):
     files['Moader-docs/licenses/' + notice.name] = notice
 app, service = files['switch/Moader.nro'].read_bytes(), files['kaihen/plugins/moader.nso'].read_bytes()
 assert app[16:20] == b'NRO0' and service[:4] == b'NSO0'
-instructions = '''Moader 0.1.0-dev
+instructions = '''Moader RELEASE_TAG (app display version 0.1.0-dev)
 
 Extract the switch/ and kaihen/ directories to the SD root. Open Moader
 normally from hbmenu. The M mark is shared by the app, web GUI and favicon.
@@ -33,6 +33,17 @@ Settings persist on the Switch: game names/Title IDs, reduced motion,
 debug-log following, automatic web startup and the web port. Unknown game
 names fall back to their Title IDs. A changed port applies at the next
 listener start. The web server defaults off at port 7712.
+
+Select each game, then open Settings / Game copy. Cartridge and game-key
+copies require their matching inserted card. Choose Digital only for a copy
+you can play without that card. Unspecified checks the inserted card; it does
+not infer digital ownership from downloaded files. Missing/uncertain games
+keep requested settings but are omitted from new routing. Read apply details
+for acknowledgement or withdrawal errors. Already loaded changes may remain.
+
+State polling keeps the last complete library available during imports.
+Refresh in the browser explicitly rescans SD; failed scans retain that list
+with a separate warning and pause changes until a complete scan succeeds.
 
 The standalone foreground app hosts the web GUI while Moader stays open.
 The moader.nso file is staged for a later kaiHEN bootstrap; copying it does

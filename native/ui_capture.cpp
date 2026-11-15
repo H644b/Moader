@@ -15,7 +15,7 @@ State fixture(){
     const char* names[]={"Lumiose texture pack","Evening lighting","Battle camera adjustments","High-resolution signage","Pokémon music restoration","A very long mod name with Unicode — café résumé texture restoration"};
     for(unsigned i=0;i<6;++i){Mod m;m.data.title_id=i==5?0x0100123400001000ULL:0x0400F43008C44001ULL;m.data.bytes=(i+1)*2457600;m.data.file_count=24+i*8;m.data.flags=moader::ipc::Romfs|(i<2?moader::ipc::Requested:0);m.data.applied=i<2?1:0;m.name=names[i];m.id="synthetic-fixture-"+std::to_string(i);
         m.detail=i<2?"Enable request saved. Waiting for the live filesystem backend to acknowledge this generation.":"Disabled by request. Original game files remain in use.";s.mods.push_back(m);}
-    s.regroup();s.events={"SYNTHETIC HOST FIXTURE", "Library generation 12 saved.","Lumiose texture pack: enable requested.","Backend not attached. Requests remain pending.","Web listener started on port 7712."};
+    s.regroup();s.game_source_available=true;s.game_source_title=s.games[s.game].id;s.events={"SYNTHETIC HOST FIXTURE", "Library generation 12 saved.","Lumiose texture pack: enable requested.","Backend not attached. Requests remain pending.","Web listener started on port 7712."};
     s.runtime_detail="The live filesystem backend has not been attached.";return s;
 }
 void capture(const std::filesystem::path& file,const State& s,int w=1280,int h=720){
@@ -32,6 +32,28 @@ int main(int argc,char** argv){
     s.view=View::Connection;capture(dir/"connection-720.ppm",s);s.summary.flags&=~moader::ipc::WebRunning;capture(dir/"web-off-720.ppm",s);s.summary.flags|=moader::ipc::WebRunning;
     s.view=View::Debug;capture(dir/"debug-720.ppm",s);
     s.view=View::Library;s.summary.flags|=moader::ipc::BackendConnected;s.summary.last_result=0x1234;s.runtime_detail="Runtime rejected this generation. Check the event history and report before trying again.";capture(dir/"runtime-error-720.ppm",s);
+    s=fixture();s.summary.flags|=moader::ipc::BackendConnected|moader::ipc::InventoryUnavailable;
+    s.runtime_detail="Library inventory unavailable. Synthetic SD scan failed. Retaining the last complete list.\n\nRuntime: FS accepted routing.";
+    assert(s.inventory_unavailable()&&s.summary.last_result==0);capture(dir/"inventory-retained-720.ppm",s);
+    s.view=View::Debug;capture(dir/"inventory-debug-720.ppm",s);
+    s.view=View::Library;s.mods.clear();s.regroup();capture(dir/"inventory-unavailable-empty-720.ppm",s);
+    s=fixture();s.summary.flags|=moader::ipc::BackendConnected;s.inventory_refresh_pending=true;
+    capture(dir/"inventory-refresh-pending-720.ppm",s);
+    s=fixture();s.summary.flags|=moader::ipc::BackendConnected;s.mods[0].data.applied=6;
+    s.mods[0].detail="Game unavailable. Insert the physical game card and wait for verification before enabling its mods.";
+    assert(!s.inventory_unavailable()&&s.summary.last_result==0);capture(dir/"game-unavailable-720.ppm",s);
+    s.view=View::Details;capture(dir/"game-unavailable-details-720.ppm",s);
+    // Actual renderer: an operation message and stale inventory warning must
+    // not alter the healthy backend badge; a real runtime result must alter it.
+    auto healthy=fixture();healthy.summary.flags|=moader::ipc::BackendConnected;
+    auto operation=healthy;operation.message="A selection changed. Refreshing the retained list.";operation.message_error=true;
+    auto inventory=healthy;inventory.summary.flags|=moader::ipc::InventoryUnavailable;
+    auto failed=healthy;failed.summary.last_result=0x1234;
+    auto pixels=[](const State& state){std::vector<uint32_t> out(1280*720);Renderer r;r.draw(out.data(),1280,720,1280*4,state,1.f/60);return out;};
+    auto h=pixels(healthy),o=pixels(operation),v=pixels(inventory),f=pixels(failed);
+    bool runtime_changed=false;
+    for(unsigned y=130;y<166;++y)for(unsigned x=940;x<1256;++x){const auto i=y*1280+x;assert(h[i]==o[i]&&h[i]==v[i]);runtime_changed|=h[i]!=f[i];}
+    assert(runtime_changed);
     s=fixture();s.mods.clear();s.regroup();capture(dir/"empty-720.ppm",s);
     s.connected=false;s.message="Service disconnected. Press Y to reconnect.";s.message_error=true;capture(dir/"disconnected-720.ppm",s);
     s=fixture();s.connected=false;s.summary.flags|=moader::ipc::BackendConnected;
@@ -55,13 +77,21 @@ int main(int argc,char** argv){
     s.settings_row=1;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::MotionField&&(s.preferences.flags&moader::ipc::ReducedMotion));
     s.settings_row=2;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::FollowField&&!(s.preferences.flags&moader::ipc::FollowLog));
     s.settings_row=3;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::StartupField&&(s.preferences.flags&moader::ipc::WebOnStart));
-    s.settings_row=4;assert(s.local_input(ActivateInput,0)==0&&s.view==View::Advanced);capture(dir/"advanced-720.ppm",s);
+    s.settings_row=4;assert(s.game_source==moader::ipc::CopyUnspecified&&s.can_save_game_source());
+    assert(s.local_input(ActivateInput,0)==SaveGameSource&&s.game_source==moader::ipc::CopyCartridge);capture(dir/"settings-game-copy-cartridge-720.ppm",s);
+    assert(s.local_input(ActivateInput,0)==SaveGameSource&&s.game_source==moader::ipc::CopyDigital);capture(dir/"settings-game-copy-digital-720.ppm",s);
+    assert(s.local_input(ActivateInput,0)==SaveGameSource&&s.game_source==moader::ipc::CopyUnspecified);capture(dir/"settings-game-copy-default-720.ppm",s);
+    s.summary.flags|=moader::ipc::InventoryUnavailable;assert(s.local_input(ActivateInput,0)==0&&s.game_source==moader::ipc::CopyUnspecified);
+    s.summary.flags&=~moader::ipc::InventoryUnavailable;s.game_source_title=0;assert(s.local_input(ActivateInput,0)==0);s.game_source_title=s.games[s.game].id;
+    s.connected=false;assert(s.local_input(ActivateInput,0)==0);s.connected=true;
+    s.game_source_available=false;assert(s.local_input(ActivateInput,0)==0);s.game_source_available=true;s.message.clear();s.message_error=false;
+    s.settings_row=5;assert(s.local_input(ActivateInput,0)==0&&s.view==View::Advanced);capture(dir/"advanced-720.ppm",s);
     assert(s.local_input(ActivateInput,0)==0&&s.port_edit);s.port_draft=7713;s.port_digit=4;capture(dir/"port-editor-720.ppm",s);
     assert(s.local_input(ActivateInput,0)==0&&s.port_edit&&s.message_error);capture(dir/"port-invalid-720.ppm",s);
     s.port_draft=8123;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::PortField&&!s.port_edit&&s.preferences.port==8123);
     s.message="Settings saved. The port applies on the next listener start.";s.message_error=false;
     s.advanced_row=2;assert(s.local_input(ActivateInput,0)==SaveReport);s.advanced_row=3;assert(s.local_input(ActivateInput,0)==SaveScreenshot);
-    assert(s.local_input(BackInput,0)==0&&s.view==View::Settings);s.settings_row=5;assert(s.local_input(ActivateInput,0)==0&&s.view==View::Credits);capture(dir/"credits-720.ppm",s);
+    assert(s.local_input(BackInput,0)==0&&s.view==View::Settings);s.settings_row=6;assert(s.local_input(ActivateInput,0)==0&&s.view==View::Credits);capture(dir/"credits-720.ppm",s);
     s.local_input(BackInput,0);s.connected=false;capture(dir/"settings-offline-720.ppm",s);s.settings_row=0;const auto old_preferences=s.preferences;assert(s.local_input(ActivateInput,0)==0&&s.preferences.flags==old_preferences.flags);
     s=fixture();s.view=View::Advanced;s.connected=false;capture(dir/"advanced-offline-720.ppm",s);
     assert(s.local_input(ActivateInput,0)==0&&!s.port_edit);

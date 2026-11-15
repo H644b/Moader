@@ -16,6 +16,7 @@ with tempfile.TemporaryDirectory(prefix='moader-core-') as temp:
     archive('traversal', [('romfs/../../escape', b'bad')])
     archive('case-collision', [('romfs/a.bin', b'one'), ('romfs/A.bin', b'two')])
     archive('metadata-only', [('mod.meta', b'no mod payload')])
+    archive('game-source-spoof', [('romfs/file', b'payload'), ('.game-source', b'2')])
     link = zipfile.ZipInfo('romfs/link')
     link.create_system = 3
     link.external_attr = 0o120777 << 16

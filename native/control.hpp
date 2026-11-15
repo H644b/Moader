@@ -10,6 +10,10 @@
 #include <stdexcept>
 namespace moader_native {
 constexpr Result BadInput = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+constexpr const char* SelectionChangedMessage = "Library changed. Refresh and select the mod again.";
+static_assert(static_cast<u32>(moader::GameSource::Unspecified)==moader::ipc::CopyUnspecified &&
+    static_cast<u32>(moader::GameSource::Cartridge)==moader::ipc::CopyCartridge &&
+    static_cast<u32>(moader::GameSource::Digital)==moader::ipc::CopyDigital);
 struct Context {
     moader::Library& library;
     moader::WebServer& web;
@@ -21,7 +25,30 @@ struct Context {
     bool foreground = false;
     bool network_ready = false;
     std::vector<std::string> diagnostics;
+    bool selection_error = false;
 };
+void clear_operation_error(Context& context) {
+    context.error.clear(); context.last_result = 0; context.selection_error = false;
+}
+void clear_selection_error(Context& context) {
+    // A service poll may have replaced LastError since the selection failed.
+    // A successful row read must not clear that newer, unrelated failure.
+    if (context.selection_error && context.last_result == BadInput && context.error == SelectionChangedMessage)
+        clear_operation_error(context);
+    else context.selection_error = false;
+}
+std::string runtime_detail(const moader::LibrarySnapshot& snapshot) {
+    auto text = snapshot.runtime.detail;
+    if (!snapshot.inventory_ready || !snapshot.inventory_error.empty()) {
+        std::string inventory = "Library inventory unavailable. ";
+        inventory += snapshot.inventory_error.empty() ? "The initial inventory is not ready." : snapshot.inventory_error;
+        inventory += " Retaining the last known inventory; this refresh has not removed saved mod files.";
+        // Put the actionable inventory failure in the short debug preview when
+        // runtime health is good. Genuine runtime failures keep first priority.
+        text = snapshot.runtime.result ? text + "\n\n" + inventory : inventory + "\n\nRuntime: " + text;
+    }
+    return text;
+}
 void copy_text(char* out, size_t capacity, const std::string& text) {
     if (!capacity) return;
     size_t n = std::min(capacity - 1, text.size());
@@ -44,6 +71,7 @@ std::string pairing_token() {
 }
 Result command(u32 id, const void* input, size_t input_size, void* output, size_t* output_size, void* data) {
     auto& context = *static_cast<Context*>(data);
+    bool selection_failure = false;
     try {
         if (id == moader::ipc::Summary) {
             if (context.network_ready && R_FAILED(nifmGetCurrentIpAddress(&context.ip))) context.ip = 0;
@@ -52,11 +80,13 @@ Result command(u32 id, const void* input, size_t input_size, void* output, size_
             moader::ipc::SummaryReply reply{}; reply.version = moader::ipc::Version;
             reply.flags = (context.web.running() ? moader::ipc::WebRunning : 0u) |
                 (snapshot.runtime.connected ? moader::ipc::BackendConnected : 0u) |
-                (context.foreground ? moader::ipc::Foreground : 0u);
+                (context.foreground ? moader::ipc::Foreground : 0u) |
+                (!snapshot.inventory_ready || !snapshot.inventory_error.empty() ? moader::ipc::InventoryUnavailable : 0u);
             reply.generation = snapshot.generation; reply.applied_generation = snapshot.runtime.applied_generation;
             reply.mod_count = snapshot.mods.size(); reply.port = context.web.running() ? context.web.port() : context.library.preferences().web_port; reply.ipv4 = context.ip;
-            reply.last_result = context.last_result ? context.last_result : snapshot.runtime.result;
-            copy_text(reply.detail, sizeof(reply.detail), snapshot.runtime.connected ? "Routing connected" : "Backend not attached");
+            reply.last_result = snapshot.runtime.result;
+            copy_text(reply.detail, sizeof(reply.detail), snapshot.runtime.result ? "Runtime error" :
+                snapshot.runtime.connected ? "Routing connected" : "Backend not attached");
             std::memcpy(output, &reply, sizeof(reply)); *output_size = sizeof(reply); return 0;
         }
         if (id == moader::ipc::WebEnabled) {
@@ -65,7 +95,7 @@ Result command(u32 id, const void* input, size_t input_size, void* output, size_
             if (enabled > 1) return BadInput;
             if (enabled && !context.web.start("0.0.0.0",context.library.preferences().web_port)) throw std::runtime_error(context.web.last_error());
             if (!enabled) context.web.stop();
-            context.error.clear(); context.last_result = 0; return 0;
+            clear_operation_error(context); return 0;
         }
         if (id == moader::ipc::GetPreferences) {
             const auto p = context.library.preferences();
@@ -83,7 +113,7 @@ Result command(u32 id, const void* input, size_t input_size, void* output, size_
             moader::Preferences p;p.game_names=wire.flags&moader::ipc::GameNames;
             p.reduced_motion=wire.flags&moader::ipc::ReducedMotion;p.web_on_start=wire.flags&moader::ipc::WebOnStart;
             p.follow_log=wire.flags&moader::ipc::FollowLog;p.web_port=static_cast<uint16_t>(wire.port);
-            context.library.update_preferences(p,wire.mask);context.error.clear();context.last_result=0;return 0;
+            context.library.update_preferences(p,wire.mask);clear_operation_error(context);return 0;
         }
         if (id == moader::ipc::PairingCode) {
             std::memset(output, 0, 64); std::memcpy(output, context.token.data(), context.token.size()); *output_size = 64; return 0;
@@ -112,17 +142,36 @@ Result command(u32 id, const void* input, size_t input_size, void* output, size_
         }
         if (id == moader::ipc::RuntimeDetail) {
             if (!context.cached) return BadInput;
-            return chunk(context.cached->runtime.detail, selected.value);
+            return chunk(runtime_detail(*context.cached), selected.value);
         }
         if (!context.cached || selected.generation != context.library.generation() ||
-            selected.generation != context.cached->generation || selected.index >= context.cached->mods.size())
-            throw std::runtime_error("Library changed. Refresh and select the mod again.");
+            selected.generation != context.cached->generation || selected.index >= context.cached->mods.size()) {
+            selection_failure = true;
+            throw std::runtime_error(SelectionChangedMessage);
+        }
         const auto& mod = context.cached->mods[selected.index];
-        if (id == moader::ipc::GetGameName) return chunk(context.library.game_name(mod.title_id),selected.value);
+        if (id == moader::ipc::GetGameSource) {
+            if (selected.value) return BadInput;
+            const u32 source = static_cast<u32>(context.library.game_source(mod.title_id));
+            std::memcpy(output,&source,sizeof(source)); *output_size=sizeof(source);
+            clear_selection_error(context); return 0;
+        }
+        if (id == moader::ipc::SetGameSource) {
+            if (selected.value > moader::ipc::CopyDigital) throw std::invalid_argument("Choose Unspecified, Cartridge or Digital for this game.");
+            context.library.set_game_source(mod.title_id,static_cast<moader::GameSource>(selected.value),selected.generation);
+            clear_operation_error(context); return 0;
+        }
+        if (id == moader::ipc::GetGameName) {
+            const auto result = chunk(context.library.game_name(mod.title_id),selected.value);
+            if (!result) clear_selection_error(context);
+            return result;
+        }
         if (id == moader::ipc::GetModText) {
             const u32 field = selected.value >> 16, offset = selected.value & 0xffff;
             if (field > moader::ipc::DetailText) return BadInput;
-            return chunk(field == moader::ipc::NameText ? mod.name : field == moader::ipc::IdText ? mod.id : mod.detail, offset);
+            const auto result = chunk(field == moader::ipc::NameText ? mod.name : field == moader::ipc::IdText ? mod.id : mod.detail, offset);
+            if (!result) clear_selection_error(context);
+            return result;
         }
         if (id == moader::ipc::GetMod) {
             moader::ipc::ModReply reply{};
@@ -131,16 +180,18 @@ Result command(u32 id, const void* input, size_t input_size, void* output, size_
             reply.flags = (mod.requested ? moader::ipc::Requested : 0u) |
                 (mod.has_romfs ? moader::ipc::Romfs : 0u) | (mod.has_exefs ? moader::ipc::Exefs : 0u);
             copy_text(reply.name, sizeof(reply.name), mod.name);
-            std::memcpy(output, &reply, sizeof(reply)); *output_size = sizeof(reply); return 0;
+            std::memcpy(output, &reply, sizeof(reply)); *output_size = sizeof(reply);
+            clear_selection_error(context);
+            return 0;
         }
         if (id == moader::ipc::SetEnabled && selected.value <= 1)
             context.library.set_enabled(mod.title_id, mod.id, selected.value != 0, selected.generation);
         else if (id == moader::ipc::Remove)
             context.library.remove(mod.title_id, mod.id, selected.generation);
         else return BadInput;
-        context.error.clear(); context.last_result = 0; return 0;
+        clear_operation_error(context); return 0;
     } catch (const std::exception& e) {
-        context.error = e.what(); context.last_result = BadInput; return BadInput;
+        context.error = e.what(); context.last_result = BadInput; context.selection_error = selection_failure; return BadInput;
     }
 }
 }

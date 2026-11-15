@@ -48,9 +48,10 @@ Result establish(){const Result rc=connect();if(R_SUCCEEDED(rc)||!service_missin
     try{foreground=std::make_unique<moader_native::Foreground>();return 0;}
     catch(const std::exception& e){message(e.what(),true);return MAKERESULT(Module_Libnx,LibnxError_BadInput);}
 }
-std::string text_chunks(u32 command,u32 index,u32 field,const std::string& fallback,size_t limit=65535){
+std::string text_chunks(u32 command,u32 index,u32 field,const std::string& fallback,size_t limit=65535,
+                        std::optional<uint64_t> generation=std::nullopt){
     std::string text;for(unsigned offset=0;offset<limit;offset+=moader::ipc::TextChunkBytes){
-        moader::ipc::Selection input{ui.summary.generation,index,(field<<16)|offset};char chunk[64]{};
+        moader::ipc::Selection input{generation.value_or(ui.summary.generation),index,(field<<16)|offset};char chunk[64]{};
         if(R_FAILED(sendInOut(command,input,chunk)))return text.empty()?fallback:text;
         const size_t n=strnlen(chunk,sizeof(chunk));if(n>63)return fallback;
         text.append(chunk,n);if(n<63)return text;
@@ -70,7 +71,10 @@ void save_debug(){if(ui.connected)refresh_debug();
     std::ofstream file("sdmc:/moader/app-diagnostics.txt",std::ios::binary);
     file<<"Moader 0.1.0-dev\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
         <<"\nFS acknowledged generation: "<<ui.summary.applied_generation<<"\nBackend channel connected (summary): "<<bool(ui.summary.flags&moader::ipc::BackendConnected)
-        <<"\nLast result: 0x"<<std::hex<<ui.summary.last_result<<std::dec<<"\nRuntime: "<<ui.runtime_detail<<"\n\n";
+        <<"\nRuntime result: 0x"<<std::hex<<ui.summary.last_result<<std::dec
+        <<"\nLibrary inventory: "<<(ui.inventory_unavailable()?"unavailable or retained; changes paused":"current")
+        <<"\nLast interface message: "<<ui.message<<"\nInterface message is an error: "<<ui.message_error
+        <<"\nRuntime: "<<ui.runtime_detail<<"\n\n";
     for(const auto& line:ui.events)file<<line<<'\n';
     file.close();
     message(file?"Saved sdmc:/moader/app-diagnostics.txt":"Could not save the diagnostic report.",!file);
@@ -98,6 +102,14 @@ void refresh_preferences(){
     ui.preferences_available=R_SUCCEEDED(sendOut(moader::ipc::GetPreferences,p))&&!(p.flags&~15u)&&p.port>=1024&&p.port<=65535&&p.port!=7713;
     if(ui.preferences_available)ui.preferences=p;
 }
+void refresh_game_source(){
+    ui.game_source_available=false;
+    if(!ui.connected||ui.inventory_unavailable()||ui.selected()>=ui.mods.size())return;
+    const moader::ipc::Selection input{ui.summary.generation,ui.selected(),0};u32 source=0;
+    if(R_SUCCEEDED(sendInOut(moader::ipc::GetGameSource,input,source))&&source<=moader::ipc::CopyDigital){
+        ui.game_source=source;ui.game_source_title=ui.mods[ui.selected()].data.title_id;ui.game_source_available=true;
+    }
+}
 void save_preferences(){
     const moader::ipc::PreferencesRequest request{ui.preferences.flags,ui.preferences.port,ui.preference_mask};
     const auto result=sendIn(moader::ipc::SetPreferences,request);
@@ -105,29 +117,48 @@ void save_preferences(){
     else {refresh_preferences();message("Settings saved. A changed web port applies the next time the listener starts.");}
 }
 Result refresh(){
-    if(foreground)foreground->backend.poll();
+    if(foreground)foreground->poll();
     moader::ipc::SummaryReply next{};Result rc=sendOut(moader::ipc::Summary,next);if(R_FAILED(rc))return rc;
     if(next.version!=moader::ipc::Version)return MAKERESULT(Module_Libnx,LibnxError_BadInput);
     if(ui.confirm_remove&&next.generation!=ui.summary.generation){ui.confirm_remove=false;message("The library changed; removal was cancelled.");}
     const uint64_t old_generation=ui.summary.generation;
-    const uint64_t old_game=ui.game<ui.games.size()?ui.games[ui.game].id:0;ui.summary=next;
+    const uint64_t old_game=ui.game<ui.games.size()?ui.games[ui.game].id:0;
+    auto retain=[&](const moader::ipc::SummaryReply& latest,const std::string& detail){
+        ui.retain_inventory(latest); ui.address=address();
+        ui.runtime_detail=text_chunks(moader::ipc::RuntimeDetail,0,0,latest.detail);
+        message(detail,true); return Result(0);
+    };
+    if((next.flags&moader::ipc::InventoryUnavailable)&&!next.mod_count&&!ui.mods.empty())
+        return retain(next,"Library inventory is unavailable. Keeping the previous list until a complete refresh succeeds.");
     refresh_preferences();
     std::map<uint64_t,std::string> game_names;
     std::vector<moader_ui::Mod> mods;mods.reserve(next.mod_count);
     for(u32 i=0;i<next.mod_count;++i){moader::ipc::Selection input{next.generation,i,0};moader_ui::Mod mod;
-        rc=sendInOut(moader::ipc::GetMod,input,mod.data);if(R_FAILED(rc))return rc;
+        rc=sendInOut(moader::ipc::GetMod,input,mod.data);
+        if(R_FAILED(rc)){
+            moader::ipc::SummaryReply latest{};
+            if(R_FAILED(sendOut(moader::ipc::Summary,latest))||latest.version!=moader::ipc::Version)return rc;
+            return retain(latest,"Library refresh changed or failed. Showing the previous list; changes are paused until refresh succeeds.");
+        }
         mod.data.name[31]=0;
         const bool cached=old_generation==next.generation&&i<ui.mods.size()&&ui.mods[i].data.title_id==mod.data.title_id;
-        mod.name=cached?ui.mods[i].name:text_chunks(moader::ipc::GetModText,i,moader::ipc::NameText,mod.data.name);
-        mod.id=cached?ui.mods[i].id:text_chunks(moader::ipc::GetModText,i,moader::ipc::IdText,"Unavailable from this service");
+        mod.name=cached?ui.mods[i].name:text_chunks(moader::ipc::GetModText,i,moader::ipc::NameText,mod.data.name,65535,next.generation);
+        mod.id=cached?ui.mods[i].id:text_chunks(moader::ipc::GetModText,i,moader::ipc::IdText,"Unavailable from this service",65535,next.generation);
         // Runtime detail can change without a new saved-library generation.
-        mod.detail=text_chunks(moader::ipc::GetModText,i,moader::ipc::DetailText,"Inspect apply state. The service does not supply additional details.");
+        mod.detail=text_chunks(moader::ipc::GetModText,i,moader::ipc::DetailText,"Inspect apply state. The service does not supply additional details.",65535,next.generation);
         auto [name,inserted]=game_names.try_emplace(mod.data.title_id);
-        if(inserted)name->second=text_chunks(moader::ipc::GetGameName,i,0,"");
+        if(inserted)name->second=text_chunks(moader::ipc::GetGameName,i,0,"",65535,next.generation);
         mod.game_name=name->second;mods.push_back(std::move(mod));
     }
+    moader::ipc::SummaryReply latest{};rc=sendOut(moader::ipc::Summary,latest);if(R_FAILED(rc))return rc;
+    if(latest.version!=moader::ipc::Version)return MAKERESULT(Module_Libnx,LibnxError_BadInput);
+    if(latest.generation!=next.generation||latest.mod_count!=next.mod_count)
+        return retain(latest,"The library changed during refresh. Keeping the previous list and retrying.");
+    const bool was_pending=ui.inventory_refresh_pending;
+    ui.summary=latest;ui.inventory_refresh_pending=false;
     ui.mods=std::move(mods);ui.regroup(old_game);ui.address=address();
-    ui.runtime_detail=text_chunks(moader::ipc::RuntimeDetail,0,0,next.detail);refresh_debug();ui.connected=true;return 0;
+    if(was_pending)message("");
+    ui.runtime_detail=text_chunks(moader::ipc::RuntimeDetail,0,0,latest.detail);refresh_debug();ui.connected=true;refresh_game_source();return 0;
 }
 void update(Result& connection){const auto rc=refresh();if(R_FAILED(rc)){connection=rc;ui.connected=false;ui.confirm_remove=false;error(rc);}}
 }
@@ -156,9 +187,16 @@ int main(){
         if(down&HidNpadButton_Left)local|=moader_ui::LeftInput;
         if(down&HidNpadButton_Right)local|=moader_ui::RightInput;
         const auto local_actions=ui.local_input(local,renderer.scroll_limit(ui,moader_ui::View::Debug));
+        if((local&moader_ui::SettingsInput)&&ui.view==moader_ui::View::Settings)refresh_game_source();
         if(local_actions&moader_ui::RefreshEvents)refresh_debug();
         if(local_actions&moader_ui::SaveReport)save_debug();
         if(local_actions&moader_ui::SavePreferences)save_preferences();
+        if(local_actions&moader_ui::SaveGameSource){
+            const moader::ipc::Selection input{ui.summary.generation,ui.selected(),ui.game_source};
+            const auto result=sendIn(moader::ipc::SetGameSource,input);
+            if(R_FAILED(result))error(result);else message("Game copy saved. Digital selection does not verify ownership.");
+            update(connection);
+        }
         if(!ui.connected){if(down&HidNpadButton_Y){message("");connection=establish();if(R_SUCCEEDED(connection))update(connection);else error(connection);}}
         else{
             if(down&HidNpadButton_ZR){ui.view=ui.view==moader_ui::View::Connection?moader_ui::View::Library:moader_ui::View::Connection;ui.confirm_remove=false;if(ui.view==moader_ui::View::Connection)pairing();}
@@ -178,12 +216,16 @@ int main(){
                 if((down&HidNpadButton_StickR)&&ui.selected()<ui.mods.size()){ui.view=moader_ui::View::Details;ui.detail_first=0;ui.confirm_remove=false;}
                 if((down&HidNpadButton_A)&&ui.rail_focus)ui.rail_focus=false;
                 else if((down&HidNpadButton_A)&&ui.selected()<ui.mods.size()){
+                    if(ui.inventory_unavailable())message("Library inventory is unavailable. Changes are paused; inspect Debug and wait for a successful refresh.",true);
+                    else {
                     const moader::ipc::Selection input{ui.summary.generation,ui.selected(),ui.mods[ui.selected()].data.flags&moader::ipc::Requested?0u:1u};
                     const auto result=sendIn(moader::ipc::SetEnabled,input);if(R_FAILED(result))error(result);else message("Request saved. Apply state shows the runtime acknowledgement.");
                     ui.confirm_remove=false;update(connection);
+                    }
                 }
                 if((down&HidNpadButton_X)&&!ui.rail_focus&&ui.selected()<ui.mods.size()){
-                    if(ui.confirm_remove){const moader::ipc::Selection input{ui.summary.generation,ui.selected(),0};const auto result=sendIn(moader::ipc::Remove,input);
+                    if(ui.inventory_unavailable())message("Library inventory is unavailable. Removal is paused until refresh succeeds.",true);
+                    else if(ui.confirm_remove){const moader::ipc::Selection input{ui.summary.generation,ui.selected(),0};const auto result=sendIn(moader::ipc::Remove,input);
                         if(R_FAILED(result))error(result);else message("Removed from the library. Files remain in recovery storage.");ui.confirm_remove=false;update(connection);
                     }else ui.confirm_remove=true;
                 }

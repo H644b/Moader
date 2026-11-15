@@ -2,6 +2,24 @@
 
 Start with the message in Moader's **ZL debug view** or browser debug panel. Note whether the problem is the app connection, web listener, runtime acknowledgement or the game's visible content; those are different stages.
 
+## The library lags or temporarily disappears
+
+Update both the app and running resident to **v0.1.0-dev.4** using the [update instructions](INSTALLATION.md#updating). This version keeps cached complete inventories available during import and removes recursive payload scans from ordinary state polling. A busy import rejects another library change with an explanation.
+
+If an SD scan fails, the last complete list remains visible with a separate inventory warning. Check SD access, then use **Refresh** in the browser. The resident also retries in its background loop. A successful empty list and an unreadable library are different states; do not erase library folders or saved preferences to troubleshoot an unreadable scan.
+
+## Game unavailable or a missing cartridge
+
+Select the game and open **Settings → Game copy**. Cartridge and game-key copies require a positively matching inserted card. Downloaded update or key-card data alone does not establish that the game is available without its card. Choose Digital only for a real card-independent copy; this is your selection, not Moader verifying ownership.
+
+The requested toggle stays saved while new routing omits the unavailable game's mods. Details explain a missing card, wrong card, missing base Program, unavailable service or uncertain identity. A query failure is not reported as proof that the card is absent. Insert the correct card or resolve the precise error and let availability refresh. Do not guess a different Title ID or change digital selection just to suppress an error. [Game-card checks](CARTRIDGES.md).
+
+If routing withdrawal failed or is awaiting acknowledgement, the detail says so; older routing/open objects can remain in use. Card insertion/removal, service privileges and the new gate have host fixtures only, pending console qualification.
+
+## A red runtime indicator after another operation failed
+
+In v0.1.0-dev.4, runtime status uses the filesystem's result, and a stale selection or failed interface operation has its own error message. A failed scan has a separate inventory warning. A genuine nonzero runtime result remains visible. Read the result and per-mod details instead of treating all three as a backend crash.
+
 ## The app works, but the browser stops when I close it
 
 You may be using **foreground mode**. That listener belongs to the open app. Resident browser access during gameplay requires the matching resident service and filesystem runtime for the current boot. Follow [backend setup](INSTALLATION.md#start-the-backend-for-this-boot).

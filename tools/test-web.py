@@ -107,6 +107,37 @@ with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
         remove = urllib.parse.urlencode({'titleId': '0400f43008c44001', 'id': 'web-upload'})
         assert request('/api/mod/remove?' + remove, 'POST', b'')[0] == 200
         assert json.loads(request('/api/state')[1])['mods'] == []
+        # State polling is cached. Only an authenticated rescan inspects an
+        # external SD copy, and a failed scan retains that complete inventory.
+        assert request('/api/library/rescan', 'POST', b'', auth=False)[0] == 401
+        assert request('/api/library/rescan', 'POST', b'', headers={'Origin': 'http://unrelated.invalid'})[0] == 403
+        external = work / 'library/library/0400f43008c44001/external/romfs'
+        external.mkdir(parents=True)
+        (external / 'fixture').write_bytes(b'external fixture')
+        assert json.loads(request('/api/state')[1])['mods'] == []
+        status, body = request('/api/library/rescan', 'POST', b'')
+        complete = json.loads(body)
+        assert status == 200 and len(complete['mods']) == 1 and complete['inventory'] == {'ready': True, 'error': ''}
+        assert request('/api/game-source?titleId=0400f43008c44001&source=cartridge', 'POST', b'', auth=False)[0] == 401
+        assert request('/api/game-source?titleId=0400f43008c44001&source=cartridge', 'POST', b'', headers={'Origin': 'http://unrelated.invalid'})[0] == 403
+        for bad_source in ['physical', '', '3']:
+            assert request('/api/game-source?' + urllib.parse.urlencode({'titleId': '0400f43008c44001', 'source': bad_source}), 'POST', b'')[0] == 400
+        assert request('/api/game-source?titleId=0400f43008c44001&source=digital&unexpected=1', 'POST', b'')[0] == 400
+        generation = complete['generation']
+        status, body = request('/api/game-source?titleId=0400f43008c44001&source=cartridge&generation=' + str(generation), 'POST', b'')
+        complete = json.loads(body)
+        assert status == 200 and complete['mods'][0]['gameSource'] == 'cartridge' and complete['generation'] > generation
+        assert request('/api/game-source?titleId=0400f43008c44001&source=digital&generation=' + str(generation), 'POST', b'')[0] == 400
+        contents = work / 'library/library'
+        offline = work / 'unavailable-library'
+        contents.rename(offline)
+        assert request('/api/library/rescan', 'POST', b'')[0] == 400
+        retained = json.loads(request('/api/state')[1])
+        assert retained['mods'] == complete['mods'] and retained['generation'] == complete['generation']
+        assert retained['inventory']['ready'] and retained['inventory']['error']
+        offline.rename(contents)
+        status, body = request('/api/library/rescan', 'POST', b'')
+        assert status == 200 and json.loads(body)['inventory'] == {'ready': True, 'error': ''}
         assert request('/api/unknown')[0] == 404
         assert request('/api/mod/enable?enabled=2', 'POST', b'')[0] == 400
         for raw in [

@@ -14,14 +14,16 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev.3 — compressed ZIP import fix](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3)**. The rebuilt app and resident service fix valid ZIP imports at a 32 KiB DEFLATE boundary. HEN and the native filesystem runtime are unchanged; the app still displays `0.1.0-dev`. The fix passes host checks; these rebuilt binaries have not been tested on a console. The [original prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) remains available.
+Start with **[v0.1.0-dev.4 — library recovery and game-card checks](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)**. The rebuilt app and resident keep complete library snapshots available during imports, retain the list after failed SD scans, and separate control errors from filesystem errors. A new **Settings → Game copy** choice guards cartridge and game-key games. This also includes the earlier ZIP fix. HEN and the native filesystem runtime are unchanged. The new app/resident have host validation only; see [Validation](docs/VALIDATION.md).
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-v0.1.0-dev.3.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-backend-v0.1.0-dev.3.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
+| [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) | The console app and matching resident plugin |
+| [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
+
+**After updating:** run the matching resident from this release, then select a game and open **Settings → Game copy**. Cartridge/game-key copies need their matching card. For an actual digital copy, choose **My digital copy**. The default checks the inserted card and blocks uncertain availability; it does not infer ownership from downloaded data. [Game-card checks and limits](docs/CARTRIDGES.md).
 
 ## Supported setup
 

@@ -13,9 +13,11 @@ extern "C" {
 #include <cstring>
 #include <cstdio>
 #include <stdexcept>
+#include <mutex>
 
 namespace moader_native {
 namespace game_names_detail {
+inline std::mutex& ns_query_mutex() { static std::mutex mutex; return mutex; }
 inline std::runtime_error failure(const char* operation, Result rc) {
     char text[128]; std::snprintf(text, sizeof(text), "%s returned 0x%08X", operation, rc);
     return std::runtime_error(text);
@@ -98,6 +100,7 @@ inline std::string read_name(u64 application_id, u8 acd_index) {
 }
 // Read installed control metadata. No network lookup, title launch or writes.
 inline std::string installed_game_name(const std::string& title) {
+    std::lock_guard<std::mutex> lock(game_names_detail::ns_query_mutex());
     const u64 id = game_names_detail::parse_id(title);
     const Result initialized = nsInitialize();
     if (R_FAILED(initialized)) throw game_names_detail::failure("Game metadata service", initialized);

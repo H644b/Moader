@@ -3,7 +3,11 @@
 
 namespace moader::ipc {
 constexpr uint32_t Version = 1;
-enum Command : uint32_t { Summary, WebEnabled, GetMod, SetEnabled, Remove, PairingCode, LastError, GetModText, DiagnosticsInfo, GetDiagnostic, RuntimeDetail, GetPreferences, SetPreferences, GetGameName };
+enum Command : uint32_t { Summary, WebEnabled, GetMod, SetEnabled, Remove, PairingCode, LastError, GetModText, DiagnosticsInfo, GetDiagnostic, RuntimeDetail, GetPreferences, SetPreferences, GetGameName,
+    GetGameSource, SetGameSource };
+// Additive game-copy commands use Selection (game identified by mod index).
+// Get returns one uint32_t; Set carries this value in Selection.value.
+enum GameCopyValue : uint32_t { CopyUnspecified=0, CopyCartridge=1, CopyDigital=2 };
 // Additive optional commands; Version 1 clients/services retain their original ABI.
 // Text replies are NUL-terminated 63-byte chunks. Selection.value: field in
 // bits 16..31, byte offset in bits 0..15. Diagnostic chunks use value as offset.
@@ -16,14 +20,15 @@ static_assert(sizeof(PreferencesReply) == 8);
 enum PreferenceField : uint32_t { NamesField=1, MotionField=2, StartupField=4, PortField=8, FollowField=16 };
 struct PreferencesRequest { uint32_t flags, port, mask; };
 static_assert(sizeof(PreferencesRequest) == 12);
-enum Flag : uint32_t { WebRunning = 1, BackendConnected = 2, Requested = 4, Romfs = 8, Exefs = 16, Foreground = 32 };
+enum Flag : uint32_t { WebRunning = 1, BackendConnected = 2, Requested = 4, Romfs = 8, Exefs = 16, Foreground = 32,
+    InventoryUnavailable = 64 }; // Last good inventory retained, or initial inventory not ready.
 struct Selection { uint64_t generation; uint32_t index; uint32_t value; };
 struct SummaryReply {
     uint32_t version, flags;
     uint64_t generation, applied_generation;
     uint32_t mod_count;
     uint16_t port, reserved;
-    uint32_t ipv4, last_result;
+    uint32_t ipv4, last_result; // Runtime/backend result only; operation errors use LastError.
     char detail[24];
 };
 struct ModReply {

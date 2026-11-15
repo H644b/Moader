@@ -62,6 +62,7 @@ jobs:
       - name: Core, pairing and real loopback HTTP
         run: |
           python3 tools/test-core.py
+          python3 tools/test-library-refresh.py
           python3 tools/test-web.py
       - name: Actual C producer and C++ runtime reader
         run: python3 tools/test-runtime-logs.py
@@ -87,8 +88,10 @@ jobs:
         run: |
           python3 tools/test-metadata-names.py
           python3 tools/test-game-names.py
+          python3 tools/test-game-availability.py
           python3 tools/test-web-worker.py
           python3 tools/test-resident.py
+          python3 tools/test-native-ui.py
 
   installer-runtime:
     name: Installer and runtime

@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
         enabled = library.set_enabled(title, "executable", true);
         expect(enabled.applied == moader::ApplyState::RelaunchGame, "Executable replacement must require game relaunch.");
         library.import_zip("0400F43008C44001", "wrapped", fixtures + "/wrapped.zip", "Wrapped example");
-        for (const char* name : {"traversal", "case-collision", "symlink", "bad-crc", "underdeclared", "metadata-only"}) {
+        for (const char* name : {"traversal", "case-collision", "symlink", "bad-crc", "underdeclared", "metadata-only", "game-source-spoof"}) {
             rejects([&] { library.import_zip(title, name, fixtures + '/' + name + ".zip", name); }, "Unsafe ZIP must reject.");
             expect(!fs::exists(root + "/library/" + title + '/' + name), "Failed import must stay outside library.");
         }
