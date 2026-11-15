@@ -51,6 +51,7 @@
 
 #include <switch.h>
 #include "protocol.h"
+#include "reload.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,6 +97,13 @@ typedef Result (*PluginServiceHandler)(u32 command_id, const void* input,
 /// Maximum number of client sessions that a PluginService serves at once.
 #define KAIHEN_PLUGIN_MAX_SESSIONS 16
 
+typedef struct {
+    bool created;
+    bool started;
+    bool exited;
+    bool closed;
+} PluginServiceThreadState;
+
 /**
  * @brief A simple scalar-command server.
  * @note Two threads serve it. The control thread answers HEN's requests to
@@ -118,17 +126,31 @@ typedef struct {
     Result worker_result;
     Result control_result;
     bool started;
+    PluginLifecycleHandler lifecycle_handler;
+    void* lifecycle_context;
+    PluginServiceThreadState control_thread_state;
+    PluginServiceThreadState worker_thread_state;
+    bool stopping;
 } PluginService;
 
 /// Starts the threads that create client sessions through the control session and serve them.
 Result pluginServiceStart(PluginService* service, Handle control_session,
                           PluginServiceHandler handler, void* context);
 
+/** Opt-in lifecycle server. The lifecycle callback runs on the control
+ * thread and must only acknowledge/query/enqueue work for the owner thread. */
+Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
+                          PluginServiceHandler handler, void* context,
+                          PluginLifecycleHandler lifecycle, void* lifecycle_context);
+
 /**
  * @brief Stops the threads and closes the client sessions. The borrowed
  *        control session stays open.
  * @return The first failure of the worker or control thread, or 0. HEN
  *         closing the control session is not a failure.
+ * @note On thread wait/close failure, started stays true and resources and
+ *       caller-owned contexts must remain alive. A later Stop resumes using
+ *       the recorded partial join state; it never joins/closes twice.
  */
 Result pluginServiceStop(PluginService* service);
 

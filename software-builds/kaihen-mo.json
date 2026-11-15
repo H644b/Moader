@@ -1,11 +1,26 @@
 {
+  "schema": 2,
   "base_commit": "e897f991524590833b82fbe8d63a3c6775fb8101",
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "hen_sha256": "e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c",
+  "patch_sha256": "456404102eee295bfb69c1fa97b0bc706afb6b94f9a3cf3f9c3ac6c829aadf89",
+  "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
+  "source_tree_sha256": "315b5731a5823b00216120fab3ed9b344ee6e7b9016007f03db35e9ccf05f7b6",
+  "protocol_version": 7,
+  "hen_sha256": "d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22",
+  "components": {
+    "hen/main": {
+      "bytes": 128611,
+      "sha256": "d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22"
+    },
+    "bootstrap.bin": {
+      "bytes": 29952,
+      "sha256": "ccf258b47dc2ef07881fbf0680491b48279ff220588d23930aa4fe32c45e0e71"
+    }
+  },
   "native_build_passed": true,
-  "console_retest_passed": true,
-  "reason": "Keep unsupported active applications from permanently faulting first-launch policy capture; add read-only GameTrace query.",
-  "validation_scope": "The patched HEN and Moader resident/FS integration passed device checks, including native diagnostics and a bounded MK8 live texture enable/disable/removal test. See docs/VALIDATION.md for scope."
+  "console_retest_passed": false,
+  "reason": "Add cooperative selected-plugin reload, retained launch capability and guarded async publication, preserving pending-launch fix and read-only trace query.",
+  "validation_scope": "Pinned SDK final link and host sanitizer coverage passed. This protocol-7 HEN/bootstrap pair and reload command have not been console-tested. Original protocol-6 device results remain separate; see docs/VALIDATION.md."
 }

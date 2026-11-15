@@ -94,7 +94,7 @@ To remove a mod in the browser, select **Remove from library**, then confirm **R
 
 Select the game, open **Settings → Game copy**, and choose the copy you actually use. The setting saves immediately and is shared by both interfaces.
 
-- **Unspecified / Check inserted card:** the conservative default. A matching inserted card and available base Program are required.
+- **Unspecified / Check inserted card:** the conservative default. A matching inserted card and a consistent second card observation are required.
 - **Cartridge / Cartridge or game-key card:** require this game's physical card, including for downloaded game-key data.
 - **Digital / My digital copy:** check installed noncard base Program data using your explicit selection. Choose this only for a copy you can play without the card. Moader does not verify ownership or infer it from downloaded updates.
 
@@ -131,3 +131,7 @@ Preferences are stored on the Switch and shared across both interfaces. Native t
 Press **ZL** for native diagnostics. The browser also has a debug panel and an Advanced log download. Native lines describe actual runtime operations, while library events describe requested management changes.
 
 Press **Minus** to save the app screen. You can also save a diagnostic report from the debug/Advanced controls. Before sharing an export, remove pairing information, network addresses, session commands, personal paths and other private details. See [Troubleshooting](TROUBLESHOOTING.md).
+
+## Reload the resident service
+
+With the matching protocol-7 HEN installed, open **Settings → Advanced → Reload Moader service**. Finish imports first. The app shows progress, then reconnects after the new process and its FS acknowledgement are verified. Your browser connection closes during restart; reconnect afterward with the saved pairing code. Reload leaves the installed FS hook running and does not clear game caches. [Full reload instructions, command and recovery](PLUGIN_RELOAD.md).

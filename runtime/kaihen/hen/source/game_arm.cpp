@@ -191,6 +191,7 @@ void GameArm::fault(Result result) {
 }
 
 void GameArm::step() {
+    if (reload_leased_) return;
     Result rc = 0;
     switch (state_) {
     case State::Inactive:
@@ -241,6 +242,16 @@ void GameArm::step() {
     if (R_FAILED(rc)) {
         fault(rc);
     }
+}
+
+bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
+    if (!started_ || reload_leased_ || !memory_ || !gate_ || step_started_ ||
+        bootstrap_restore_pending_ || gate_->pendingRestoreWithReceipt() ||
+        (state_ != State::WaitForInput && state_ != State::WaitExit)) return false;
+    reload_leased_ = true;
+    out = {memory_config_, gate_config_, mount_config_, reader_session_,
+           filesystem_process_, filesystem_root_, loader_root_, monitor_};
+    return true;
 }
 
 Result GameArm::openPackage() {

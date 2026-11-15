@@ -395,6 +395,17 @@ static void _launchConnectServices(LaunchState* args, bool plugin) {
         args->result = henAdoptServiceManager(&hen, args->input.sm_session);
     }
     if (R_SUCCEEDED(args->result)) {
+        const HenPluginLaunchConfig config = {args->pm.program_id, args->pm.flags,
+                                             args->pm.storage_id, {0, 0, 0}};
+        // Independent protocol session: the acquisition process may close
+        // its original CMIF client during teardown. A COPY alone is not a
+        // guarantee that its later CMIF Close leaves HEN's connection alive.
+        Handle shell = INVALID_HANDLE;
+        args->result = cmifCloneCurrentObject(args->input.shell_session, &shell);
+        if (R_SUCCEEDED(args->result)) args->result = henConfigurePluginReload(&hen, &config, shell);
+        if (shell != INVALID_HANDLE) svcCloseHandle(shell);
+    }
+    if (R_SUCCEEDED(args->result)) {
         args->result = henReleaseControlPort(&hen);
     }
 }

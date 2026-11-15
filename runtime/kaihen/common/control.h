@@ -20,9 +20,24 @@ enum HenControlCommand {
     HenControlCommand_ReleaseControlPort = 13,
     HenControlCommand_CreateServiceManagerSession = 14,
     HenControlCommand_CloneFilesystemRoot = 15,
+    HenControlCommand_ConfigurePluginReload = 16,
     // Moader diagnostic extension. Read-only on control and homebrew sessions.
     HenControlCommand_MoaderGameTrace = 0x4d4f0001,
 };
+
+typedef struct {
+    u64 program_id;
+    u32 flags;
+    u8 storage_id;
+    u8 reserved[3];
+} HenPluginLaunchConfig;
+
+// COPY an independent PM shell client cloned for HEN; the bootstrap closes
+// only its local kernel reference, never its protocol connection.
+NX_INLINE Result henConfigurePluginReload(Service* s, const HenPluginLaunchConfig* config, Handle shell) {
+    return serviceDispatchIn(s, HenControlCommand_ConfigurePluginReload, *config,
+        .in_num_handles = 1, .in_handles = {shell});
+}
 
 
 

@@ -1,6 +1,6 @@
 # Game-card checks
 
-Moader v0.1.0-dev.4 checks game availability before admitting requested replacements to a newly published runtime catalogue. The checks cover the Moader-managed library. They do not launch the game, mount its executable as a probe, change a license, or contact an online ownership service.
+Moader v0.1.0-dev.5 checks game availability before admitting requested replacements to a newly published runtime catalogue. The checks cover the Moader-managed library. They do not launch the game, mount its executable as a probe, change a license, or contact an online ownership service.
 
 ## Choose the game's copy
 
@@ -8,7 +8,7 @@ Select a game in the left rail, then open **Settings → Game copy**. The choice
 
 | Choice | Behavior |
 | --- | --- |
-| Unspecified / Check inserted card | Require a positively matching current card and available base Program. Uncertain card independence remains blocked. |
+| Unspecified / Check inserted card | Require a positively matching current card and a second consistent card observation. Uncertain identity remains blocked. |
 | Cartridge / Cartridge or game-key card | Require this game's matching card, including when the game data was downloaded. |
 | Digital / My digital copy | Check installed noncard base Program data based on your explicit declaration that you use a card-independent copy. This is not automatic ownership or license verification. |
 
@@ -28,11 +28,13 @@ This does not eject or reload a game, undo code already loaded into its process,
 
 ## What the implementation checks
 
-The provider uses the SDK's NS insertion/application-list/content-status calls and NCM metadata/storage calls. It validates counts and complete bounded enumerations, checks again for changing observations, distinguishes Application bases from downloaded patches/DLC, and verifies a full base Program content ID is present in the selected storage. Opaque rights flags are not interpreted as proof of digital ownership.
+For Unspecified and Cartridge, the provider checks NS insertion and the complete bounded list of applications on the card, resolves the routed title to its verified owner, requires a match, then repeats the card observation. It does not require a cartridge to appear in NS's installed-content list or perform NCM content probes on this path. This checks physical presence; the platform still enforces the game's executable, update and download dependencies.
+
+For explicit Digital, the provider checks complete NS content-status observations and NCM metadata/storage. It distinguishes Application bases from patches/DLC and verifies the full base-owner Program content ID at offset zero is present on built-in or SD storage. It repeats the content observation before allowing. Opaque rights flags are not interpreted as proof of digital ownership.
 
 Names and availability share a mutex around NS lifecycle/query sequences. Both foreground and resident publishers use the provider; a UI-only toggle cannot assert a card is present. Query failures and unsupported or ambiguous identities fail closed with their stage/result in the detail.
 
-Exact application records take precedence. The existing bounded record-backed NX/Ounce relationship supports delta 0 and the demonstrated Edition index 1; Edition control fields are checked before using its base owner. The base owner's Program index zero is checked. An ACD index is never treated as an executable Program index. This verifies the required base/card relationship, not the presence or compatibility of every routed update, Edition dependency or mod executable.
+Exact application records take precedence. The existing bounded record-backed NX/Ounce relationship supports delta 0 and the demonstrated Edition index 1; Edition control fields are checked before using its base owner. The Digital path checks the base owner's Program index zero. An ACD index is never treated as an executable Program index. These checks establish the selected presence condition, not complete launch readiness or compatibility of every update, Edition dependency, game-key download or mod executable.
 
 The supported combined installer starts with an empty checked catalogue before attaching the native filesystem runtime, then starts the publisher. It does not admit the separate upstream loader's legacy `contents/` or global-patch collections. Those standalone upstream workflows do not gain Moader's gate by copying these application files.
 
@@ -40,6 +42,8 @@ Relevant upstream interfaces: [NS declarations](https://switchbrew.github.io/lib
 
 ## Validation and crash limits
 
-The production provider and publisher have sanitizer-backed host fixtures using real SDK declarations and fake service replies. They cover card/source choices, Program presence, errors, identity mapping, changing observations and cleanup. Actual resident/foreground service permissions, game-card/key-card responses, insertion/removal and the rebuilt programs have **not been console-tested**. A service denied on a particular policy stays blocked rather than guessing availability. See [Validation](VALIDATION.md).
+The production provider and publisher have sanitizer-backed host fixtures using real SDK declarations and fake service replies. They cover card/source choices, Program presence, errors, identity mapping, changing observations and cleanup. The dev.4 resident was installed and reached the web interface on a console. With the Z-A card inserted, its gate passed the card/owner checks but then reported the base Program unavailable. This exposed the extra installed-content requirement on the physical path. Raw installed-content rows were not captured, so the exact NS/NCM response behind that failure is unknown.
+
+The dev.5 correction has host regressions for matching cards with empty or patch-only installed lists, plus wrong/absent/changing cards and required-query failures. They assert that the physical path makes no installed-content or NCM calls. The corrected binaries and live insertion/removal behavior have **not been console-tested**. A service denied on a particular policy stays blocked rather than guessing availability. See [Validation](VALIDATION.md).
 
 A missing cartridge has not been established as the cause of the reported fatal Minecraft/hbmenu system restart. This guard is preventive behavior; this release does not claim to diagnose or repair that fatal.

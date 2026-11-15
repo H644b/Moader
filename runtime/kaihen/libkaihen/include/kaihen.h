@@ -24,6 +24,7 @@
 #include <switch.h>
 
 #include "kaihen/protocol.h"
+#include "kaihen/reload.h"
 
 /// Gets the ldr:ro session that hbloader passes to the NRO. The Service does
 /// not own the handle: do not close it. Returns LibnxError_NotFound when the
@@ -166,4 +167,17 @@ NX_INLINE Result henOpenPlugin(Service* s, const HenPluginName* name, Service* o
     if (R_SUCCEEDED(rc))
         serviceCreate(out, session);
     return rc;
+}
+
+NX_INLINE Result henGetPluginInfo(Service* s, const HenPluginName* name, HenPluginInfo* out) {
+    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginInfo, *name, *out);
+}
+NX_INLINE Result henReloadPlugin(Service* s, const HenPluginReloadRequest* request, HenPluginReloadStatus* out) {
+    return serviceDispatchInOut(s, HenHomebrewCommand_ReloadPlugin, *request, *out);
+}
+NX_INLINE Result henGetPluginReloadStatus(Service* s, u64 operation_id, HenPluginReloadStatus* out) {
+    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginReloadStatus, operation_id, *out);
+}
+NX_INLINE Result henGetReloadCapabilities(Service* s, HenReloadCapabilities* out) {
+    return serviceDispatchOut(s, HenHomebrewCommand_GetReloadCapabilities, *out);
 }

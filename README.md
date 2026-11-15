@@ -14,12 +14,12 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev.4 — library recovery and game-card checks](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)**. The rebuilt app and resident keep complete library snapshots available during imports, retain the list after failed SD scans, and separate control errors from filesystem errors. A new **Settings → Game copy** choice guards cartridge and game-key games. This also includes the earlier ZIP fix. HEN and the native filesystem runtime are unchanged. The new app/resident have host validation only; see [Validation](docs/VALIDATION.md).
+Start with **[v0.1.0-dev.5 — cartridge correction and plugin reload](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.5)**. The physical-copy guard now uses consistent matching-card observations. The patched HEN adds a command to reload a cooperative resident plugin, exposed in **Settings → Advanced → Reload Moader service**. This release rebuilds the app, resident, HEN and bootstrap; the native filesystem hook is unchanged. Install the matching kit once to add the command. See [reload instructions](docs/PLUGIN_RELOAD.md) and the precise [validation scope](docs/VALIDATION.md).
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
+| [Moader-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-v0.1.0-dev.5.zip) | The console app and matching resident plugin |
+| [Moader-backend-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-backend-v0.1.0-dev.5.zip) | Backend setup kit with matching patched HEN/bootstrap; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 
@@ -72,7 +72,7 @@ This is a bounded test of one loose RomFS replacement. Game caches, new/resized 
 
 - [Wiki](https://github.com/H644b/Moader/wiki) — browse all user guides
 - [Installation](docs/INSTALLATION.md) — app copy, both backend setup routes and updates
-- [kaiHEN modifications](docs/KAIHEN_CHANGES.md) — exact four-file patch, upstream base and binary hash
+- [kaiHEN modifications](docs/KAIHEN_CHANGES.md) — complete source patch, reload protocol, upstream base and HEN/bootstrap hashes
 - [CivSwitch / Civilization VII](docs/CIV7.md) — experimental entrypoint, exact source pin and validation limits
 - [Usage](docs/USAGE.md) — controller controls, pairing, ZIP layout and settings
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — connection, apply-state and recovery help

@@ -10,7 +10,7 @@
 #include <switch/types.h>
 
 /// The version of HEN's protocol, in HenStatus::protocol_version.
-#define HEN_PROTOCOL_VERSION 6
+#define HEN_PROTOCOL_VERSION 7
 
 #define HEN_PLUGIN_NAME_SIZE 64
 #define HEN_MAX_PLUGINS 16
@@ -86,6 +86,10 @@ typedef enum {
     HenHomebrewCommand_GetPluginName = 21,
     /// Takes HenPluginName and returns a new plugin session by COPY.
     HenHomebrewCommand_OpenPlugin = 22,
+    HenHomebrewCommand_GetPluginInfo = 23,
+    HenHomebrewCommand_ReloadPlugin = 24,
+    HenHomebrewCommand_GetPluginReloadStatus = 25,
+    HenHomebrewCommand_GetReloadCapabilities = 26,
 } HenHomebrewCommand;
 
 /// The reply of HenHomebrewCommand_GetStatus.

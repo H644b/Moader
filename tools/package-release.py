@@ -4,6 +4,7 @@ from pathlib import Path, PurePosixPath
 import argparse
 import datetime
 import hashlib
+import importlib.util
 import json
 import re
 import subprocess
@@ -35,6 +36,39 @@ def binary(root, item, magic, offset=0):
             'Binary differs from config/release.json: ' + item['source'])
     require(data[offset:offset + len(magic)] == magic, 'Invalid release binary format')
     return data
+
+
+def native_pair(root, spec):
+    hen = binary(root, spec['patched_hen'], b'NSO0')
+    backend_spec = importlib.util.spec_from_file_location('moader_release_backend', root / 'tools/setup-backend.py')
+    backend = importlib.util.module_from_spec(backend_spec)
+    backend_spec.loader.exec_module(backend)
+    proof = backend.proof(root)
+    backend.qualify_patched(hen, 'hen/main', proof)
+    require(spec['patched_hen']['source'] == 'vendor/kaihen-mo/hen/main', 'Unexpected patched HEN release source')
+    bootstrap = None
+    if proof.get('schema') == 2:
+        item = spec.get('patched_bootstrap')
+        require(isinstance(item, dict) and item.get('source') == 'vendor/kaihen-mo/bootstrap.bin', 'Paired patched bootstrap descriptor is required')
+        bootstrap = binary(root, item, b'')
+        backend.qualify_patched(bootstrap, 'bootstrap.bin', proof)
+    else:
+        require('patched_bootstrap' not in spec, 'Legacy release cannot declare an unqualified patched bootstrap')
+    return hen, bootstrap, proof
+
+
+def qualify_exported_native_source(source, proof):
+    if proof.get('schema') != 2:
+        return
+    files = {}
+    for name, (data, _) in source.items():
+        if name.startswith('runtime/kaihen/'):
+            relative = name[len('runtime/kaihen/'):]
+            if any(part in ('build', '.git', '__pycache__') for part in PurePosixPath(relative).parts) or PurePosixPath(relative).name == '.DS_Store':
+                continue
+            files[relative] = data
+    digest = sha(''.join(name + '\0' + sha(data) + '\n' for name, data in sorted(files.items())).encode())
+    require(digest == proof['source_tree_sha256'], 'Committed release omits or changes pinned native source')
 
 
 def git(root, *args):
@@ -108,8 +142,9 @@ def main():
     require(re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', tag), 'Invalid release tag')
     app = binary(root, spec['binaries']['Moader.nro'], b'NRO0', 16)
     service = binary(root, spec['binaries']['moader.nso'], b'NSO0')
-    hen = binary(root, spec['patched_hen'], b'NSO0')
+    hen, bootstrap, proof = native_pair(root, spec)
     commit, source = public_source(root)
+    qualify_exported_native_source(source, proof)
     timestamp = datetime.datetime.fromtimestamp(int(git(root, 'show', '-s', '--format=%ct', 'HEAD')), datetime.timezone.utc).timetuple()[:6]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -124,6 +159,8 @@ def main():
     prefix = f'Moader-backend-{tag}/'
     host = {prefix + name: value for name, value in source.items()}
     host[prefix + 'vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
+    if bootstrap is not None:
+        host[prefix + 'vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
     host[prefix + 'dist/Moader.nro'] = (app, 0o100644)
     host[prefix + 'dist/moader.nso'] = (service, 0o100644)
     host[prefix + 'START_HERE.txt'] = ((
@@ -131,7 +168,8 @@ def main():
         'Start with README.md and docs/INSTALLATION.md in this folder.\n'
         'Keep this folder on your computer; do not copy the whole kit to the SD.\n'
         'For ordinary SD installation, use the separate Moader app ZIP.\n\n'
-        'The kit includes the matched Moader app/service and tested patched HEN.\n'
+        'The kit includes the matched Moader app/service and pinned patched HEN.\n'
+        + ('The patched bootstrap is included as the required matched HEN pair.\n' if bootstrap is not None else '') +
         'See docs/VALIDATION.md for host checks and console-test coverage.\n'
         'Preparation fetches pinned official HEN components and upstream host source.\n'
         'It needs Node 24, Python 3.10+ and internet access, not a compiler/SDK.\n'
@@ -152,6 +190,9 @@ def main():
         'appAndResidentMatchTestedManifest': spec['appAndResidentHardwareTested'],
         'appAndResidentHardwareTested': spec['appAndResidentHardwareTested'],
         'patchedHenSha256': sha(hen),
+        **({'patchedBootstrapSha256': sha(bootstrap), 'kaihenProtocolVersion': proof['protocol_version']} if bootstrap is not None else {}),
+        'kaihenBuildProofSchema': proof.get('schema', 1),
+        'kaihenConsoleRetestPassed': proof.get('console_retest_passed', False),
         'upstreamHostSourceBundled': False, 'officialHenArchiveBundled': False,
         'assets': records, 'validation': 'docs/VALIDATION.md',
     }, indent=2) + '\n')

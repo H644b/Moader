@@ -65,7 +65,9 @@ jobs:
           python3 tools/test-library-refresh.py
           python3 tools/test-web.py
       - name: Actual C producer and C++ runtime reader
-        run: python3 tools/test-runtime-logs.py
+        run: |
+          python3 tools/test-runtime-logs.py
+          python3 tools/test-backend-restart.py
 
   host-sdk:
     name: Host SDK and resident
@@ -92,6 +94,9 @@ jobs:
           python3 tools/test-web-worker.py
           python3 tools/test-resident.py
           python3 tools/test-native-ui.py
+          python3 tools/test-reload-client.py
+      - name: Actual HEN reload orchestration and lifecycle server
+        run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/hen/test.sh
 
   installer-runtime:
     name: Installer and runtime
@@ -129,10 +134,11 @@ jobs:
           node tools/test-installers.cjs
           node tools/test-control-resident.cjs
           node tools/test-inspect-hen.cjs
-      - name: Both precompiled host profiles with public inputs and console calls blocked
+      - name: Legacy host compatibility and paired source qualification with console calls blocked
         run: |
-          python3 tools/test-ns2jb-host.py --online --node node
-          python3 tools/test-ns2jb-host.py --online --node node --host-profile civ7-s8n
+          python3 tools/test-ns2jb-host.py --pair-only --node node
+          python3 tools/test-ns2jb-host.py --online --baseline --node node
+          python3 tools/test-ns2jb-host.py --online --baseline --node node --host-profile civ7-s8n
       - name: Portable runtime preparation regressions
         run: |
           node runtime/modloader/tests/pchtxt.cjs

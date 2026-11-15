@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Provision pinned local backend inputs; never acquire or contact a console."""
 from __future__ import annotations
-import argparse, hashlib, io, json, os, pathlib, platform, shutil, stat, subprocess, tarfile, tempfile, urllib.parse, urllib.request, zipfile
+import argparse, hashlib, io, json, os, pathlib, platform, re, shutil, stat, subprocess, tarfile, tempfile, urllib.parse, urllib.request, zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 NS2JB_REV = '28f03b5895e5569d8fbc35cbed84906b8f0a65b2'
@@ -14,6 +14,7 @@ HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n')
 KAIHEN_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip'
 KAIHEN_SHA = '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967'
 HEN_SHA = 'e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c'
+SOURCE_TREE_ALGORITHM = 'sha256-sorted-path-nul-sha256-newline-v1'
 PROGRAM_ENTRIES = {'dist/Moader.nro': 'switch/Moader.nro', 'dist/moader.nso': 'kaihen/plugins/moader.nso'}
 KAIHEN_COMPONENTS = ('ro/main', 'hen/main', 'game/main', 'bootstrap.bin', 'hbmenu.nro')
 MAX_ARCHIVE, MAX_FILE, MAX_TOTAL, MAX_ENTRIES = 64 << 20, 32 << 20, 96 << 20, 4096
@@ -162,22 +163,71 @@ def validate_programs(files):
     require(4 <= len(service) <= MAX_FILE and service[:4] == b'NSO0', 'Invalid resident NSO')
 
 
+def kaihen_source_sha(root):
+    base = root / 'runtime/kaihen'
+    require(base.is_dir() and not base.is_symlink(), 'Expected native source directory')
+    files = {}
+    for file in sorted(base.rglob('*')):
+        relative = file.relative_to(base)
+        if any(part in ('build', '.git', '__pycache__') for part in relative.parts) or file.name == '.DS_Store':
+            continue
+        require(not file.is_symlink(), 'Native source symlink is forbidden')
+        if file.is_dir():
+            continue
+        data = regular(file).read_bytes()
+        require(0 < len(data) <= MAX_FILE, 'Invalid native source file size')
+        files[relative.as_posix()] = data
+    require(0 < len(files) <= MAX_ENTRIES, 'Invalid native source file count')
+    return tree_sha(files)
+
+
 def proof(root):
     p = json.loads(regular(root / 'software-builds/kaihen-mo.json').read_text())
-    require(p.get('hen_sha256') == HEN_SHA, 'Public tested-HEN proof/hash differs')
-    regular(root / 'software-builds/kaihen-mo.patch')
+    require(isinstance(p, dict) and ('schema' not in p or type(p['schema']) is int), 'Invalid kaiHEN build proof schema')
+    patch = regular(root / 'software-builds/kaihen-mo.patch').read_bytes()
+    if p.get('schema', 1) == 1:
+        require(p.get('hen_sha256') == HEN_SHA and not any(key in p for key in
+                ('components', 'bootstrap_sha256', 'protocol_version', 'source_tree_sha256')), 'Public legacy HEN proof/hash differs or mixes new descriptors')
+        return p
+    require(p.get('schema') == 2, 'Unsupported kaiHEN build proof schema')
+    require(p.get('base_commit') == 'e897f991524590833b82fbe8d63a3c6775fb8101' and p.get('release_base') == '20261114c' and
+            p.get('patch') == 'software-builds/kaihen-mo.patch' and p.get('protocol_version') == 7, 'Unqualified kaiHEN base, patch or protocol')
+    require(p.get('native_build_passed') is True and type(p.get('console_retest_passed')) is bool, 'Missing explicit native build/console validation scope')
+    require(p.get('source_tree_algorithm') == SOURCE_TREE_ALGORITHM and p.get('source_tree_sha256') == kaihen_source_sha(root), 'kaiHEN source identity differs from build proof')
+    require(p.get('patch_sha256') == digest(patch), 'kaiHEN patch identity differs from build proof')
+    components = p.get('components')
+    require(isinstance(components, dict) and set(components) == {'hen/main', 'bootstrap.bin'}, 'Build proof requires exactly the HEN/bootstrap pair')
+    for name, item in components.items():
+        require(isinstance(item, dict) and set(item) == {'bytes', 'sha256'} and type(item['bytes']) is int and 0 < item['bytes'] <= MAX_FILE and
+                isinstance(item['sha256'], str) and re.fullmatch(r'[a-f0-9]{64}', item['sha256']), 'Invalid patched component descriptor: ' + name)
+    require(p.get('hen_sha256') == components['hen/main']['sha256'], 'HEN proof descriptors disagree')
+    protocol = regular(root / 'runtime/kaihen/libkaihen/include/kaihen/protocol.h').read_text()
+    require(re.search(r'^#define HEN_PROTOCOL_VERSION\s+7\s*$', protocol, re.M), 'Native protocol header differs from build proof')
     return p
+
+
+def patched_components(p):
+    return p['components'] if p.get('schema') == 2 else {'hen/main': {'sha256': HEN_SHA}}
+
+
+def qualify_patched(data, name, p):
+    item = patched_components(p)[name]
+    require(0 < len(data) <= MAX_FILE and digest(data) == item['sha256'] and ('bytes' not in item or len(data) == item['bytes']),
+            'Patched component does not match pinned build/tested bytes: ' + name)
+    if name == 'hen/main':
+        require(data[:4] == b'NSO0', 'Invalid patched HEN NSO')
 
 
 def sdk(root):
     require(platform.system() == 'Darwin' and platform.machine().lower() in ('arm64', 'aarch64'), '--build currently requires Apple Silicon macOS; no Linux/Intel SDK is provisioned')
     result = root / 'vendor/devkitpro'
-    for name in ('devkitA64/bin/aarch64-none-elf-g++', 'tools/bin/elf2nso', 'libounce/switch2_cpu.mk', 'libounce/lib/libounce_core.a', 'portlibs/switch2/lib/libkaihen_plugin.a'):
+    for name in ('devkitA64/bin/aarch64-none-elf-g++', 'tools/bin/elf2nso', 'libounce/switch2_cpu.mk', 'libounce/lib/libounce_core.a'):
         regular(result / name)
     return result.resolve()
 
 
 def build_inputs(root, work):
+    p = proof(root)
     devkit = sdk(root)
     source = work / 'source-build'; source.mkdir()
     # Source allowlist: no research, state, dist, build, .git or device files.
@@ -187,10 +237,16 @@ def build_inputs(root, work):
         target = source / name; target.parent.mkdir(parents=True, exist_ok=True); shutil.copyfile(root / name, target)
     subprocess.run(['make', '-C', str(source / 'runtime/kaihen/hen'), '-j4', 'DEVKITPRO=' + str(devkit), 'LIBOUNCE=' + str(devkit / 'libounce')], check=True)
     hen = (source / 'runtime/kaihen/hen/build/main').read_bytes()
-    require(digest(hen) == HEN_SHA, 'Rebuilt HEN is not byte-identical to tested HEN; existing binary was not touched')
+    qualify_patched(hen, 'hen/main', p)
+    pair = {'hen/main': hen}
+    if p.get('schema') == 2:
+        subprocess.run(['make', '-C', str(source / 'runtime/kaihen/bootstrap'), '-j4', 'DEVKITPRO=' + str(devkit), 'LIBOUNCE=' + str(devkit / 'libounce')], check=True)
+        bootstrap = regular(source / 'runtime/kaihen/bootstrap/build/bootstrap.bin').read_bytes()
+        qualify_patched(bootstrap, 'bootstrap.bin', p); pair['bootstrap.bin'] = bootstrap
+        require(kaihen_source_sha(source) == p['source_tree_sha256'], 'Copied native build source identity changed')
     subprocess.run(['make', '-C', str(source), '-j4', 'DEVKITPRO=' + str(devkit)], check=True)
     result = {name: regular(source / name).read_bytes() for name in PROGRAM_ENTRIES}
-    validate_programs(result); return hen, result
+    validate_programs(result); return pair if p.get('schema') == 2 else hen, result
 
 
 def safe_destination(root, relative):
@@ -246,7 +302,7 @@ def bundled_programs(root, allow_missing=False):
 
 def check_root(root, node='node', host_profile='smilebasic-kurumuz'):
     profile = source_profile(host_profile)
-    proof(root)
+    p = proof(root)
     archive = checked_archive(root / 'research/artifacts/kaiHEN-20261114c.zip', KAIHEN_SHA)
     shipped = zip_files(archive)
     engine = profile_files(root, profile)
@@ -255,12 +311,17 @@ def check_root(root, node='node', host_profile='smilebasic-kurumuz'):
         require(name in shipped, 'Incomplete official kaiHEN archive: ' + name)
         data = shipped[name]
         actual = regular(root / 'vendor/kaihen-mo' / name).read_bytes()
-        require(digest(actual) == HEN_SHA if name == 'hen/main' else actual == data, 'Local kaiHEN component differs: ' + name)
+        if name in patched_components(p):
+            qualify_patched(actual, name, p)
+        else:
+            require(actual == data, 'Local kaiHEN component differs: ' + name)
     bundled = bundled_programs(root)
     built = {name: regular(root / name).read_bytes() for name in PROGRAM_ENTRIES}; validate_programs(built)
     version = node_check(root, node)
     return {'readyForInstallerCheck': True, 'consoleConnected': False, 'node': version, 'hostProfile': profile['id'], 'engineRevision': profile['revision'],
-            'engineTreeSha256': profile['sha256'], 'henSha256': HEN_SHA, 'bundledPrograms': sorted(bundled),
+            'engineTreeSha256': profile['sha256'], 'henSha256': p['hen_sha256'], 'bundledPrograms': sorted(bundled),
+            'kaihenProofSchema': p.get('schema', 1), 'kaihenConsoleRetestPassed': p.get('console_retest_passed', False),
+            **({'bootstrapSha256': p['components']['bootstrap.bin']['sha256'], 'kaihenProtocolVersion': p['protocol_version']} if p.get('schema') == 2 else {}),
             'programs': {name: {'bytes': len(data), 'sha256': digest(data)} for name, data in built.items()}}
 
 
@@ -288,10 +349,10 @@ def setup(args):
     profile = source_profile(args.host_profile)
     require(not (args.check and args.build), '--check cannot build')
     if args.sources_only:
-        conflicts = [name.replace('_', '-') for name in ('check', 'build', 'node', 'release_manifest', 'kaihen_archive', 'programs_archive', 'programs_sha256', 'hen_binary') if getattr(args, name) not in (None, False)]
+        conflicts = [name.replace('_', '-') for name in ('check', 'build', 'node', 'release_manifest', 'kaihen_archive', 'programs_archive', 'programs_sha256', 'hen_binary', 'bootstrap_binary') if getattr(args, name) not in (None, False)]
         require(not conflicts, '--sources-only accepts only --root, --host-profile, --offline and --engine-archive; conflicting options: ' + ', '.join('--' + name for name in conflicts))
         return setup_sources(args.root.resolve(), args)
-    root = args.root.resolve(); proof(root)
+    root = args.root.resolve(); p = proof(root)
     if args.check:
         return check_root(root, args.node or 'node', args.host_profile)
     if args.build:
@@ -317,19 +378,25 @@ def setup(args):
         else:
             engine_archive = args.engine_archive or download(profile['url'], work / 'engine.tar.gz', offline=args.offline)
             engine = engine_files(engine_archive, args.host_profile)
-        hen, app = None, None
+        built, app = None, None
         if args.build:
-            hen, app = build_inputs(root, work)
-        if hen is None:
-            if args.hen_binary:
-                hen = regular(args.hen_binary).read_bytes()
-            elif (root / 'vendor/kaihen-mo/hen/main').exists():
-                hen = regular(root / 'vendor/kaihen-mo/hen/main').read_bytes()
-            elif manifest.get('patched_hen', {}).get('url'):
-                hen = download(manifest['patched_hen']['url'], work / 'patched-hen.nso', HEN_SHA, args.offline).read_bytes()
-            else:
-                raise ValueError('Missing patched HEN: use the pre-populated host kit, --hen-binary, or explicit --build with the installed Apple Silicon SDK')
-        require(digest(hen) == HEN_SHA, 'Patched HEN does not match tested bytes; refusing replacement')
+            built, app = build_inputs(root, work)
+        pair = built if isinstance(built, dict) else ({'hen/main': built} if built is not None else {})
+        require(p.get('schema') == 2 or not args.bootstrap_binary, '--bootstrap-binary requires the schema-2 paired build proof')
+        for name, pin in patched_components(p).items():
+            if name not in pair:
+                explicit = args.hen_binary if name == 'hen/main' else args.bootstrap_binary
+                local = root / 'vendor/kaihen-mo' / name
+                release = manifest.get('patched_hen' if name == 'hen/main' else 'patched_bootstrap', {})
+                if explicit:
+                    pair[name] = regular(explicit).read_bytes()
+                elif local.exists():
+                    pair[name] = regular(local).read_bytes()
+                elif release.get('url'):
+                    pair[name] = download(release['url'], work / ('patched-hen.nso' if name == 'hen/main' else 'bootstrap.bin'), pin['sha256'], args.offline).read_bytes()
+                else:
+                    raise ValueError('Missing pinned patched component '+name+': use the paired host kit, explicit binary, or --build')
+            qualify_patched(pair[name], name, p)
         if app is None:
             if all((root / name).exists() for name in PROGRAM_ENTRIES):
                 app = {name: regular(root / name).read_bytes() for name in PROGRAM_ENTRIES}; validate_programs(app)
@@ -342,7 +409,7 @@ def setup(args):
         files = {'research/artifacts/kaiHEN-20261114c.zip': archive.read_bytes(), **app}
         files.update({profile['directory'] + '/' + name: data for name, data in engine.items()})
         # Optional programs such as OunceShell are deliberately not extracted.
-        files.update({'vendor/kaihen-mo/' + name: hen if name == 'hen/main' else shipped[name] for name in KAIHEN_COMPONENTS})
+        files.update({'vendor/kaihen-mo/' + name: pair.get(name, shipped[name]) for name in KAIHEN_COMPONENTS})
         written = publish_new(root, files, directories=('vendor/kaihen-mo/programs',))
     result = check_root(root, args.node or 'node', args.host_profile); result['newFiles'] = written; return result
 
@@ -354,7 +421,7 @@ def parser():
     p.add_argument('--check', action='store_true', help='read-only local validation; no downloads/builds/preparation')
     p.add_argument('--sources-only', action='store_true', help='fetch/validate only selected host sources; no acquisition/HEN/app/SDK/Node work')
     p.add_argument('--offline', action='store_true', help='refuse downloads; use supplied/host-kit inputs')
-    p.add_argument('--build', action='store_true', help='explicit isolated HEN/app rebuild with existing Apple Silicon SDK')
+    p.add_argument('--build', action='store_true', help='explicit isolated pinned HEN/bootstrap/app rebuild with existing Apple Silicon SDK')
     p.add_argument('--node', help='Node executable (default: node); pass mac2jb Node 24 path when appropriate')
     p.add_argument('--release-manifest', type=pathlib.Path)
     p.add_argument('--kaihen-archive', type=pathlib.Path)
@@ -362,6 +429,7 @@ def parser():
     p.add_argument('--programs-archive', type=pathlib.Path)
     p.add_argument('--programs-sha256')
     p.add_argument('--hen-binary', type=pathlib.Path)
+    p.add_argument('--bootstrap-binary', type=pathlib.Path, help='schema-2 pinned bootstrap paired with patched HEN')
     return p
 
 

@@ -3,8 +3,8 @@ export DEVKITPRO
 include $(DEVKITPRO)/libounce/switch2_cpu.mk
 PREFIX := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
 ARCH := $(SWITCH2_CPU) -mtp=soft -fPIE
-CPPFLAGS := -D__SWITCH__ -D__SWITCH2__ -Iinclude -I$(DEVKITPRO)/libounce/include -I$(DEVKITPRO)/portlibs/switch/include -I$(DEVKITPRO)/portlibs/switch2/include
-CXXFLAGS := $(ARCH) -std=gnu++20 -O2 -g -Wall -Wextra -Werror -Wno-missing-field-initializers -ffunction-sections -fdata-sections -MMD -MP
+CPPFLAGS := -D__SWITCH__ -D__SWITCH2__ -Iinclude -Iruntime/kaihen/libkaihen/include -I$(DEVKITPRO)/libounce/include -I$(DEVKITPRO)/portlibs/switch/include -I$(DEVKITPRO)/portlibs/switch2/include
+CXXFLAGS := $(ARCH) -std=gnu++20 -O2 -g -Wall -Wextra -Werror -Wno-missing-field-initializers -ffunction-sections -fdata-sections -MMD -MP $(SOURCE_PREFIX_FLAGS)
 CORE := build/native/model.o build/native/library.o build/native/zip.o build/native/web.o build/native/runtime_backend.o
 
 all: build/native/libmoader.a build/native/core-linkcheck.elf dist/Moader.nro dist/moader.nso dist/moader-diagnostics.nro
@@ -33,17 +33,20 @@ build/generated/native_font.hpp: native/assets/NotoSans-Regular.ttf native/embed
 build/native/ui.o: native/ui.cpp native/ui.hpp native/third_party/stb_truetype.h branding/mark-alpha.hpp build/generated/native_font.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -Wno-unused-function -c $< -o $@
 
-build/native/app.o: native/app.cpp build/generated/web_assets.hpp | build/native
+build/native/app.o: native/app.cpp native/reload_client.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
 
-build/native/service.o: native/service.cpp build/generated/web_assets.hpp | build/native
+build/native/service.o: native/service.cpp native/resident_lifecycle.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
 
 build/native/Moader.elf: build/native/app.o build/native/ui.o build/native/libmoader.a build/native/switch.specs
 	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections build/native/app.o build/native/ui.o build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
 
-build/native/moader-service.elf: build/native/service.o build/native/libmoader.a build/native/switch.specs
-	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< build/native/libmoader.a -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
+runtime/kaihen/libkaihen/build/libkaihen_plugin.a: $(wildcard runtime/kaihen/libkaihen/source/*) $(wildcard runtime/kaihen/libkaihen/include/kaihen/*) runtime/kaihen/libkaihen/Makefile
+	$(MAKE) -C runtime/kaihen/libkaihen DEVKITPRO=$(DEVKITPRO) LIBOUNCE=$(DEVKITPRO)/libounce build/libkaihen_plugin.a
+
+build/native/moader-service.elf: build/native/service.o build/native/libmoader.a build/native/switch.specs runtime/kaihen/libkaihen/build/libkaihen_plugin.a
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< build/native/libmoader.a -Lruntime/kaihen/libkaihen/build -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
 
 build/native/Moader.nacp: | build/native
 	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader' 'Moader' '0.1.0-dev' $@
@@ -75,11 +78,14 @@ check: build/generated/web_assets.hpp
 	python3 tools/test-web.py
 	python3 tools/test-web-worker.py
 	python3 tools/test-runtime.py
+	python3 tools/test-backend-restart.py
 	python3 tools/test-runtime-logs.py
 	python3 tools/test-metadata-names.py
 	python3 tools/test-game-names.py
 	python3 tools/test-game-availability.py
 	python3 tools/test-resident.py
+	python3 tools/test-reload-client.py
+	LIBOUNCE=$(DEVKITPRO)/libounce CXX=clang++ sh runtime/kaihen/hen/test.sh
 	python3 tools/test-native-ui.py
 
 -include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/ui.d build/native/service.d

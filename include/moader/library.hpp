@@ -50,6 +50,11 @@ public:
     // Bits: 1 names, 2 motion, 4 startup, 8 port, 16 log follow.
     void update_preferences(const Preferences& values, uint32_t mask);
     std::string game_name(const std::string& title);
+    // Reserve a cooperative service shutdown only between library operations.
+    // No routing/files are withdrawn. Readers remain valid while writes pause.
+    bool begin_quiesce();
+    void cancel_quiesce();
+    bool quiescing() const;
 private:
     std::string root_;
     Backend& backend_;
@@ -57,6 +62,7 @@ private:
     mutable std::mutex mutex_;
     std::mutex operation_mutex_, names_mutex_;
     bool importing_ = false; // Guarded by operation_mutex_; availability may proceed during extraction.
+    bool quiescing_ = false; // Guarded by mutex_; changed while holding operation_mutex_.
     std::vector<Mod> inventory_;
     bool inventory_ready_ = false;
     std::string inventory_error_;

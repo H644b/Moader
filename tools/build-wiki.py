@@ -12,6 +12,7 @@ PAGES = {
     'CivSwitch-Entrypoint': 'docs/CIV7.md',
     'Using-Moader': 'docs/USAGE.md',
     'Game-Card-Checks': 'docs/CARTRIDGES.md',
+    'Plugin-Reload': 'docs/PLUGIN_RELOAD.md',
     'Troubleshooting': 'docs/TROUBLESHOOTING.md',
     'How-Moader-Works': 'docs/RUNTIME.md',
     'Validation': 'docs/VALIDATION.md',
@@ -83,10 +84,11 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
 | [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, crashes and setup recovery |
 | [Game-card checks](Game-Card-Checks) | Per-game copy selection, missing cards, game-key downloads, digital choices and verification limits |
+| [Plugin reload](Plugin-Reload) | Reload the resident service, read progress, reconnect and recover from a failed replacement |
 | [How Moader works](How-Moader-Works) | Console app, resident service, filesystem runtime, apply states and component lifetimes |
 | [Frequently asked questions](FAQ) | Quick answers about reboot, live changes, removal and game errors |
 | [Validation](Validation) | What was tested on hardware and what the host checks establish |
-| [kaiHEN modifications](kaiHEN-Modifications) | The four changed source files, complete patch, upstream base and shipped HEN hash |
+| [kaiHEN modifications](kaiHEN-Modifications) | The complete patch, plugin reload protocol, upstream base and shipped HEN/bootstrap hashes |
 
 ## Interface previews
 
@@ -126,7 +128,7 @@ Use `/moader/library/TITLE_ID/mod-folder/romfs/`, with a lowercase Title ID and 
 
 ## How is kaiHEN modified?
 
-Moader publishes the complete four-file HEN patch, upstream revision and shipped hash. The [kaiHEN modification disclosure](kaiHEN-Modifications) explains the pending-launch fix and read-only trace query, separately from Moader's resident service and filesystem runtime.
+Moader publishes the complete kaiHEN source patch, upstream revision and shipped HEN/bootstrap hashes. The [kaiHEN modification disclosure](kaiHEN-Modifications) explains the pending-launch fix, read-only trace query and cooperative plugin reload, separately from Moader's FS hook. [Reload instructions](Plugin-Reload).
 
 ## Can I close Moader while playing?
 

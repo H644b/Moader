@@ -10,6 +10,8 @@ If an SD scan fails, the last complete list remains visible with a separate inve
 
 ## Game unavailable or a missing cartridge
 
+If dev.4 reports **“The base game Program is unavailable”** with the correct Z-A cartridge inserted, that version adds an installed-content requirement after its card check. The dev.5 correction uses repeated matching-card observations for physical copies. Install the matched updated app/resident; selecting Digital just to suppress the error defeats the physical-presence policy. The card still needs to match, and failed or changing card queries remain blocked.
+
 Select the game and open **Settings → Game copy**. Cartridge and game-key copies require a positively matching inserted card. Downloaded update or key-card data alone does not establish that the game is available without its card. Choose Digital only for a real card-independent copy; this is your selection, not Moader verifying ownership.
 
 The requested toggle stays saved while new routing omits the unavailable game's mods. Details explain a missing card, wrong card, missing base Program, unavailable service or uncertain identity. A query failure is not reported as proof that the card is absent. Insert the correct card or resolve the precise error and let availability refresh. Do not guess a different Title ID or change digital selection just to suppress an error. [Game-card checks](CARTRIDGES.md).
@@ -128,3 +130,7 @@ Follow the release's supported recovery instructions. Backend installation needs
 - A small, sanitized diagnostic excerpt or screenshot when useful.
 
 Remove pairing codes, session commands, network addresses, personal paths and credentials before posting. Do not attach game files, proprietary textures or saves. Describe the mod type and relevant behavior instead.
+
+## Reload progress or a lost connection during reload
+
+The protocol-7 patch adds **Settings → Advanced → Reload Moader service**. The listener closes while its process restarts. Wait for the app to reconnect, then reconnect your browser. A timeout is an unknown outcome, not proof of cancellation. Use the displayed status and save diagnostics; do not start a second writer or repeatedly submit a command after a quarantined result. [Reload guide](PLUGIN_RELOAD.md).

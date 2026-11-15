@@ -207,6 +207,7 @@ void Library::update_preferences(const Preferences& values, uint32_t mask) {
     if ((mask & 8) && (values.web_port < 1024 || values.web_port == 7713))
         throw std::runtime_error("Choose a web port from 1024 to 65535, except reserved port 7713.");
     std::unique_lock<std::mutex> lock(mutex_);
+    if (quiescing_) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     auto p = preferences_;
     if (mask & 1) p.game_names = values.game_names;
     if (mask & 2) p.reduced_motion = values.reduced_motion;
@@ -271,6 +272,7 @@ void Library::set_game_source(const std::string& title, GameSource source,
     if (!valid_title_id(title)) throw std::invalid_argument("Invalid game Title ID.");
     std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
     if (!operation.owns_lock() || importing_) throw std::runtime_error("An import or another library operation is in progress. Try again when it finishes.");
+    if (quiescing()) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     if (expected_generation && *expected_generation != generation())
         throw std::runtime_error("The library changed. Refresh before changing the game copy.");
     auto mods = cached_inventory(); bool found = false;
@@ -438,8 +440,26 @@ void Library::event(const std::string& message) {
     events_.push_back(message);
     if (events_.size() > 128) events_.erase(events_.begin());
 }
+bool Library::begin_quiesce() {
+    std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
+    if (!operation.owns_lock() || importing_) return false;
+    std::unique_lock<std::mutex> lock(mutex_, std::try_to_lock);
+    if (!lock.owns_lock()) return false;
+    quiescing_ = true;
+    return true;
+}
+void Library::cancel_quiesce() {
+    std::lock_guard<std::mutex> operation(operation_mutex_);
+    std::lock_guard<std::mutex> lock(mutex_);
+    quiescing_ = false;
+}
+bool Library::quiescing() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return quiescing_;
+}
 void Library::synchronize() {
     std::lock_guard<std::mutex> operation(operation_mutex_);
+    if (quiescing()) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     if (importing_) throw std::runtime_error("An import is in progress. Try again when it finishes.");
     std::vector<Mod> mods;
     try { mods = scan(); }
@@ -448,7 +468,7 @@ void Library::synchronize() {
 }
 bool Library::rescan() {
     std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
-    if (!operation.owns_lock() || importing_) return false;
+    if (!operation.owns_lock() || importing_ || quiescing()) return false;
     std::vector<Mod> mods;
     try { mods = scan(); }
     catch (const std::exception& e) { scan_failed(e.what()); throw; }
@@ -466,7 +486,7 @@ bool Library::rescan() {
 }
 bool Library::refresh_availability() {
     std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
-    if (!operation.owns_lock()) return false;
+    if (!operation.owns_lock() || quiescing()) return false;
     std::vector<Mod> mods;
     {
         std::lock_guard<std::mutex> lock(mutex_);
@@ -486,6 +506,7 @@ Mod Library::set_enabled(const std::string& title, const std::string& id, bool e
                          std::optional<uint64_t> expected_generation) {
     std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
     if (!operation.owns_lock() || importing_) throw std::runtime_error("An import or another library operation is in progress. Try again when it finishes.");
+    if (quiescing()) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     if (expected_generation && *expected_generation != generation())
         throw std::runtime_error("The library changed. Refresh before changing this mod.");
     const auto path = mod_path(title, id);
@@ -514,6 +535,7 @@ void Library::remove(const std::string& title, const std::string& id,
                      std::optional<uint64_t> expected_generation) {
     std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
     if (!operation.owns_lock() || importing_) throw std::runtime_error("An import or another library operation is in progress. Try again when it finishes.");
+    if (quiescing()) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     if (expected_generation && *expected_generation != generation())
         throw std::runtime_error("The library changed. Refresh before removing this mod.");
     const auto path = mod_path(title, id);

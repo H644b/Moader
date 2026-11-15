@@ -9,7 +9,7 @@ struct Mod { moader::ipc::ModReply data{}; std::string name, id, detail, game_na
 struct Game { uint64_t id; std::vector<unsigned> mods; std::string name; };
 enum class View { Library, Connection, Debug, Details, Settings, Advanced, Credits };
 enum LocalInput : uint32_t { BackInput=1, DebugInput=2, UpInput=4, DownInput=8, ActivateInput=16, SettingsInput=32, LeftInput=64, RightInput=128 };
-enum LocalAction : uint32_t { RefreshEvents=1, SaveReport=2, SavePreferences=4, SaveScreenshot=8, SaveGameSource=16 };
+enum LocalAction : uint32_t { RefreshEvents=1, SaveReport=2, SavePreferences=4, SaveScreenshot=8, SaveGameSource=16, ReloadService=32 };
 struct State {
     moader::ipc::SummaryReply summary{};
     moader::ipc::PreferencesReply preferences{moader::ipc::GameNames|moader::ipc::FollowLog,7712};
@@ -24,6 +24,8 @@ struct State {
     bool preferences_available=false, port_edit=false, log_paused=false;
     bool rail_focus = false, confirm_remove = false, connected = false, message_error = false;
     bool inventory_refresh_pending = false;
+    bool reload_available=false, reload_busy=false, reload_error=false;
+    std::string reload_detail="Install the new kaiHEN build to reload the resident service.";
     uint32_t game_source = moader::ipc::CopyUnspecified;
     uint64_t game_source_title = 0;
     bool game_source_available = false;

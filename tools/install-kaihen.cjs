@@ -10,23 +10,24 @@ async function qualifyRelease(prepared) {
   const archive = await fs.readFile(path.join(rootDir, 'research/artifacts/kaiHEN-20261114c.zip'));
   if (inputs.digest(archive) !== '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967')
     throw Error('kaiHEN release checksum differs');
-  // Moader deliberately patches HEN, whose separate tested digest is checked
-  // by the combined preflight. These other components must remain upstream's
-  // exact bytes from that qualified archive, not just a self-consistent copy.
-  if (prepared) for (const [name,sha256] of Object.entries({
-    'ro/main':'eed2f243fa7261607f33c19ee4fe916a7a1fe77319d38a17cca9dd759a97a2a0',
-    'bootstrap.bin':'c7a00d324ef1a13f43596b9806539b027761ffb2dd7ab6d4d8cf5fd1327b0be1',
-    'game/main':'f72ac5f94b8263a83e2ae698ca5ef91b192127d01778105293419d896247563c',
-    'hbmenu.nro':'bbb2de170be91749ae186bcae9853897dc4ec1e01790ef507b3504a9ea2c628a',
-  })) if (prepared.kaihenFiles.find(item=>item.source===path.join(prepared.kaihen,name))?.sha256 !== sha256)
-    throw Error('Prepared '+name+' differs from the qualified kaiHEN release');
+  const build=await inputs.qualifyKaihenBuild(rootDir);
+  if(prepared){
+    inputs.assertKaihenBinding(prepared,build);
+    for(const [name,pin] of Object.entries(build.components)){
+      const item=prepared.kaihenFiles.find(row=>row.source===path.join(prepared.kaihen,name));
+      if(item?.sha256!==pin.sha256||(pin.bytes!==undefined&&item?.bytes!==pin.bytes))
+        throw Error('Prepared '+name+' differs from the qualified kaiHEN release/build proof');
+    }
+  }
+  return build;
 }
 async function prepareKaihen({ship,extraFile,output}) {
   // Reject all extra manifests before loading a module with a live endpoint.
   const extra = await inputs.readExtra(extraFile);
-  const prepared = await inputs.snapshot({output,kaihen:ship,programs:extra});
+  const build=await inputs.qualifyKaihenBuild(rootDir);
+  const prepared = await inputs.snapshot({output,kaihen:ship,programs:extra,kaihenBuild:build});
   await inputs.validatePrepared(prepared);
-  await qualifyRelease();
+  await qualifyRelease(prepared);
   return prepared;
 }
 function verifyRoPackage(packageSession,image,policy) {

@@ -9,6 +9,73 @@ const METADATA_SIZES=Object.freeze({'/moader/runtime/catalogue.bin':64,'/moader/
 const METADATA_TARGETS=Object.freeze(Object.keys(METADATA_SIZES));
 const COMPONENTS=['ro/main','hen/main','bootstrap.bin','game/main','hbmenu.nro'];
 const MAX=32*1024*1024;
+const LEGACY_HEN_SHA='e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c';
+const OFFICIAL_COMPONENTS=Object.freeze({
+ 'ro/main':'eed2f243fa7261607f33c19ee4fe916a7a1fe77319d38a17cca9dd759a97a2a0',
+ 'bootstrap.bin':'c7a00d324ef1a13f43596b9806539b027761ffb2dd7ab6d4d8cf5fd1327b0be1',
+ 'game/main':'f72ac5f94b8263a83e2ae698ca5ef91b192127d01778105293419d896247563c',
+ 'hbmenu.nro':'bbb2de170be91749ae186bcae9853897dc4ec1e01790ef507b3504a9ea2c628a',
+});
+const SOURCE_TREE_ALGORITHM='sha256-sorted-path-nul-sha256-newline-v1';
+const isDigest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
+async function regularBytes(file){
+ const info=await fs.lstat(file);check(info.isFile()&&!info.isSymbolicLink()&&info.size>0&&info.size<=MAX,'Expected bounded regular build input: '+file);
+ return fs.readFile(file);
+}
+async function kaihenSourceDigest(root){
+ const base=path.join(root,'runtime/kaihen'),files=[];
+ async function walk(folder){
+  check((await fs.lstat(folder)).isDirectory(),'Expected native source directory');
+  for(const entry of await fs.readdir(folder,{withFileTypes:true})){
+   if(['build','.git','__pycache__'].includes(entry.name)||entry.name==='.DS_Store')continue;
+   const file=path.join(folder,entry.name);check(!entry.isSymbolicLink(),'Native source symlink is forbidden');
+   if(entry.isDirectory())await walk(file);
+   else{check(entry.isFile(),'Native source special file is forbidden');files.push([path.relative(base,file).split(path.sep).join('/'),digest(await regularBytes(file))]);}
+  }
+ }
+ await walk(base);check(files.length>0&&files.length<=4096,'Invalid native source file count');
+ files.sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
+ return digest(Buffer.from(files.map(([name,hash])=>name+'\0'+hash+'\n').join('')));
+}
+function validateKaihenProof(proof,observed={}){
+ check(proof&&typeof proof==='object'&&!Array.isArray(proof),'Invalid kaiHEN build proof');
+ if(proof.schema===undefined||proof.schema===1){
+  check(proof.hen_sha256===LEGACY_HEN_SHA&&!Object.hasOwn(proof,'components')&&!Object.hasOwn(proof,'bootstrap_sha256')&&
+   !Object.hasOwn(proof,'protocol_version')&&!Object.hasOwn(proof,'source_tree_sha256'),'Legacy HEN proof/hash differs or mixes new descriptors');
+  return{schema:1,protocolVersion:6,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),
+   'hen/main':{sha256:LEGACY_HEN_SHA}}};
+ }
+ check(proof.schema===2,'Unsupported kaiHEN build proof schema');
+ check(proof.base_commit==='e897f991524590833b82fbe8d63a3c6775fb8101'&&proof.release_base==='20261114c'&&
+  proof.patch==='software-builds/kaihen-mo.patch'&&proof.protocol_version===7,'Unqualified kaiHEN base, patch or protocol');
+ check(proof.native_build_passed===true&&typeof proof.console_retest_passed==='boolean','Missing explicit native build/console validation scope');
+ check(proof.source_tree_algorithm===SOURCE_TREE_ALGORITHM&&isDigest(proof.source_tree_sha256)&&
+  proof.source_tree_sha256===observed.sourceSha256,'kaiHEN source identity differs from build proof');
+ check(isDigest(proof.patch_sha256)&&proof.patch_sha256===observed.patchSha256,'kaiHEN patch identity differs from build proof');
+ check(proof.components&&Object.keys(proof.components).sort().join(',')==='bootstrap.bin,hen/main','Build proof requires exactly the HEN/bootstrap pair');
+ for(const name of ['hen/main','bootstrap.bin']){
+  const item=proof.components[name];check(item&&Object.keys(item).sort().join(',')==='bytes,sha256'&&Number.isSafeInteger(item.bytes)&&
+   item.bytes>0&&item.bytes<=MAX&&isDigest(item.sha256),'Invalid patched component descriptor: '+name);
+ }
+ check(proof.hen_sha256===proof.components['hen/main'].sha256,'HEN proof descriptors disagree');
+ return{schema:2,protocolVersion:7,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),...proof.components}};
+}
+async function qualifyKaihenBuild(root=path.resolve(__dirname,'..')){
+ const raw=await regularBytes(path.join(root,'software-builds/kaihen-mo.json')),proof=JSON.parse(raw.toString('utf8'));
+ const patch=await regularBytes(path.join(root,'software-builds/kaihen-mo.patch'));
+ const observed=proof.schema===2?{sourceSha256:await kaihenSourceDigest(root),patchSha256:digest(patch)}:{};
+ const build=validateKaihenProof(proof,observed);
+ if(build.schema===2){
+  const protocol=(await regularBytes(path.join(root,'runtime/kaihen/libkaihen/include/kaihen/protocol.h'))).toString('utf8');
+  check(/^#define HEN_PROTOCOL_VERSION\s+7\s*$/m.test(protocol),'Native protocol header differs from build proof');
+ }
+ return{...build,identity:digest(raw)};
+}
+function assertKaihenBinding(manifest,build){
+ if(build.schema===2||manifest.kaihenBuild!==undefined)
+  check(manifest.kaihenBuild?.schema===build.schema&&manifest.kaihenBuild?.protocolVersion===build.protocolVersion&&
+   manifest.kaihenBuild?.identity===build.identity,'Prepared HEN/bootstrap proof identity changed; prepare again after integration');
+}
 
 async function assertLogWireContract(){
  const header=await fs.readFile(path.resolve(__dirname,'../include/moader/runtime_log_wire.h'),'utf8');
@@ -82,7 +149,7 @@ async function readExtra(file){
 
 // Read mutable originals once, then publish a unique read-only tree. Build
 // jobs can replace dist files without changing this installation's inputs.
-async function snapshot({output,kaihen,programs=[],metadata=[],nativeRuntime,hostProfile}){
+async function snapshot({output,kaihen,programs=[],metadata=[],nativeRuntime,hostProfile,kaihenBuild}){
  const components=[];
  for(const name of COMPONENTS)components.push({...await readInput({source:path.resolve(kaihen,name)}),name});
  const bundled=[];
@@ -127,6 +194,7 @@ async function snapshot({output,kaihen,programs=[],metadata=[],nativeRuntime,hos
  const extraFile=path.join(directory,'programs.json'),manifestFile=path.join(directory,'manifest.json');
  await fs.writeFile(extraFile,JSON.stringify(frozenPrograms,null,2)+'\n',{flag:'wx',mode:0o400});
  const manifest={schema:1,preparedAt:new Date().toISOString(),directory,manifestFile,kaihen:path.join(directory,'kaihen'),kaihenFiles,...(nativeRuntime?{nativeRuntime}:{}),...(hostProfile?{hostProfile}:{}),
+  ...(kaihenBuild?{kaihenBuild:{schema:kaihenBuild.schema,protocolVersion:kaihenBuild.protocolVersion,identity:kaihenBuild.identity}}:{}),
   bundledPrograms,programs:frozenPrograms,metadata:frozenMetadata,extraFile,consoleTested:false};
  await fs.writeFile(manifestFile,JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o400});
  for(const name of [...directories].sort((a,b)=>b.length-a.length))await fs.chmod(name,0o500);
@@ -143,4 +211,5 @@ async function validatePrepared(manifest){
  return{programs,metadata};
 }
 module.exports={snapshot,validatePrepared,validateMoaderPrepared,assertLogWireContract,initialRuntimeMetadata,assertMoaderMetadata,validateMetadataReadback,
- validateEntries,readInput,readExtra,digest,PROGRAM_TARGETS,METADATA_TARGETS,METADATA_SIZES,LOG_SNAPSHOT_CAPACITY};
+ validateEntries,readInput,readExtra,digest,PROGRAM_TARGETS,METADATA_TARGETS,METADATA_SIZES,LOG_SNAPSHOT_CAPACITY,
+ qualifyKaihenBuild,validateKaihenProof,kaihenSourceDigest,assertKaihenBinding,SOURCE_TREE_ALGORITHM,OFFICIAL_COMPONENTS,LEGACY_HEN_SHA};

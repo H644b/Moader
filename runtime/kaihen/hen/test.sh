@@ -4,12 +4,13 @@
 set -eu
 cd "$(dirname "$0")"
 nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
-mkdir -p build/tests
+out=${TEST_OUT:-build/tests}
+mkdir -p "$out"
 cxx=${CXX:-g++}
 # libnx's HIPC parser reads unaligned fields, as allowed on AArch64. Keep the
 # other ASan/UBSan checks.
-flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
-$cxx $flags -I"$nx/include" -I../libkaihen/include tests/mount_request_test.cpp -o build/tests/mount_request
-build/tests/mount_request
-$cxx $flags -I"$nx/include" -I../libkaihen/include tests/sm_request_test.cpp -o build/tests/sm_request
-build/tests/sm_request
+flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
+for test in mount_request sm_request reload lifecycle_server; do
+    $cxx $flags -Itests/host -I"$nx/include" -I../libkaihen/include "tests/${test}_test.cpp" -o "$out/$test"
+    "$out/$test"
+done

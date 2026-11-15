@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-For installation, use the [v0.1.0-dev.4 library recovery and game-card update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4) and `Moader-backend-v0.1.0-dev.4.zip`. App and resident binaries are rebuilt; HEN and native filesystem runtime bytes are unchanged. The rebuilt programs have host validation only, and the app still displays `0.1.0-dev`. The separate [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) supplies the SD app/plugin files, not a complete host kit.
+For installation, use the matching [v0.1.0-dev.5 release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.5) and `Moader-backend-v0.1.0-dev.5.zip`. App, resident, HEN and bootstrap are rebuilt for the cartridge correction and plugin reload. The native filesystem hook is unchanged. The app still displays `0.1.0-dev`; see [Validation](VALIDATION.md) for host and console evidence. The separate SD ZIP supplies the app/plugin, not a complete HEN update.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
@@ -29,7 +29,7 @@ python3 tools/install-from-rpc.py --prepare --status-command "$MOADER_STATUS_COM
 
 In bash, use `read -r -p 'Paste the full mac2jb status command: ' MOADER_STATUS_COMMAND` for the first line. Do not combine `--status-command` with `--run-dir` or `--node`; the status command supplies mac2jb's exact executable.
 
-Preparation downloads the checksum-pinned official kaiHEN archive and pinned ns2jb source directly from upstream if missing. It verifies the engine tree, fills the required kaiHEN components while retaining the exact patched HEN, checks the kit, and creates a unique local installer snapshot. It creates an empty `vendor/kaihen-mo/programs` directory and does not extract OunceShell or other optional programs. Neither route executes an acquisition/status script. Preparation opens no console connection and prints an installation command that uses the selected Node executable and unique `--prepared` manifest. Review it, then run that exact command once for privileged installation while the original held session stays open. Do not run `hen.cjs` first; the combined installer owns HEN bootstrap. Follow [INSTALLATION.md](INSTALLATION.md) for the device workflow and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if anything stops.
+Preparation downloads the checksum-pinned official kaiHEN archive and pinned ns2jb source directly from upstream if missing. It verifies the engine tree, fills the required kaiHEN components while retaining the exact patched HEN/bootstrap pair, checks the kit, and creates a unique local installer snapshot. It creates an empty `vendor/kaihen-mo/programs` directory and does not extract OunceShell or other optional programs. Neither route executes an acquisition/status script. Preparation opens no console connection and prints an installation command that uses the selected Node executable and unique `--prepared` manifest. Review it, then run that exact command once for privileged installation while the original held session stays open. Do not run `hen.cjs` first; the combined installer owns HEN bootstrap. Follow [INSTALLATION.md](INSTALLATION.md) for the device workflow and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if anything stops.
 
 The ns2jb engine is fetched into `research/sources/ns2jb/engine` on the user's machine. It is omitted from the public repository and kit because an explicit upstream redistribution license has not been identified. Moader does not copy ns2jb/mac2jb runs, credentials or captured device state into the kit.
 
@@ -56,11 +56,11 @@ python3 tools/setup-backend.py --check --node node
 node tools/install-moader.cjs --check
 ```
 
-The SDK bootstrap downloads the packages pinned in `tools/toolchain-packages.json` and the checksum-pinned ounce SDK. Backend setup downloads the pinned official kaiHEN archive and ns2jb source. It copies a source allowlist to a temporary directory, rebuilds HEN and the application there, verifies HEN against the tested digest, then fills missing local inputs. Existing files must already match; there is no force-overwrite option. Use a separate clean checkout for a rebuild when release binaries already occupy `dist/` or `vendor/kaihen-mo`.
+The SDK bootstrap downloads the packages pinned in `tools/toolchain-packages.json` and the checksum-pinned ounce SDK. Backend setup downloads the pinned official kaiHEN archive and ns2jb source. It copies a source allowlist to a temporary directory, rebuilds HEN, bootstrap, plugin library and the application there, verifies HEN/bootstrap against the source-qualified component digests, then fills missing local inputs. Existing files must already match; there is no force-overwrite option. Use a separate clean checkout for a rebuild when release binaries already occupy `dist/` or `vendor/kaihen-mo`.
 
 `setup-backend.py --check` is read-only. In contrast, `install-moader.cjs --check` writes a local immutable snapshot under `build/install/prepared-*` and updates its convenience pointer. Both avoid console connections. Use the unique manifest printed by the installer for any later `--prepared` command; `build/install/manifest.json` is a mutable convenience pointer.
 
-The HEN rebuild is required to be byte-identical to the tested HEN. The app and resident are compiled with debug information, so their hashes may vary with the build directory. A successful source build does not establish device behavior; see the release's validation scope.
+HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/kaihen-mo.json`. Its source-tree/patch digests bind those binaries to the reviewed source, and its console-validation flag is separate. The app and resident are compiled with debug information, so their hashes may vary with the build directory. A successful source build does not establish device behavior; see the release's validation scope.
 
 ## Exact external inputs
 
@@ -72,7 +72,8 @@ The HEN rebuild is required to be byte-identical to the tested HEN. The app and 
 | Selected Civ7 source tree SHA-256 | `d83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75` |
 | Official kaiHEN release | `20261114c` |
 | Official kaiHEN ZIP SHA-256 | `63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967` |
-| Patched HEN SHA-256 | `e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c` |
+| Patched HEN SHA-256 | `d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22` |
+| Matched bootstrap SHA-256 | `ccf258b47dc2ef07881fbf0680491b48279ff220588d23930aa4fe32c45e0e71` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
 Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.

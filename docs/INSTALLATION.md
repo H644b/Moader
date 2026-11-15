@@ -1,6 +1,6 @@
 # Install Moader
 
-Use **[v0.1.0-dev.4](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)** for library recovery, responsive import polling and game-card checks. It includes the compressed ZIP fix from dev.3. The app and resident have been rebuilt; HEN and the native filesystem runtime are unchanged. The app version remains `0.1.0-dev`. These rebuilt binaries have host validation only. [Validation](VALIDATION.md).
+Use **[v0.1.0-dev.5](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.5)** for the matching-card correction and cooperative plugin reload. It includes the earlier library recovery and ZIP fixes. The app, resident, HEN and bootstrap are rebuilt; the native filesystem hook is unchanged. The app version remains `0.1.0-dev`. Read the current [validation scope](VALIDATION.md) before installation.
 
 | Situation | What to do |
 | --- | --- |
@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip).
+1. Download [Moader-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-v0.1.0-dev.5.zip).
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.
@@ -21,7 +21,7 @@ If the matching resident service is running, the app connects to it. Otherwise i
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+Download and extract [Moader-backend-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-backend-v0.1.0-dev.5.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
 
 Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
 
@@ -129,7 +129,7 @@ In WSL, `node -p 'process.platform'` must print `linux`. Keep acquisition and in
 
 ## Updating
 
-Keep the NRO and NSO from **v0.1.0-dev.4** matched. Resident imports, library recovery and cartridge gating need the **updated resident service running**: copying only the NRO does not update an older service, and copying an NSO to SD does not hot-reload it. Use the updated backend kit for the next supported per-boot setup. A foreground app uses its own implementation.
+Keep the app, resident and patched HEN/bootstrap from **v0.1.0-dev.5** matched. Install the updated backend kit through a fresh current-boot FS session once to add protocol-7 reload support. An older running HEN cannot gain the command by copying files. After that, finish imports, copy a compatible replacement `kaihen/plugins/moader.nso` and use **Settings → Advanced → Reload Moader service**. The command checks and restarts that resident; copying an NSO alone still does not reload it. A foreground app uses its own implementation and cannot restart a resident. [Reload guide](PLUGIN_RELOAD.md).
 
 Select each game, then open **Settings → Game copy**. Choose Cartridge/game-key for a physical copy or My digital copy for a copy that runs without the card. Unspecified defaults to checking the inserted card. Existing enable requests are preserved; a missing card or verification failure withholds that game's replacements from newly published routing. Insert the card or correct the copy setting, then inspect the apply details. [Full behavior and limits](CARTRIDGES.md).
 

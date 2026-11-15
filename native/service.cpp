@@ -9,6 +9,7 @@
 #include "instance.hpp"
 #include "game_names.hpp"
 #include "game_availability.hpp"
+#include "resident_lifecycle.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -29,14 +30,22 @@ namespace {
 // HEN's five-second ready window covers the IPC transport, not an SD scan or
 // network setup. Until initialization finishes, answer without exposing Context.
 // In particular, an early WebEnabled must not race the saved auto-start setting.
-struct ResidentControl {
-    std::mutex mutex;
-    Context* context = nullptr;
-};
 Result resident_command(u32 id, const void* input, size_t input_size,
                         void* output, size_t* output_size, void* data) {
     auto& control = *static_cast<ResidentControl*>(data);
     std::lock_guard<std::mutex> lock(control.mutex);
+    if (control.state != KaihenPluginLifecycleState_Starting &&
+        control.state != KaihenPluginLifecycleState_Running) {
+        *output_size = 0;
+        if (id == moader::ipc::LastError) {
+            copy_text(static_cast<char*>(output), 64,
+                control.state == KaihenPluginLifecycleState_Failed && control.context ? control.context->error :
+                "Resident reload in progress. Waiting for HEN to reconnect.");
+            *output_size = 64;
+            return 0;
+        }
+        return ReloadBusy;
+    }
     if (!control.context) {
         *output_size = 0;
         if (id == moader::ipc::LastError) {
@@ -47,7 +56,10 @@ Result resident_command(u32 id, const void* input, size_t input_size,
         }
         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
     }
-    return command(id, input, input_size, output, output_size, control.context);
+    const Result rc = command(id, input, input_size, output, output_size, control.context);
+    if (R_SUCCEEDED(rc) && id == moader::ipc::WebEnabled && control.context->web.running())
+        control.web_start_error = false;
+    return rc;
 }
 struct ContextBinding {
     ResidentControl& control;
@@ -70,7 +82,8 @@ int main() {
     PluginService service{};
     ResidentControl endpoint;
     try {
-        rc = pluginServiceStart(&service, control, resident_command, &endpoint);
+        rc = pluginServiceStartWithLifecycle(&service, control, resident_command, &endpoint,
+                                             resident_lifecycle, &endpoint);
         if (R_SUCCEEDED(rc)) rc = svcSignalEvent(ready);
         if (R_SUCCEEDED(rc)) { rc = fsInitialize(); fs_ready = R_SUCCEEDED(rc); }
         if (R_SUCCEEDED(rc)) { rc = fsdevMountSdmc(); mounted = R_SUCCEEDED(rc); }
@@ -97,10 +110,39 @@ int main() {
             const auto preferences = library.preferences();
             if (preferences.web_on_start && !web.start("0.0.0.0",preferences.web_port)) {
                 context.error = web.last_error(); context.last_result = BadInput;
+                std::lock_guard<std::mutex> lock(endpoint.mutex);
+                endpoint.web_start_error = true;
             }
             ContextBinding binding(endpoint, context);
             unsigned inventory_ticks = 0;
             while (true) {
+                try {
+                    if (resident_lifecycle_step(endpoint, context)) {
+                        const Result stopped = pluginServiceStop(&service);
+                        if (R_FAILED(stopped) && service.started) {
+                            // A thread that has not joined may still borrow the
+                            // endpoint. Keep Context and the writer lock alive.
+                            std::lock_guard<std::mutex> lock(endpoint.mutex);
+                            endpoint.state = KaihenPluginLifecycleState_Failed;
+                            endpoint.result = stopped;
+                            endpoint.exit_requested = false;
+                            context.error = "Plugin worker shutdown failed; ownership retained.";
+                            context.last_result = stopped;
+                        } else break;
+                    }
+                } catch (const std::exception& e) {
+                    // A failed drain/abort is not proof of worker exit. Keep
+                    // ownership and the Context alive for diagnosis; never
+                    // release the single-writer lock to a competing process.
+                    std::lock_guard<std::mutex> lock(endpoint.mutex);
+                    endpoint.state = KaihenPluginLifecycleState_Failed;
+                    endpoint.result = BadInput;
+                    context.error = e.what(); context.last_result = BadInput;
+                }
+                if (library.quiescing()) {
+                    svcSleepThread(1000000000);
+                    continue;
+                }
                 try { backend.poll(); }
                 catch (const std::exception& e) {
                     // A transient receipt/FS failure must not terminate the LAN
@@ -125,6 +167,7 @@ int main() {
                         context.error = e.what(); context.last_result = BadInput;
                     }
                 }
+                resident_health(endpoint, library.snapshot());
                 svcSleepThread(1000000000);
             }
         }

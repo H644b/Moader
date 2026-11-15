@@ -1,6 +1,201 @@
---- research/sources/kaihen/hen/source/game_arm.cpp	2026-11-13 21:18:44
-+++ runtime/kaihen/hen/source/game_arm.cpp	2026-11-13 22:06:55
-@@ -538,7 +538,10 @@
+--- a/bootstrap/source/main.cpp
++++ b/bootstrap/source/main.cpp
+@@ -395,6 +395,17 @@
+         args->result = henAdoptServiceManager(&hen, args->input.sm_session);
+     }
+     if (R_SUCCEEDED(args->result)) {
++        const HenPluginLaunchConfig config = {args->pm.program_id, args->pm.flags,
++                                             args->pm.storage_id, {0, 0, 0}};
++        // Independent protocol session: the acquisition process may close
++        // its original CMIF client during teardown. A COPY alone is not a
++        // guarantee that its later CMIF Close leaves HEN's connection alive.
++        Handle shell = INVALID_HANDLE;
++        args->result = cmifCloneCurrentObject(args->input.shell_session, &shell);
++        if (R_SUCCEEDED(args->result)) args->result = henConfigurePluginReload(&hen, &config, shell);
++        if (shell != INVALID_HANDLE) svcCloseHandle(shell);
++    }
++    if (R_SUCCEEDED(args->result)) {
+         args->result = henReleaseControlPort(&hen);
+     }
+ }
+--- a/common/code_mount_request.hpp
++++ b/common/code_mount_request.hpp
+@@ -33,6 +33,11 @@
+     bool open_code;
+     CodeMountArguments arguments;
+ };
++
++inline bool matchesCodeMount(const CodeMountRequest& request, u64 program_id, u8 storage_id) {
++    return request.open_code && request.arguments.content_attributes == 1 &&
++           request.arguments.program_id == program_id && request.arguments.storage_id == storage_id;
++}
+ 
+ /// The fsp-ldr command that opens a program's code file system.
+ constexpr u32 FsProxyForLoaderCommand_OpenCodeFileSystem = 0;
+--- a/common/control.h
++++ b/common/control.h
+@@ -20,7 +20,24 @@
+     HenControlCommand_ReleaseControlPort = 13,
+     HenControlCommand_CreateServiceManagerSession = 14,
+     HenControlCommand_CloneFilesystemRoot = 15,
++    HenControlCommand_ConfigurePluginReload = 16,
++    // Moader diagnostic extension. Read-only on control and homebrew sessions.
++    HenControlCommand_MoaderGameTrace = 0x4d4f0001,
+ };
++
++typedef struct {
++    u64 program_id;
++    u32 flags;
++    u8 storage_id;
++    u8 reserved[3];
++} HenPluginLaunchConfig;
++
++// COPY an independent PM shell client cloned for HEN; the bootstrap closes
++// only its local kernel reference, never its protocol connection.
++NX_INLINE Result henConfigurePluginReload(Service* s, const HenPluginLaunchConfig* config, Handle shell) {
++    return serviceDispatchIn(s, HenControlCommand_ConfigurePluginReload, *config,
++        .in_num_handles = 1, .in_handles = {shell});
++}
+ 
+ 
+ 
+--- a/common/domain_mount.hpp
++++ b/common/domain_mount.hpp
+@@ -40,13 +40,7 @@
+         if (R_FAILED(rc) || !decoded.open_code) {
+             return rc;
+         }
+-        const CodeMountArguments& arguments = decoded.arguments;
+-        if (arguments.content_attributes != 1 ||
+-            arguments.storage_id != NcmStorageId_BuiltInSystem ||
+-            arguments.program_id != config_.title) {
+-            return UnexpectedState;
+-        }
+-        mount = true;
++        mount = matchesCodeMount(decoded, config_.title, NcmStorageId_BuiltInSystem);
+         return 0;
+     }
+ 
+--- /dev/null
++++ b/common/plugin_launch.hpp
+@@ -0,0 +1,25 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "package.hpp"
++#include "loader_gate.hpp"
++
++// Borrowed only while GameArm's reload lease is held. No destructor closes
++// these resources; the original GameArm remains their sole lifetime owner.
++struct PluginLaunchContext {
++    ounce::RetainedMemoryConfig memory;
++    ounce::LoaderGateConfig gate;
++    ounce::DomainMountConfig mount;
++    Handle reader;
++    Handle filesystem_process;
++    Handle filesystem_root;
++    Handle loader_root;
++    Handle monitor;
++};
++
++struct PluginLaunchSpec {
++    u64 program_id;
++    u32 flags;
++    u8 storage_id;
++    u8 reserved[3];
++};
++static_assert(sizeof(PluginLaunchSpec) == 16);
+--- a/common/policy_package.cpp
++++ b/common/policy_package.cpp
+@@ -88,7 +88,7 @@
+ }
+ 
+ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
+-                         const char* package_path, const SignedPolicy& policy) {
++                         const char* package_path, const SignedPolicy& policy, u8* expected_sha256) {
+     if (!policy.size || policy.size > SignedPolicy::Capacity) return InvalidPackage;
+     SdReader reader;
+     u64 main_size = 0;
+@@ -101,6 +101,13 @@
+     SdWriter writer;
+     rc = writer.begin(fs_root, package_path, package_size);
+     if (R_FAILED(rc)) return rc;
++
++    Sha256Context sha;
++    if (expected_sha256) sha256ContextCreate(&sha);
++    const auto write = [&](const void* bytes, size_t size) {
++        if (expected_sha256) sha256ContextUpdate(&sha, bytes, size);
++        return writer.write(bytes, size);
++    };
+ 
+     u8 header[HeaderSize] = {};
+     std::memcpy(header, "PFS0", 4);
+@@ -115,7 +122,7 @@
+     std::memcpy(header + 48, &policy_size, sizeof(policy_size));
+     std::memcpy(header + 56, &policy_name_offset, sizeof(policy_name_offset));
+     std::memcpy(header + 64, "main\0main.npdm\0", names_size);
+-    rc = writer.write(header, sizeof(header));
++    rc = write(header, sizeof(header));
+ 
+     u8 buffer[CopyChunk];
+     u64 remaining = main_size;
+@@ -124,16 +131,17 @@
+         u64 received = 0;
+         rc = reader.read(buffer, wanted, &received);
+         if (R_SUCCEEDED(rc) && received != wanted) rc = InvalidPackage;
+-        if (R_SUCCEEDED(rc)) rc = writer.write(buffer, wanted);
++        if (R_SUCCEEDED(rc)) rc = write(buffer, wanted);
+         remaining -= received;
+     }
+     reader.close();
+ 
+     if (R_SUCCEEDED(rc) && policy_offset > main_size) {
+         const u8 padding[0x20] = {};
+-        rc = writer.write(padding, policy_offset - main_size);
++        rc = write(padding, policy_offset - main_size);
+     }
+-    if (R_SUCCEEDED(rc)) rc = writer.write(policy.bytes, policy.size);
++    if (R_SUCCEEDED(rc)) rc = write(policy.bytes, policy.size);
+     if (R_SUCCEEDED(rc)) rc = writer.finish();
++    if (R_SUCCEEDED(rc) && expected_sha256) sha256ContextGetHash(&sha, expected_sha256);
+     return rc;
+ }
+--- a/common/policy_package.hpp
++++ b/common/policy_package.hpp
+@@ -23,4 +23,5 @@
+ 
+ // Build a flat ExeFS package with /main from SD and /main.npdm from policy.
+ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
+-                         const char* package_path, const SignedPolicy& policy);
++                         const char* package_path, const SignedPolicy& policy,
++                         u8* expected_sha256 = nullptr);
+--- a/hen/source/game_arm.cpp
++++ b/hen/source/game_arm.cpp
+@@ -191,6 +191,7 @@
+ }
+ 
+ void GameArm::step() {
++    if (reload_leased_) return;
+     Result rc = 0;
+     switch (state_) {
+     case State::Inactive:
+@@ -241,6 +242,16 @@
+     if (R_FAILED(rc)) {
+         fault(rc);
+     }
++}
++
++bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
++    if (!started_ || reload_leased_ || !memory_ || !gate_ || step_started_ ||
++        bootstrap_restore_pending_ || gate_->pendingRestoreWithReceipt() ||
++        (state_ != State::WaitForInput && state_ != State::WaitExit)) return false;
++    reload_leased_ = true;
++    out = {memory_config_, gate_config_, mount_config_, reader_session_,
++           filesystem_process_, filesystem_root_, loader_root_, monitor_};
++    return true;
+ }
+ 
+ Result GameArm::openPackage() {
+@@ -538,7 +549,10 @@
              return rc;
          }
          if (!allow_bridge_process_ && !isApplicationProgram(title)) {
@@ -12,39 +207,1912 @@
          }
          active_title_ = title;
      }
---- research/sources/kaihen/hen/source/game_arm.hpp	2026-11-13 21:18:44
-+++ runtime/kaihen/hen/source/game_arm.hpp	2026-11-13 22:06:55
-@@ -27,6 +27,7 @@
+--- a/hen/source/game_arm.hpp
++++ b/hen/source/game_arm.hpp
+@@ -7,6 +7,7 @@
+ #include "../../common/package.hpp"
+ #include "../../common/loader_gate.hpp"
+ #include "game_trace.hpp"
++#include "../../common/plugin_launch.hpp"
+ 
+ using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
+ using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
+@@ -27,6 +28,9 @@
      Result start(Handle filesystem_root, Handle bootstrap_process);
      void step();
      HenGameStatus status() const;
 +    GameTraceSnapshot trace() const { return trace_.snapshot(); }
++    bool acquireReloadLease(PluginLaunchContext& out);
++    void releaseReloadLease() { reload_leased_ = false; }
  
    private:
      enum class InputChoice {
---- research/sources/kaihen/hen/source/server.cpp	2026-11-13 21:18:44
-+++ runtime/kaihen/hen/source/server.cpp	2026-11-13 22:06:55
-@@ -248,6 +248,12 @@
-         if (!request.num_copy_handles) {
-             reply.result = 0;
-             reply.setData(game_.status());
+@@ -98,6 +102,7 @@
+     bool handles1_ = false;
+     bool started_ = false;
+     bool policy_ready_ = false;
++    bool reload_leased_ = false;
+     bool capture_pending_ = false;
+     u32 capture_attempts_ = 0;
+     u64 capture_next_tick_ = 0;
+--- /dev/null
++++ b/hen/source/lifecycle_client.hpp
+@@ -0,0 +1,74 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "reload_state.hpp"
++
++// Transport and clock adapters allow the actual asynchronous owner contract
++// to be exercised on the host without mirroring it in a fake HEN manager.
++namespace reload {
++inline KaihenPluginLifecycleRequest lifecycleRequest(u32 command, u64 operation) {
++    return {command, 0, command == KaihenPluginLifecycle_Query || command == KaihenPluginLifecycle_Health ? 0 : operation};
++}
++inline bool validLifecycleReply(const KaihenPluginLifecycleRequest& request, const KaihenPluginLifecycleReply& reply) {
++    const bool query = request.command == KaihenPluginLifecycle_Query || request.command == KaihenPluginLifecycle_Health;
++    return reply.version == KAIHEN_PLUGIN_LIFECYCLE_VERSION && !reply.reserved &&
++           (reply.flags & KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE) &&
++           (query || reply.operation_id == request.operation_id);
++}
++template <typename Io>
++Result lifecycleRetryBusy(Io& io, u32 command, KaihenPluginLifecycleReply& reply, u64 timeout) {
++    const u64 start = io.now();
++    do {
++        if (io.cancelled()) return Deadline;
++        Result rc = io.call(command, reply);
++        if (rc != KAIHEN_PLUGIN_LIFECYCLE_BUSY) return rc;
++        io.pause();
++    } while (!io.deadline(start, timeout));
++    return Deadline;
++}
++
++template <typename Io>
++Result lifecycleWait(Io& io, u32 command, u32 state, bool healthy, u64 timeout) {
++    const u64 start = io.now();
++    do {
++        if (io.cancelled()) return Deadline;
++        KaihenPluginLifecycleReply reply = {};
++        Result rc = io.call(command, reply);
++        if (rc != KAIHEN_PLUGIN_LIFECYCLE_BUSY) {
++            if (R_FAILED(rc)) return rc;
++            if (reply.state == state && (!healthy || (reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY))) return 0;
++            if (reply.state == KaihenPluginLifecycleState_Failed) return Invalid;
 +        }
-+        return reply;
++        io.pause();
++    } while (!io.deadline(start, timeout));
++    return Deadline;
++}
++
++template <typename Io>
++bool lifecycleAbort(Io& io, u64 timeout) {
++    const u64 start = io.now();
++    bool accepted = false;
++    do {
++        if (io.cancelled()) return false;
++        KaihenPluginLifecycleReply reply = {};
++        const Result rc = io.call(accepted ? KaihenPluginLifecycle_Poll : KaihenPluginLifecycle_Abort, reply);
++        if (rc != KAIHEN_PLUGIN_LIFECYCLE_BUSY) {
++            if (R_FAILED(rc)) return false;
++            accepted = true;
++            if (reply.state == KaihenPluginLifecycleState_Running &&
++                (reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY)) return true;
++            if (reply.state == KaihenPluginLifecycleState_Failed) return false;
++        }
++        io.pause();
++    } while (!io.deadline(start, timeout));
++    return false;
++}
++
++template <typename Io>
++Result lifecycleCommit(Io& io, u64 timeout) {
++    KaihenPluginLifecycleReply reply = {};
++    const Result rc = lifecycleRetryBusy(io, KaihenPluginLifecycle_Commit, reply, timeout);
++    if (R_FAILED(rc)) return rc;
++    return reply.state == KaihenPluginLifecycleState_Quiesced ||
++           reply.state == KaihenPluginLifecycleState_Exiting ? 0 : Invalid;
++}
++} // namespace reload
+--- /dev/null
++++ b/hen/source/plugin_reload.cpp
+@@ -0,0 +1,424 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "plugin_reload.hpp"
++#include "../../common/sd_writer.hpp"
++#include "../../libkaihen/source/plugin_startup.h"
++#include <cstdio>
++#include <cstring>
++
++namespace {
++constexpr u64 Second = 1000000000ull;
++constexpr Result ProcessNotFound = MAKERESULT(15, 1);
++constexpr u64 MaxExecutable = 64 * 1024 * 1024;
++bool elapsed(u64 tick, u64 ns) { return armGetSystemTick() - tick >= armNsToTicks(ns); }
++void close(Handle& handle) { if (handle != INVALID_HANDLE) svcCloseHandle(handle); handle = INVALID_HANDLE; }
++
++void deleteArtifact(Handle fs, const char* path) {
++    if (!path[0]) return;
++    Service root = {};
++    serviceCreate(&root, fs);
++    FsFileSystem sd = {};
++    if (R_SUCCEEDED(serviceDispatch(&root, 18, .out_num_objects = 1, .out_objects = &sd.s))) {
++        // FS may still deny deletion of a backing object it retains. Leave
++        // that file intact; never force-close another owner's object.
++        fsFsDeleteFile(&sd, path);
++        fsFsCommit(&sd);
++        fsFsClose(&sd);
++    }
++}
++
++// The staged bytes are read twice: verify their digest before packaging and
++// verify the package itself after flush. NSO section ranges are bounded before
++// the old process is asked to drain.
++Result digestFile(Handle fs, const char* path, u8 hash[32], u64* size_out = nullptr) {
++    SdReader reader;
++    u64 size = 0;
++    R_TRY(reader.begin(fs, path, &size));
++    if (!size || size > MaxExecutable + SignedPolicy::Capacity + 0x1000) return reload::Invalid;
++    Sha256Context sha;
++    sha256ContextCreate(&sha);
++    u8 buffer[4096];
++    for (u64 left = size; left;) {
++        u64 read = 0;
++        const size_t wanted = left < sizeof(buffer) ? left : sizeof(buffer);
++        R_TRY(reader.read(buffer, wanted, &read));
++        if (read != wanted) return reload::Invalid;
++        sha256ContextUpdate(&sha, buffer, read);
++        left -= read;
++    }
++    sha256ContextGetHash(&sha, hash);
++    if (size_out) *size_out = size;
++    return 0;
++}
++
++Result stageExecutable(Handle fs, const char* source, const char* target) {
++    SdReader reader;
++    u64 size = 0;
++    R_TRY(reader.begin(fs, source, &size));
++    if (size < 0x100 || size > MaxExecutable) return reload::Invalid;
++    u8 header[0x100];
++    u64 read = 0;
++    R_TRY(reader.read(header, sizeof(header), &read));
++    if (read != sizeof(header) || std::memcmp(header, "NSO0", 4)) return reload::Invalid;
++    u32 flags = 0;
++    std::memcpy(&flags, header + 0x0c, 4);
++    u64 previous_end = 0x100;
++    for (unsigned section = 0; section < 3; ++section) {
++        u32 offset, unpacked, packed;
++        std::memcpy(&offset, header + 0x10 + 0x10 * section, 4);
++        std::memcpy(&unpacked, header + 0x18 + 0x10 * section, 4);
++        std::memcpy(&packed, header + 0x60 + 4 * section, 4);
++        const u64 extent = flags & (1u << section) ? packed : unpacked;
++        if (!extent || !unpacked || unpacked > MaxExecutable || offset < previous_end ||
++            offset > size || extent > size - offset) return reload::Invalid;
++        previous_end = offset + extent;
++    }
++    SdWriter writer;
++    R_TRY(writer.begin(fs, target, size));
++    R_TRY(writer.write(header, sizeof(header)));
++    Sha256Context sha;
++    sha256ContextCreate(&sha);
++    sha256ContextUpdate(&sha, header, sizeof(header));
++    u8 buffer[4096];
++    for (u64 left = size - sizeof(header); left;) {
++        const size_t wanted = left < sizeof(buffer) ? left : sizeof(buffer);
++        R_TRY(reader.read(buffer, wanted, &read));
++        if (read != wanted) return reload::Invalid;
++        sha256ContextUpdate(&sha, buffer, read);
++        R_TRY(writer.write(buffer, read));
++        left -= read;
++    }
++    R_TRY(writer.finish());
++    u8 expected[32], actual[32];
++    sha256ContextGetHash(&sha, expected);
++    R_TRY(digestFile(fs, target, actual));
++    return std::memcmp(expected, actual, sizeof(actual)) ? reload::Invalid : 0;
++}
++} // namespace
++
++Result PluginReload::start(const Input& input, const HenPluginReloadStatus& status) {
++    if (created_ && !joined_) return reload::Busy;
++    input_ = input;
++    status_ = status;
++    stage_tick_ = armGetSystemTick();
++    created_ = joined_ = pm_created_ = pm_joined_ = false;
++    success_ = quarantined_ = touched_old_ = false;
++    finished_.store(false);
++    pm_finished_.store(false);
++    cancelled_.store(false);
++    pm_pid_.store(0);
++    new_control_ = INVALID_HANDLE;
++    Result rc = threadCreate(&thread_, worker, this, nullptr, 0x20000, 0x2c, -2);
++    if (R_FAILED(rc)) return rc;
++    created_ = true;
++    rc = threadStart(&thread_);
++    if (R_FAILED(rc)) {
++        threadClose(&thread_);
++        created_ = false;
++    }
++    return rc;
++}
++
++HenPluginReloadStatus PluginReload::status() {
++    mutexLock(&lock_);
++    if (!finished_.load(std::memory_order_acquire) && elapsed(stage_tick_, 60 * Second)) {
++        cancelled_.store(true);
++        status_.phase = HenPluginReloadPhase_Quarantined;
++        status_.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++        status_.result = reload::Deadline;
++    }
++    // Even a late PM completion remains tracked. Never free/reuse its state.
++    if (pm_pid_.load(std::memory_order_acquire)) status_.new_process_id = pm_pid_.load();
++    const auto value = status_;
++    mutexUnlock(&lock_);
++    return value;
++}
++
++bool PluginReload::join() {
++    if (!finished() || !created_) return false;
++    if (!joined_) {
++        Result rc = threadWaitForExit(&thread_);
++        if (R_SUCCEEDED(rc)) rc = threadClose(&thread_);
++        if (R_FAILED(rc)) { fail(rc, true); return false; }
++        joined_ = true;
++    }
++    return true;
++}
++
++void PluginReload::worker(void* value) {
++    auto& self = *static_cast<PluginReload*>(value);
++    const Result rc = reload::run(self);
++    self.success_ = R_SUCCEEDED(rc) && !self.cancelled_.load();
++    if (self.cancelled_.load()) self.fail(reload::Deadline, true);
++    if (!self.quarantined_) self.releaseOwned();
++    // Cleanup can outlive its deadline. Finalize and publish finished under
++    // the supervisor's lock so cancellation cannot slip between the two.
++    mutexLock(&self.lock_);
++    reload::finalizeWorker(R_SUCCEEDED(rc), self.cancelled_.load(), self.success_, self.quarantined_, self.status_);
++    self.finished_.store(true, std::memory_order_release);
++    mutexUnlock(&self.lock_);
++}
++
++void PluginReload::phase(u32 value) {
++    mutexLock(&lock_);
++    if (!cancelled_.load()) { status_.phase = value; stage_tick_ = armGetSystemTick(); }
++    mutexUnlock(&lock_);
++}
++bool PluginReload::expired() const { return cancelled_.load(); }
++Result PluginReload::fail(Result rc, bool quarantine) {
++    mutexLock(&lock_);
++    quarantined_ |= quarantine || cancelled_.load();
++    status_.result = rc;
++    status_.phase = quarantined_ ? HenPluginReloadPhase_Quarantined : HenPluginReloadPhase_Failed;
++    if (quarantined_) status_.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++    mutexUnlock(&lock_);
++    return rc;
++}
++
++Result PluginReload::lifecycle(u32 command, KaihenPluginLifecycleReply& out, Handle control) {
++    if (expired()) return reload::Deadline;
++    Service service = {};
++    serviceCreate(&service, control);
++    const auto request = reload::lifecycleRequest(command, status_.operation_id);
++    Result rc = serviceDispatchInOut(&service, KAIHEN_PLUGIN_CONTROL_LIFECYCLE, request, out);
++    if (expired()) return reload::Deadline;
++    if (R_FAILED(rc)) return rc;
++    if (!reload::validLifecycleReply(request, out)) return reload::Capability;
++    return out.result;
++}
++
++Result PluginReload::processProgram(u64 pid, u64* program) {
++    Service monitor = {};
++    serviceCreate(&monitor, input_.context.monitor);
++    return serviceDispatchInOut(&monitor, 7, pid, *program);
++}
++
++Result PluginReload::preflight() {
++    u64 program = 0;
++    R_TRY(processProgram(input_.request.expected_process_id, &program));
++    if (program != input_.spec.program_id) return reload::Identity;
++    KaihenPluginLifecycleReply reply = {};
++    LifecycleIo query_io{*this, input_.old_control};
++    R_TRY(reload::lifecycleRetryBusy(query_io, KaihenPluginLifecycle_Query, reply, 5 * Second));
++    if (reply.state != KaihenPluginLifecycleState_Running ||
++        !(reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY)) return reload::Busy;
++    R_TRY(readSignedPolicy(input_.context.loader_root, input_.spec.program_id,
++                          input_.spec.storage_id, 1, &policy_));
++    char source[128];
++    std::snprintf(source, sizeof(source), "/kaihen/plugins/%s.nso", input_.request.name);
++    std::snprintf(staged_file_, sizeof(staged_file_), "/kaihen/plugin-packages/reload-%016llx-%016llx.nso",
++                  (unsigned long long)status_.instance_id, (unsigned long long)status_.operation_id);
++    std::snprintf(package_file_, sizeof(package_file_), "/kaihen/plugin-packages/reload-%016llx-%016llx.nsp",
++                  (unsigned long long)status_.instance_id, (unsigned long long)status_.operation_id);
++    std::snprintf(package_path_, sizeof(package_path_), "@Sdcard:%s", package_file_);
++    R_TRY(stageExecutable(input_.fs, source, staged_file_));
++    u8 first[32], second[32];
++    R_TRY(writeExeFsPackage(input_.fs, staged_file_, package_file_, policy_, first));
++    R_TRY(digestFile(input_.fs, package_file_, second));
++    if (std::memcmp(first, second, 32) || expired()) return reload::Invalid;
++    memory_.emplace(input_.context.memory, input_.context.reader, input_.context.filesystem_process);
++    R_TRY(memory_->begin());
++    // Open and pin the exact staged package before the old process stops.
++    package_.emplace(*memory_, input_.fs);
++    auto mount = input_.context.mount;
++    mount.title = input_.spec.program_id;
++    R_TRY(package_->open(package_path_, mount));
++    input_.context.mount = mount;
++    return 0;
++}
++
++Result PluginReload::prepare() {
++    touched_old_ = true;
++    KaihenPluginLifecycleReply reply = {};
++    Result rc = lifecycle(KaihenPluginLifecycle_Prepare, reply, input_.old_control);
++    // Resident's explicit fast Busy denial guarantees no state was changed.
++    if (rc == KAIHEN_PLUGIN_LIFECYCLE_BUSY) touched_old_ = false;
++    return rc;
++}
++Result PluginReload::waitLifecycle(u32 command, u32 state, u64 timeout) {
++    LifecycleIo io{*this, input_.old_control};
++    return reload::lifecycleWait(io, command, state, false, timeout);
++}
++Result PluginReload::drain() { return waitLifecycle(KaihenPluginLifecycle_Poll, KaihenPluginLifecycleState_Quiesced, 10 * Second); }
++bool PluginReload::abort() {
++    if (!touched_old_) return true;
++    LifecycleIo io{*this, input_.old_control};
++    return reload::lifecycleAbort(io, 10 * Second);
++}
++Result PluginReload::commit() {
++    LifecycleIo io{*this, input_.old_control};
++    return reload::lifecycleCommit(io, 5 * Second);
++}
++bool PluginReload::waitGone(u64 pid, u64 timeout) {
++    const u64 start = armGetSystemTick();
++    do {
++        u64 program = 0;
++        const Result rc = processProgram(pid, &program);
++        if (rc == ProcessNotFound) return true;
++        if (R_FAILED(rc) || program != input_.spec.program_id || expired()) return false;
++        svcSleepThread(1000000);
++    } while (!elapsed(start, timeout));
++    return false;
++}
++Result PluginReload::waitExit() { return waitGone(input_.request.expected_process_id, 5 * Second) ? 0 : reload::Deadline; }
++void PluginReload::oldExited() {
++    mutexLock(&lock_);
++    status_.flags |= HEN_PLUGIN_RELOAD_OLD_EXITED;
++    mutexUnlock(&lock_);
++    if (input_.previous_package_operation) {
++        char previous[160];
++        std::snprintf(previous, sizeof(previous), "/kaihen/plugin-packages/reload-%016llx-%016llx.nsp",
++                      (unsigned long long)status_.instance_id,
++                      (unsigned long long)input_.previous_package_operation);
++        deleteArtifact(input_.fs, previous);
++    }
++}
++
++void PluginReload::pmWorker(void* value) {
++    auto& self = *static_cast<PluginReload*>(value);
++    // Only this worker uses libounce's PM-shell global. All monitor and
++    // cleanup operations use explicit local Services, never rebind it.
++    serviceCreate(pmshellGetServiceSession(), self.input_.shell);
++    NcmProgramLocation location = {};
++    location.program_id = self.input_.spec.program_id;
++    location.storageID = self.input_.spec.storage_id;
++    u64 pid = 0;
++    self.pm_result_ = pmshellLaunchProgram(self.input_.spec.flags, &location, &pid);
++    self.pm_pid_.store(pid, std::memory_order_release);
++    self.pm_finished_.store(true, std::memory_order_release);
++}
++
++Result PluginReload::launch() {
++    gate_.emplace(*memory_, input_.context.gate);
++    Result rc = gate_->park();
++    if (R_SUCCEEDED(rc)) {
++        rc = threadCreate(&pm_thread_, pmWorker, this, nullptr, 0x8000, 0x2c, -2);
++        if (R_SUCCEEDED(rc)) {
++            pm_created_ = true;
++            rc = threadStart(&pm_thread_);
++            if (R_FAILED(rc)) { threadClose(&pm_thread_); pm_created_ = false; }
++        }
++    }
++    bool exchanged = false;
++    if (R_SUCCEEDED(rc)) {
++        const u64 start = armGetSystemTick();
++        ounce::DomainMount<ounce::MemoryWriter::RoProcess> mount(*memory_, input_.context.mount);
++        u32 matches = 0;
++        while (!elapsed(start, 30 * Second) && !expired()) {
++            if (pm_finished_.load(std::memory_order_acquire) && R_FAILED(pm_result_)) { rc = pm_result_; break; }
++            bool ready = false;
++            rc = gate_->pending(ready);
++            if (R_FAILED(rc)) break;
++            if (!ready) { svcSleepThread(1000000); continue; }
++            ounce::DomainEntry before[ounce::MaxDomainEntries], after[ounce::MaxDomainEntries], added;
++            u32 before_count = 0, after_count = 0;
++            rc = mount.snapshot(before, before_count);
++            alignas(16) u8 request[ounce::LoaderRequestSize] = {};
++            if (R_SUCCEEDED(rc)) rc = gate_->step(request);
++            if (R_SUCCEEDED(rc)) rc = mount.snapshot(after, after_count);
++            if (R_FAILED(rc)) break;
++            ounce::CodeMountRequest decoded = {};
++            rc = ounce::decodeCodeMountRequest(request, input_.context.mount.root_id, decoded);
++            if (R_FAILED(rc)) break;
++            // Unrelated Loader requests complete normally and never count.
++            if (!ounce::matchesCodeMount(decoded, input_.spec.program_id, input_.spec.storage_id)) continue;
++            if (++matches != 2) continue;
++            rc = mount.added(before, before_count, after, after_count, added);
++            if (R_SUCCEEDED(rc)) rc = mount.exchange(added);
++            exchanged = R_SUCCEEDED(rc);
++            break;
++        }
++        if (R_SUCCEEDED(rc) && !exchanged) rc = reload::Deadline;
++    }
++    const Result restore = gate_->restore();
++    const Result channel = memory_->restore();
++    mutexLock(&lock_);
++    status_.restoration_result = R_FAILED(restore) ? restore : channel;
++    mutexUnlock(&lock_);
++    if (R_FAILED(restore) || R_FAILED(channel)) return R_FAILED(rc) ? rc : status_.restoration_result;
++    if (pm_created_) {
++        const u64 start = armGetSystemTick();
++        while (!pm_finished_.load(std::memory_order_acquire) && !elapsed(start, 5 * Second) && !expired()) svcSleepThread(1000000);
++        if (!pm_finished_.load(std::memory_order_acquire)) return reload::Deadline;
++        Result join = threadWaitForExit(&pm_thread_);
++        if (R_SUCCEEDED(join)) join = threadClose(&pm_thread_);
++        if (R_FAILED(join)) return join;
++        pm_joined_ = true;
++    }
++    if (R_FAILED(rc)) return rc;
++    if (R_FAILED(pm_result_) || !pm_pid_.load() || pm_pid_.load() == input_.request.expected_process_id)
++        return R_FAILED(pm_result_) ? pm_result_ : reload::Identity;
++    u64 program = 0;
++    R_TRY(processProgram(pm_pid_.load(), &program));
++    if (program != input_.spec.program_id) return reload::Identity;
++    Service monitor = {};
++    serviceCreate(&monitor, input_.context.monitor);
++    const u64 pid = pm_pid_.load();
++    return serviceDispatchIn(&monitor, 1, pid);
++}
++
++Result PluginReload::handoff() {
++    // This independent SM proxy session can wait in GetService without
++    // blocking HEN's main thread. The supervisor retains it on a timeout.
++    Service sm = {}, plugin = {};
++    serviceCreate(&sm, input_.sm);
++    const SmServiceName name = smEncodeName("mig:usr");
++    Handle endpoint = INVALID_HANDLE;
++    Result rc = serviceDispatchIn(&sm, 1, name,
++        .out_handle_attrs = {SfOutHandleAttr_HipcMove}, .out_handles = &endpoint);
++    if (R_FAILED(rc)) return rc;
++    serviceCreate(&plugin, endpoint);
++    Handle process = INVALID_HANDLE;
++    rc = serviceDispatch(&plugin, PluginStartupCommand_GetIdentity,
++        .out_handle_attrs = {SfOutHandleAttr_HipcCopy}, .out_handles = &process);
++    u64 pid = 0;
++    if (R_SUCCEEDED(rc)) rc = svcGetProcessId(&pid, process);
++    close(process);
++    if (R_SUCCEEDED(rc) && pid != pm_pid_.load()) rc = reload::Identity;
++    Handle release = INVALID_HANDLE, ready = INVALID_HANDLE;
++    if (R_SUCCEEDED(rc) && !expired()) rc = pluginAdoptHandles(&plugin, input_.sm, input_.fs, &release, &ready, &new_control_);
++    if (R_SUCCEEDED(rc)) rc = svcSignalEvent(release);
++    if (R_SUCCEEDED(rc)) rc = svcWaitSynchronizationSingle(ready, 5 * Second);
++    close(release);
++    close(ready);
++    close(endpoint);
++    if (R_SUCCEEDED(rc) && new_control_ == INVALID_HANDLE) rc = reload::Capability;
++    return expired() ? reload::Deadline : rc;
++}
++
++Result PluginReload::health() {
++    LifecycleIo io{*this, new_control_};
++    return reload::lifecycleWait(io, KaihenPluginLifecycle_Health, KaihenPluginLifecycleState_Running, true, 30 * Second);
++}
++
++bool PluginReload::cleanup() {
++    // No forced termination of the OLD plugin exists. Only this operation's
++    // unpublished, pre-health candidate may be reaped through PID-targeted PM.
++    if (expired() || R_FAILED(status_.restoration_result) || (pm_created_ && !pm_joined_)) return false;
++    const u64 pid = pm_pid_.load();
++    if (!pid) return true;
++    if (pid == input_.request.expected_process_id) return false;
++    u64 program = 0;
++    Result rc = processProgram(pid, &program);
++    if (rc == ProcessNotFound) return true;
++    if (R_FAILED(rc) || program != input_.spec.program_id) return false;
++    Service shell = {};
++    serviceCreate(&shell, input_.shell);
++    rc = serviceDispatchIn(&shell, 1, pid);
++    return R_SUCCEEDED(rc) && waitGone(pid, 5 * Second);
++}
++
++void PluginReload::releaseOwned() {
++    if (package_) package_->close();
++    package_.reset();
++    gate_.reset();
++    memory_.reset();
++    // Files are unique to this operation. Never delete while a launch or
++    // restore remains uncertain; quarantined paths deliberately stay pinned.
++    deleteArtifact(input_.fs, staged_file_);
++    // A successful plugin keeps its backing NSP until a later reload proves
++    // that exact process exited. The registry records its operation ID.
++    if (!success_) deleteArtifact(input_.fs, package_file_);
++    close(input_.sm);
++    close(input_.fs);
++    if (!success_) close(new_control_);
++}
+--- /dev/null
++++ b/hen/source/plugin_reload.hpp
+@@ -0,0 +1,84 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <atomic>
++#include <optional>
++#include <switch.h>
++#include "../../common/plugin_launch.hpp"
++#include "../../common/policy_package.hpp"
++#include "reload_state.hpp"
++#include "lifecycle_client.hpp"
++
++class PluginReload {
++  public:
++    struct Input {
++        PluginLaunchContext context;
++        PluginLaunchSpec spec;
++        HenPluginReloadRequest request;
++        Handle shell;
++        Handle old_control; // borrowed: registry is pinned until worker completes
++        Handle sm; // owned, new plugin's SM proxy session
++        Handle fs; // owned, new plugin's cloned FS root
++        u64 previous_package_operation;
++    };
++    PluginReload() { mutexInit(&lock_); }
++    Result start(const Input& input, const HenPluginReloadStatus& status);
++    HenPluginReloadStatus status();
++    bool finished() const { return finished_.load(std::memory_order_acquire); }
++    bool join();
++    bool succeeded() const { return success_; }
++    bool quarantined() const { return quarantined_; }
++    Handle takeControl() { Handle value = new_control_; new_control_ = INVALID_HANDLE; return value; }
++
++  private:
++    using Memory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
++    using Gate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
++    using Package = ounce::NativePackage<ounce::MemoryWriter::RoProcess>;
++    static void worker(void* argument);
++    static void pmWorker(void* argument);
++    Result preflight();
++    Result prepare();
++    Result drain();
++    bool abort();
++    Result commit();
++    Result waitExit();
++    void oldExited();
++    Result launch();
++    Result handoff();
++    Result health();
++    bool cleanup();
++    Result fail(Result rc, bool quarantine);
++    void phase(u32 value);
++    Result lifecycle(u32 command, KaihenPluginLifecycleReply& out, Handle control);
++    struct LifecycleIo {
++        PluginReload& owner;
++        Handle control;
++        Result call(u32 command, KaihenPluginLifecycleReply& reply) { return owner.lifecycle(command, reply, control); }
++        u64 now() const { return armGetSystemTick(); }
++        bool deadline(u64 start, u64 ns) const { return now() - start >= armNsToTicks(ns); }
++        bool cancelled() const { return owner.expired(); }
++        void pause() const { svcSleepThread(1000000); }
++    };
++    Result waitLifecycle(u32 command, u32 state, u64 timeout);
++    Result processProgram(u64 pid, u64* program);
++    bool waitGone(u64 pid, u64 timeout);
++    bool expired() const;
++    void releaseOwned();
++    template <typename Io> friend Result reload::run(Io&);
++
++    Mutex lock_ = {};
++    Input input_ = {};
++    HenPluginReloadStatus status_ = {};
++    Thread thread_ = {}, pm_thread_ = {};
++    bool created_ = false, joined_ = false, pm_created_ = false, pm_joined_ = false;
++    bool success_ = false, quarantined_ = false, touched_old_ = false;
++    std::atomic<bool> finished_{false}, pm_finished_{false}, cancelled_{false};
++    u64 stage_tick_ = 0;
++    std::atomic<u64> pm_pid_{0};
++    Result pm_result_ = 0;
++    SignedPolicy policy_ = {};
++    std::optional<Memory> memory_;
++    std::optional<Gate> gate_;
++    std::optional<Package> package_;
++    Handle new_control_ = INVALID_HANDLE;
++    char staged_file_[160] = {}, package_file_[160] = {}, package_path_[176] = {};
++};
+--- /dev/null
++++ b/hen/source/reload_state.hpp
+@@ -0,0 +1,152 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <cstring>
++#include <switch/result.h>
++#include "../../libkaihen/include/kaihen/reload.h"
++
++namespace reload {
++// Dedicated results, independent of libnx's evolving error enum.
++constexpr Result Busy = MAKERESULT(345, 1);
++constexpr Result Stale = MAKERESULT(345, 2);
++constexpr Result Capability = MAKERESULT(345, 3);
++constexpr Result Expired = MAKERESULT(345, 4);
++constexpr Result Invalid = MAKERESULT(345, 5);
++constexpr Result Exhausted = MAKERESULT(345, 6);
++constexpr Result Deadline = MAKERESULT(345, 7);
++constexpr Result Identity = MAKERESULT(345, 8);
++
++inline bool validName(const char name[64]) {
++    for (unsigned i = 0; i != 64; ++i) {
++        const char c = name[i];
++        if (!c) return i != 0;
++        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
++              (c >= '0' && c <= '9') || c == '_' || c == '-')) return false;
++    }
++    return false;
++}
++
++// Called under the same owner lock used by the supervisor's cancellation.
++// finished must be published before releasing that lock, closing the window
++// between checking cancellation and exposing completion.
++inline void finalizeWorker(bool eligible, bool cancelled, bool& success, bool& quarantined,
++                           HenPluginReloadStatus& status) {
++    quarantined |= cancelled;
++    success = eligible && !quarantined;
++    if (cancelled) status.result = Deadline;
++    if (quarantined) {
++        status.phase = HenPluginReloadPhase_Quarantined;
++        status.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++    }
++}
++
++inline bool publishable(const HenPluginReloadStatus& status, bool success, bool quarantined) {
++    return success && !quarantined && !(status.flags & HEN_PLUGIN_RELOAD_BLOCKED) &&
++           (status.flags & HEN_PLUGIN_RELOAD_OLD_EXITED) && status.old_process_id &&
++           R_SUCCEEDED(status.result) && R_SUCCEEDED(status.restoration_result) &&
++           status.new_process_id && status.new_process_id != status.old_process_id;
++}
++
++template <typename Worker>
++bool completedSnapshot(Worker& worker, HenPluginReloadStatus& status) {
++    status = worker.status();
++    if (!worker.finished() || !worker.join()) return false;
++    // The worker may have completed between the first snapshot and finished.
++    status = worker.status();
++    return true;
++}
++
++class Journal {
++  public:
++    struct Entry {
++        u64 caller = 0;
++        HenPluginReloadRequest request = {};
++        HenPluginReloadStatus status = {};
++    };
++    struct Caller { u64 pid = 0; u64 high = 0; };
++    static constexpr unsigned Capacity = 8;
++    Entry entries[Capacity] = {};
++    Caller callers[32] = {};
++    unsigned next = 0;
++    u64 serial = 0;
++    u64 active = 0;
++    bool blocked = false;
++
++    Entry* find(u64 id) {
++        for (auto& entry : entries) if (id && entry.status.operation_id == id) return &entry;
++        return nullptr;
++    }
++    Result lookup(u64 caller, const HenPluginReloadRequest& request, Entry** out) {
++        *out = nullptr;
++        if (!caller || !request.nonce || !validName(request.name)) return Invalid;
++        for (auto& entry : entries) {
++            if (entry.caller != caller || entry.request.nonce != request.nonce) continue;
++            if (std::memcmp(&entry.request, &request, sizeof(request))) return Invalid;
++            *out = &entry;
++            return 0;
++        }
++        for (const auto& owner : callers)
++            if (owner.pid == caller && request.nonce <= owner.high) return Expired;
++        return active || blocked ? Busy : 0;
++    }
++    Result begin(u64 caller, const HenPluginReloadRequest& request, Entry** out) {
++        Result rc = lookup(caller, request, out);
++        if (R_FAILED(rc) || *out) return rc;
++        Caller* owner = nullptr;
++        for (auto& slot : callers) if (slot.pid == caller) owner = &slot;
++        if (!owner) for (auto& slot : callers) if (!slot.pid) { owner = &slot; break; }
++        if (!owner || serial == UINT64_MAX) return Exhausted;
++        *owner = {caller, request.nonce};
++        auto& entry = entries[next++ % Capacity];
++        entry = {};
++        entry.caller = caller;
++        entry.request = request;
++        entry.status.instance_id = request.instance_id;
++        entry.status.operation_id = ++serial;
++        entry.status.old_process_id = request.expected_process_id;
++        entry.status.generation = request.expected_generation;
++        entry.status.phase = HenPluginReloadPhase_Preparing;
++        entry.status.flags = HEN_PLUGIN_RELOAD_BUSY;
++        active = serial;
++        *out = &entry;
++        return 0;
++    }
++    void finish(u64 id, bool quarantine) {
++        if (auto* entry = find(id)) {
++            entry->status.flags &= ~HEN_PLUGIN_RELOAD_BUSY;
++            if (quarantine) entry->status.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++        }
++        blocked |= quarantine;
++        // Keep the quarantined operation pinned, including a late PM PID.
++        active = quarantine ? id : 0;
++    }
++};
++
++// Production orchestration, also executed with fault-injecting host adapters.
++// Each adapter owns its pending IPC/thread storage beyond a deadline. A
++// failure after prepare may only restore availability after acknowledged abort.
++template <typename Io> Result run(Io& io) {
++    Result rc = io.preflight();
++    if (R_FAILED(rc)) return io.fail(rc, false);
++    io.phase(HenPluginReloadPhase_Draining);
++    rc = io.prepare();
++    if (R_FAILED(rc)) return io.fail(rc, !io.abort());
++    rc = io.drain();
++    if (R_FAILED(rc)) return io.fail(rc, !io.abort());
++    io.phase(HenPluginReloadPhase_Exiting);
++    rc = io.commit();
++    if (R_FAILED(rc)) return io.fail(rc, true);
++    rc = io.waitExit();
++    if (R_FAILED(rc)) return io.fail(rc, true);
++    io.oldExited();
++    io.phase(HenPluginReloadPhase_Launching);
++    rc = io.launch();
++    if (R_FAILED(rc)) return io.fail(rc, !io.cleanup());
++    io.phase(HenPluginReloadPhase_Handoff);
++    rc = io.handoff();
++    if (R_FAILED(rc)) return io.fail(rc, !io.cleanup());
++    io.phase(HenPluginReloadPhase_Health);
++    rc = io.health();
++    if (R_FAILED(rc)) return io.fail(rc, !io.cleanup());
++    return 0; // owner loop publishes before marking Complete
++}
++} // namespace reload
+--- a/hen/source/server.cpp
++++ b/hen/source/server.cpp
+@@ -23,6 +23,7 @@
+ HenServer::HenServer() = default;
+ 
+ HenServer::~HenServer() {
++    ounce::closeHandle(&reload_shell_);
+     ounce::closeHandle(&fs_root_);
+     ounce::closeHandle(&sm_session_);
+     if (settings_ready_) {
+@@ -44,6 +45,8 @@
+ }
+ 
+ Result HenServer::initialize() {
++    reload_instance_ = randomGet64();
++    if (!reload_instance_) reload_instance_ = armGetSystemTick() | 1;
+     status_.protocol_version = HEN_PROTOCOL_VERSION;
+     Result rc = svcGetProcessId(&status_.process_id, CUR_PROCESS_HANDLE);
+     if (R_SUCCEEDED(rc)) {
+@@ -98,6 +101,7 @@
+         if (R_FAILED(serve_result)) {
+             return serve_result;
+         }
++        advanceReload();
+     }
+ }
+ 
+@@ -124,6 +128,7 @@
+ 
+ /// Advances game arming between incoming requests.
+ void HenServer::stepBetweenRequests() {
++    advanceReload();
+     game_.step();
+     svcSleepThread(IdleSleepNs);
+ }
+@@ -250,6 +255,12 @@
+             reply.setData(game_.status());
+         }
+         return reply;
 +    case HenControlCommand_MoaderGameTrace:
 +        if (!request.num_copy_handles) {
 +            reply.result = 0;
 +            reply.setData(game_.trace());
-         }
-         return reply;
++        }
++        return reply;
      default:
---- research/sources/kaihen/common/control.h	2026-11-13 21:18:44
-+++ runtime/kaihen/common/control.h	2026-11-13 22:06:55
-@@ -20,6 +20,8 @@
-     HenControlCommand_ReleaseControlPort = 13,
-     HenControlCommand_CreateServiceManagerSession = 14,
-     HenControlCommand_CloneFilesystemRoot = 15,
-+    // Moader diagnostic extension. Read-only on control and homebrew sessions.
-+    HenControlCommand_MoaderGameTrace = 0x4d4f0001,
+         break;
+     }
+@@ -268,6 +279,20 @@
+     const Handle* handles = request.copy_handles;
+ 
+     switch (request.command_id) {
++    case HenControlCommand_ConfigurePluginReload:
++        if (copies == 1 && request.data_size >= sizeof(HenPluginLaunchConfig) && !reload_configured_) {
++            HenPluginLaunchConfig config;
++            std::memcpy(&config, request.data, sizeof(config));
++            if (config.program_id && config.storage_id == NcmStorageId_BuiltInSystem &&
++                !config.reserved[0] && !config.reserved[1] && !config.reserved[2]) {
++                reload_shell_ = handles[0];
++                reload_spec_ = {config.program_id, config.flags, config.storage_id, {0, 0, 0}};
++                reload_configured_ = true;
++                reply.result = 0;
++                reply.keeps_request_handles = true;
++            }
++        }
++        break;
+     case HenControlCommand_ConfigureGame:
+         if (!copies && request.data_size >= sizeof(HenGameConfig)) {
+             HenGameConfig configuration;
+@@ -358,6 +383,43 @@
+     }
+ 
+     switch (request.command_id) {
++    case HenHomebrewCommand_GetReloadCapabilities: {
++        HenReloadCapabilities caps = {1, reload_configured_ ? HEN_PLUGIN_RELOAD_AVAILABLE : 0,
++                                      reload_instance_, reload_journal_.active};
++        if (reload_journal_.active) caps.flags |= HEN_PLUGIN_RELOAD_BUSY;
++        if (reload_journal_.blocked) caps.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++        reply.result = 0;
++        reply.setData(caps);
++        break;
++    }
++    case HenHomebrewCommand_GetPluginInfo: {
++        HenPluginName name;
++        if (request.data_size < sizeof(name)) break;
++        std::memcpy(&name, request.data, sizeof(name));
++        HenPluginInfo info = {};
++        reply.result = getPluginInfo(name, info);
++        if (R_SUCCEEDED(reply.result)) reply.setData(info);
++        break;
++    }
++    case HenHomebrewCommand_ReloadPlugin: {
++        HenPluginReloadRequest input;
++        if (request.data_size < sizeof(input)) break;
++        std::memcpy(&input, request.data, sizeof(input));
++        HenPluginReloadStatus output = {};
++        reply.result = submitReload(index, input, output);
++        if (R_SUCCEEDED(reply.result)) reply.setData(output);
++        break;
++    }
++    case HenHomebrewCommand_GetPluginReloadStatus: {
++        u64 id = 0;
++        if (request.data_size < sizeof(id)) break;
++        std::memcpy(&id, request.data, sizeof(id));
++        advanceReload();
++        auto* entry = reload_journal_.find(id);
++        reply.result = entry ? 0 : reload::Expired;
++        if (entry) reply.setData(entry->status);
++        break;
++    }
+     case HenHomebrewCommand_GetFilesystemRoot:
+         if (fs_root_ == INVALID_HANDLE) {
+             reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+@@ -516,6 +578,12 @@
+         if (std::strcmp(plugins_[index].name.name, name.name)) {
+             continue;
+         }
++        if (plugins_[index].operation_id) {
++            const auto* operation = reload_journal_.find(plugins_[index].operation_id);
++            if ((operation && (operation->status.flags & (HEN_PLUGIN_RELOAD_BUSY | HEN_PLUGIN_RELOAD_BLOCKED))) ||
++                plugins_[index].control_session == INVALID_HANDLE) return reload::Busy;
++        }
++        if (plugins_[index].control_session == INVALID_HANDLE) return reload::Busy;
+         Service control = {};
+         serviceCreate(&control, plugins_[index].control_session);
+         control.own_handle = false;
+@@ -525,6 +593,10 @@
+         );
+         // The plugin closed its control session, so it no longer serves.
+         if (rc == KERNELRESULT(ConnectionClosed)) {
++            if (plugins_[index].operation_id || game_.processExists(plugins_[index].process_id)) {
++                ounce::closeHandle(&plugins_[index].control_session);
++                return rc;
++            }
+             removePlugin(index);
+             return MAKERESULT(Module_Libnx, LibnxError_NotFound);
+         }
+@@ -547,8 +619,108 @@
+ /// the two can still name a plugin that exits in the meantime.
+ void HenServer::removeExitedPlugins() {
+     for (u32 index = plugin_count_; index > 0; index--) {
+-        if (!game_.processExists(plugins_[index - 1].process_id)) {
++        if (!plugins_[index - 1].operation_id && !game_.processExists(plugins_[index - 1].process_id)) {
+             removePlugin(index - 1);
+         }
+     }
+ }
++
++HenServer::PluginRecord* HenServer::findPlugin(const char* name) {
++    for (u32 index = 0; index < plugin_count_; ++index)
++        if (!std::strcmp(plugins_[index].name.name, name)) return &plugins_[index];
++    return nullptr;
++}
++
++Result HenServer::getPluginInfo(const HenPluginName& name, HenPluginInfo& out) {
++    if (!reload::validName(name.name)) return reload::Invalid;
++    advanceReload();
++    removeExitedPlugins();
++    out = {};
++    out.instance_id = reload_instance_;
++    // Explicit successful absence is the ONLY new-client fallback signal.
++    auto* plugin = findPlugin(name.name);
++    if (!plugin) return 0;
++    out.process_id = plugin->process_id;
++    out.generation = plugin->generation;
++    out.operation_id = plugin->operation_id;
++    out.flags = reload_configured_ ? HEN_PLUGIN_RELOAD_AVAILABLE : 0;
++    if (auto* entry = reload_journal_.find(plugin->operation_id)) {
++        out.phase = entry->status.phase;
++        out.flags |= entry->status.flags;
++    }
++    return 0;
++}
++
++Result HenServer::submitReload(u32 caller, const HenPluginReloadRequest& request, HenPluginReloadStatus& out) {
++    advanceReload();
++    u64 caller_pid = 0;
++    R_TRY(svcGetProcessId(&caller_pid, homebrew_processes_[caller]));
++    reload::Journal::Entry* entry = nullptr;
++    R_TRY(reload_journal_.lookup(caller_pid, request, &entry));
++    if (entry) { out = entry->status; return 0; }
++    if (!reload_configured_) return reload::Capability;
++    if (request.instance_id != reload_instance_) return reload::Stale;
++    auto* plugin = findPlugin(request.name);
++    if (!plugin || !plugin->process_id || plugin->process_id != request.expected_process_id ||
++        plugin->generation != request.expected_generation || plugin->generation == UINT64_MAX ||
++        plugin->control_session == INVALID_HANDLE) return reload::Stale;
++    PluginLaunchContext context = {};
++    if (!game_.acquireReloadLease(context)) return reload::Busy;
++    Handle fs = INVALID_HANDLE, sm = INVALID_HANDLE;
++    Result rc = cmifCloneCurrentObject(fs_root_, &fs);
++    if (R_SUCCEEDED(rc)) rc = sm_proxy_.openSession(&sm);
++    if (R_SUCCEEDED(rc)) rc = reload_journal_.begin(caller_pid, request, &entry);
++    if (R_FAILED(rc)) {
++        ounce::closeHandle(&fs);
++        ounce::closeHandle(&sm);
++        game_.releaseReloadLease();
++        return rc;
++    }
++    plugin->operation_id = entry->status.operation_id;
++    const PluginReload::Input input = {context, reload_spec_, request, reload_shell_, plugin->control_session, sm, fs,
++                                      plugin->package_operation_id};
++    rc = reload_.start(input, entry->status);
++    if (R_FAILED(rc)) {
++        ounce::closeHandle(&fs);
++        ounce::closeHandle(&sm);
++        entry->status.result = rc;
++        entry->status.phase = HenPluginReloadPhase_Failed;
++        reload_journal_.finish(entry->status.operation_id, false);
++        game_.releaseReloadLease();
++    }
++    out = entry->status;
++    // A reserved ticket remains queryable even if creating its worker failed.
++    return 0;
++}
++
++void HenServer::advanceReload() {
++    if (!reload_journal_.active) return;
++    auto* entry = reload_journal_.find(reload_journal_.active);
++    if (!entry) return;
++    if (!reload::completedSnapshot(reload_, entry->status)) return;
++    auto* plugin = findPlugin(entry->request.name);
++    bool quarantine = reload_.quarantined();
++    if (reload::publishable(entry->status, reload_.succeeded(), quarantine) &&
++        plugin && plugin->generation != UINT64_MAX) {
++        ounce::closeHandle(&plugin->control_session);
++        plugin->control_session = reload_.takeControl();
++        plugin->process_id = entry->status.new_process_id;
++        plugin->package_operation_id = entry->status.operation_id;
++        ++plugin->generation;
++        entry->status.generation = plugin->generation;
++        entry->status.phase = HenPluginReloadPhase_Complete;
++        entry->status.result = 0;
++    } else if (reload_.succeeded()) {
++        // An impossible registry/generation conflict cannot turn a healthy
++        // but unpublished process into an untracked writer.
++        quarantine = true;
++        entry->status.phase = HenPluginReloadPhase_Quarantined;
++        entry->status.result = reload::Stale;
++    }
++    if (entry->status.phase != HenPluginReloadPhase_Complete &&
++        (entry->status.flags & HEN_PLUGIN_RELOAD_OLD_EXITED)) {
++        if (plugin) { ounce::closeHandle(&plugin->control_session); plugin->process_id = 0; }
++    }
++    reload_journal_.finish(entry->status.operation_id, quarantine);
++    if (!quarantine) game_.releaseReloadLease();
++}
+--- a/hen/source/server.hpp
++++ b/hen/source/server.hpp
+@@ -5,6 +5,7 @@
+ #include "../../common/control.h"
+ #include "game_arm.hpp"
+ #include "sm_proxy.hpp"
++#include "plugin_reload.hpp"
+ #include "../../libkaihen/source/cmif_server.hpp"
+ 
+ /// HEN's IPC server. It serves the mig:usr control port, on which the
+@@ -84,6 +85,9 @@
+         HenPluginName name = {};
+         u64 process_id = 0;
+         Handle control_session = INVALID_HANDLE;
++        u64 generation = 1;
++        u64 operation_id = 0;
++        u64 package_operation_id = 0;
+     };
+ 
+     // The loop
+@@ -112,6 +116,10 @@
+     Result openPlugin(const HenPluginName& name, Handle* out_session);
+     void removePlugin(u32 index);
+     void removeExitedPlugins();
++    Result getPluginInfo(const HenPluginName& name, HenPluginInfo& out);
++    Result submitReload(u32 caller, const HenPluginReloadRequest& request, HenPluginReloadStatus& out);
++    void advanceReload();
++    PluginRecord* findPlugin(const char* name);
+ 
+     Handle port_ = INVALID_HANDLE;
+     Handle fs_root_ = INVALID_HANDLE;
+@@ -127,4 +135,10 @@
+     u32 plugin_count_ = 0;
+     HenStatus status_ = {};
+     GameArm game_ = {};
++    PluginReload reload_;
++    reload::Journal reload_journal_;
++    Handle reload_shell_ = INVALID_HANDLE;
++    PluginLaunchSpec reload_spec_ = {};
++    bool reload_configured_ = false;
++    u64 reload_instance_ = 0;
+ };
+--- a/hen/test.sh
++++ b/hen/test.sh
+@@ -4,12 +4,13 @@
+ set -eu
+ cd "$(dirname "$0")"
+ nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
+-mkdir -p build/tests
++out=${TEST_OUT:-build/tests}
++mkdir -p "$out"
+ cxx=${CXX:-g++}
+ # libnx's HIPC parser reads unaligned fields, as allowed on AArch64. Keep the
+ # other ASan/UBSan checks.
+-flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
+-$cxx $flags -I"$nx/include" -I../libkaihen/include tests/mount_request_test.cpp -o build/tests/mount_request
+-build/tests/mount_request
+-$cxx $flags -I"$nx/include" -I../libkaihen/include tests/sm_request_test.cpp -o build/tests/sm_request
+-build/tests/sm_request
++flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
++for test in mount_request sm_request reload lifecycle_server; do
++    $cxx $flags -Itests/host -I"$nx/include" -I../libkaihen/include "tests/${test}_test.cpp" -o "$out/$test"
++    "$out/$test"
++done
+--- /dev/null
++++ b/hen/tests/host/sys/lock.h
+@@ -0,0 +1,6 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <stdint.h>
++// Only the newlib lock layout needed by SDK headers in host IPC fixtures.
++typedef uint32_t _LOCK_T;
++typedef struct { uint32_t lock; uint32_t counter; } _LOCK_RECURSIVE_T;
+--- /dev/null
++++ b/hen/tests/lifecycle_server_test.cpp
+@@ -0,0 +1,106 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstring>
++#include <cstdio>
++#include "../../libkaihen/source/plugin_server.cpp"
++
++namespace {
++alignas(16) u8 tls[0x100];
++bool reply_sent = false, ack = false;
++unsigned callbacks = 0;
++Result send_result = 0;
++Thread* fail_wait = nullptr;
++Thread* fail_close = nullptr;
++unsigned waits = 0, thread_closes = 0, handle_closes = 0;
++}
++extern "C" {
++void* armGetTls() { return tls; }
++void mutexLock(Mutex*) {}
++void mutexUnlock(Mutex*) {}
++Result svcCloseHandle(Handle) { ++handle_closes; return 0; }
++Result svcSignalEvent(Handle) { return 0; }
++Result svcCreateEvent(Handle* write, Handle* read) { *write = 60; *read = 61; return 0; }
++Result svcClearEvent(Handle) { return 0; }
++Result svcCreateSession(Handle* server, Handle* client, u32, u64) { *server = 50; *client = 51; return 0; }
++Result svcReplyAndReceive(s32*, const Handle*, s32, Handle, u64) {
++    assert(!ack); // post-reply callback must not have run early
++    reply_sent = R_SUCCEEDED(send_result);
++    return R_SUCCEEDED(send_result) ? KERNELRESULT(TimedOut) : send_result;
++}
++Result threadCreate(Thread*, ThreadFunc, void*, void*, size_t, int, int) { return 0; }
++Result threadStart(Thread*) { return 0; }
++Result threadClose(Thread* thread) { ++thread_closes; return thread == fail_close ? MAKERESULT(345, 222) : 0; }
++Result threadWaitForExit(Thread* thread) { ++waits; return thread == fail_wait ? MAKERESULT(345, 221) : 0; }
++}
++namespace {
++Result lifecycle(const KaihenPluginLifecycleRequest* input, KaihenPluginLifecycleReply* output, void*) {
++    ++callbacks;
++    assert(input->operation_id == 19);
++    if (input->command == KaihenPluginLifecycle_CommitAcknowledged) {
++        assert(reply_sent);
++        ack = true;
++        return 0;
++    }
++    assert(input->command == KaihenPluginLifecycle_Commit);
++    assert(!reply_sent && !ack);
++    *output = {1, KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE, KaihenPluginLifecycleState_Quiesced, 0, 19, 0};
++    return 0;
++}
++void request(u32 command) {
++    std::memset(tls, 0, sizeof(tls));
++    CmifRequestFormat format = {};
++    format.request_id = KAIHEN_PLUGIN_CONTROL_LIFECYCLE;
++    format.data_size = sizeof(KaihenPluginLifecycleRequest);
++    auto message = cmifMakeRequest(tls, format);
++    const KaihenPluginLifecycleRequest input = {command, 0, 19};
++    std::memcpy(message.data, &input, sizeof(input));
++    reply_sent = ack = false;
++    callbacks = 0;
++}
++}
++int main() {
++    PluginService service = {};
++    service.control_session = 20;
++    service.lifecycle_handler = lifecycle;
++    request(KaihenPluginLifecycle_Commit);
++    assert(!serveControlRequest(&service));
++    assert(reply_sent && ack && callbacks == 2);
++    request(KaihenPluginLifecycle_Commit);
++    send_result = KERNELRESULT(ConnectionClosed);
++    assert(serveControlRequest(&service) == send_result);
++    assert(!reply_sent && !ack && callbacks == 1);
++    request(KaihenPluginLifecycle_CommitAcknowledged);
++    send_result = 0;
++    assert(!serveControlRequest(&service));
++    assert(reply_sent && !ack && !callbacks); // remote internal notification rejected
++    request(KaihenPluginLifecycle_Commit);
++    service.lifecycle_handler = nullptr;
++    assert(!serveControlRequest(&service));
++    assert(reply_sent && !ack && !callbacks); // legacy plugin has no shutdown command
++    PluginService owned = {};
++    owned.started = true;
++    owned.control_thread_state = owned.worker_thread_state = {true, true, false, false};
++    owned.stop_write = 40; owned.stop_read = 41; owned.wake_write = 42; owned.wake_read = 43;
++    handle_closes = waits = thread_closes = 0;
++    fail_wait = &owned.control_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes && !thread_closes);
++    Handle extra = INVALID_HANDLE;
++    assert(createClientSession(&owned, &extra) == KAIHEN_PLUGIN_LIFECYCLE_BUSY && extra == INVALID_HANDLE);
++    fail_wait = nullptr;
++    fail_close = &owned.control_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes);
++    assert(owned.control_thread_state.exited && !owned.control_thread_state.closed);
++    fail_close = nullptr;
++    fail_wait = &owned.worker_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes);
++    assert(owned.control_thread_state.closed && !owned.worker_thread_state.exited);
++    fail_wait = nullptr;
++    fail_close = &owned.worker_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes);
++    assert(owned.worker_thread_state.exited && !owned.worker_thread_state.closed);
++    fail_close = nullptr;
++    assert(!pluginServiceStop(&owned) && !owned.started && handle_closes == 4);
++    assert(waits == 4 && thread_closes == 4); // completed joins never repeated
++    std::puts("plugin lifecycle server: real dispatch, post-reply acknowledgement and legacy/remote rejection passed");
++    std::puts("plugin stop: wait/close failures retain ownership and partial joins resume without double close");
++}
+--- /dev/null
++++ b/hen/tests/reload_test.cpp
+@@ -0,0 +1,283 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include <vector>
++#include <thread>
++#include <mutex>
++#include <condition_variable>
++#include "../source/reload_state.hpp"
++#include "../source/lifecycle_client.hpp"
++#include "../../libkaihen/include/kaihen/protocol.h"
++#include "../../libkaihen/source/cmif_server.hpp"
++#include "../../common/code_mount_request.hpp"
++
++namespace {
++HenPluginReloadRequest request(u64 nonce = 1) {
++    HenPluginReloadRequest out = {};
++    std::strcpy(out.name, "moader");
++    out.instance_id = 41;
++    out.expected_process_id = 52;
++    out.expected_generation = 1;
++    out.nonce = nonce;
++    return out;
++}
++
++void journal() {
++    reload::Journal journal;
++    reload::Journal::Entry* entry = nullptr;
++    auto input = request();
++    assert(!journal.begin(80, input, &entry));
++    const auto operation = entry->status.operation_id;
++    assert(operation && journal.active == operation);
++    assert(!journal.lookup(80, input, &entry) && entry->status.operation_id == operation);
++    auto changed = input;
++    ++changed.expected_generation;
++    assert(journal.lookup(80, changed, &entry) == reload::Invalid);
++    assert(journal.lookup(81, input, &entry) == reload::Busy);
++    assert(journal.lookup(80, request(2), &entry) == reload::Busy);
++    journal.find(operation)->status.phase = HenPluginReloadPhase_Complete;
++    journal.finish(operation, false);
++    // Lost terminal reply reuses the ticket, even though the target's
++    // generation has already changed outside the journal.
++    assert(!journal.begin(80, input, &entry) && entry->status.operation_id == operation);
++    assert(journal.serial == 1 && !journal.active);
++    for (u64 nonce = 2; nonce <= 12; ++nonce) {
++        assert(!journal.begin(80, request(nonce), &entry));
++        journal.finish(entry->status.operation_id, false);
++    }
++    assert(journal.lookup(80, input, &entry) == reload::Expired);
++    assert(!journal.find(operation));
++    assert(!journal.begin(80, request(13), &entry));
++    auto blocked = entry->status.operation_id;
++    journal.finish(blocked, true);
++    assert(journal.active == blocked && journal.blocked);
++    assert(journal.find(blocked)->status.flags & HEN_PLUGIN_RELOAD_BLOCKED);
++    assert(journal.lookup(80, request(14), &entry) == reload::Busy);
++    assert(!journal.lookup(80, request(13), &entry));
++    // Malformed requests never allocate a nonce/operation.
++    reload::Journal fresh;
++    auto malformed = request();
++    std::strcpy(malformed.name, "../moader");
++    assert(fresh.begin(80, malformed, &entry) == reload::Invalid && fresh.serial == 0);
++    std::memset(malformed.name, 'x', sizeof(malformed.name));
++    assert(fresh.begin(80, malformed, &entry) == reload::Invalid);
++    malformed = request(0);
++    assert(fresh.begin(80, malformed, &entry) == reload::Invalid);
++    for (u64 caller = 1; caller <= 32; ++caller) {
++        assert(!fresh.begin(caller, request(), &entry));
++        fresh.finish(entry->status.operation_id, false);
++    }
++    assert(fresh.begin(33, request(), &entry) == reload::Exhausted);
++}
++
++// Executes the exact production orchestration with observable effects and
++// failures, including uncertainty that is NOT equivalent to process exit.
++struct Io {
++    unsigned failure = 0, calls = 0;
++    bool abort_ok = true, cleanup_ok = true, stopped = false, gone = false;
++    bool launched = false, quarantined = false, aborted = false, cleaned = false;
++    u32 current_phase = HenPluginReloadPhase_Preparing;
++    Result result = 0;
++    Result restoration_result = 0;
++    std::vector<unsigned> actions;
++    Result action(unsigned id) {
++        ++calls; actions.push_back(id);
++        return failure == id ? MAKERESULT(345, 100 + id) : 0;
++    }
++    void phase(u32 value) { current_phase = value; }
++    Result preflight() { assert(!stopped && !launched); return action(1); }
++    Result prepare() { assert(!launched); return action(2); }
++    Result drain() { return action(3); }
++    bool abort() { assert(!stopped && !launched); aborted = true; return abort_ok; }
++    Result commit() { stopped = failure != 4; return action(4); }
++    Result waitExit() { assert(stopped); return action(5); }
++    void oldExited() { assert(stopped); gone = true; }
++    Result launch() { assert(gone); launched = true; return action(6); }
++    Result handoff() { assert(gone && launched); return action(7); }
++    Result health() { assert(gone && launched); return action(8); }
++    bool cleanup() { assert(gone); cleaned = true; return cleanup_ok; }
++    Result fail(Result rc, bool quarantine) {
++        result = rc; quarantined = quarantine;
++        current_phase = quarantine ? HenPluginReloadPhase_Quarantined : HenPluginReloadPhase_Failed;
++        return rc;
++    }
++};
++
++void flow() {
++    Io happy;
++    assert(!reload::run(happy));
++    assert(happy.calls == 8 && happy.gone && happy.launched && !happy.quarantined);
++    assert(happy.current_phase == HenPluginReloadPhase_Health); // owner publishes next
++    for (unsigned failure = 1; failure <= 8; ++failure) {
++        Io io;
++        io.failure = failure;
++        assert(R_FAILED(reload::run(io)));
++        assert(io.calls == failure && io.result == MAKERESULT(345, 100 + failure));
++        assert(io.quarantined == (failure == 4 || failure == 5));
++        if (failure < 4) assert(!io.stopped && !io.launched);
++        if (failure < 6) assert(!io.launched);
++        assert(io.aborted == (failure == 2 || failure == 3));
++        assert(io.cleaned == (failure >= 6));
++    }
++    for (unsigned failure : {2u, 3u}) {
++        Io io; io.failure = failure; io.abort_ok = false;
++        assert(R_FAILED(reload::run(io)) && io.quarantined && !io.launched);
++    }
++    for (unsigned failure : {6u, 7u, 8u}) {
++        Io io; io.failure = failure; io.cleanup_ok = false;
++        io.restoration_result = MAKERESULT(345, 250);
++        assert(R_FAILED(reload::run(io)) && io.quarantined);
++        assert(io.result == MAKERESULT(345, 100 + failure));
++        assert(io.restoration_result == MAKERESULT(345, 250));
++        assert(io.calls == failure); // one attempt; no rollback launch/retry
++    }
++}
++
++struct LifecycleIo {
++    struct Step { u32 command; Result result; u32 state; bool healthy = false; };
++    std::vector<Step> steps;
++    size_t cursor = 0;
++    u64 clock = 0;
++    bool cancel = false;
++    Result call(u32 command, KaihenPluginLifecycleReply& reply) {
++        assert(cursor < steps.size());
++        const auto step = steps[cursor++];
++        assert(command == step.command);
++        reply = {1, KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE |
++                    (step.healthy ? KAIHEN_PLUGIN_LIFECYCLE_HEALTHY : 0), step.state, 0, 19, 0};
++        return step.result;
++    }
++    u64 now() { return clock; }
++    void pause() { ++clock; }
++    bool deadline(u64 start, u64 timeout) { return clock - start >= timeout; }
++    bool cancelled() { return cancel; }
++};
++void lifecycleContract() {
++    const auto query = reload::lifecycleRequest(KaihenPluginLifecycle_Query, 19);
++    const auto health = reload::lifecycleRequest(KaihenPluginLifecycle_Health, 19);
++    const auto commit = reload::lifecycleRequest(KaihenPluginLifecycle_Commit, 19);
++    assert(!query.operation_id && !health.operation_id && commit.operation_id == 19);
++    KaihenPluginLifecycleReply reply = {1, KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE, 0, 0, 82, 0};
++    assert(reload::validLifecycleReply(query, reply)); // last operation, not request op
++    assert(reload::validLifecycleReply(health, reply));
++    assert(!reload::validLifecycleReply(commit, reply));
++    reply.operation_id = 19;
++    assert(reload::validLifecycleReply(commit, reply));
++    LifecycleIo commit_io{{{KaihenPluginLifecycle_Commit, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                           {KaihenPluginLifecycle_Commit, 0, KaihenPluginLifecycleState_Quiesced}}};
++    assert(!reload::lifecycleCommit(commit_io, 10) && commit_io.cursor == 2);
++    LifecycleIo lost{{{KaihenPluginLifecycle_Commit, KERNELRESULT(ConnectionClosed), 0}}};
++    assert(reload::lifecycleCommit(lost, 10) == KERNELRESULT(ConnectionClosed) && lost.cursor == 1);
++    LifecycleIo abort_io{{{KaihenPluginLifecycle_Abort, 0, KaihenPluginLifecycleState_Quiesced},
++                         {KaihenPluginLifecycle_Poll, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                         {KaihenPluginLifecycle_Poll, 0, KaihenPluginLifecycleState_Draining},
++                         {KaihenPluginLifecycle_Poll, 0, KaihenPluginLifecycleState_Running},
++                         {KaihenPluginLifecycle_Poll, 0, KaihenPluginLifecycleState_Running, true}}};
++    assert(reload::lifecycleAbort(abort_io, 10) && abort_io.cursor == 5);
++    LifecycleIo health_io{{{KaihenPluginLifecycle_Health, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                          {KaihenPluginLifecycle_Health, 0, KaihenPluginLifecycleState_Starting},
++                          {KaihenPluginLifecycle_Health, 0, KaihenPluginLifecycleState_Running},
++                          {KaihenPluginLifecycle_Health, 0, KaihenPluginLifecycleState_Running, true}}};
++    assert(!reload::lifecycleWait(health_io, KaihenPluginLifecycle_Health, KaihenPluginLifecycleState_Running, true, 10));
++    assert(health_io.cursor == 4);
++    LifecycleIo busy{{{KaihenPluginLifecycle_Query, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                     {KaihenPluginLifecycle_Query, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0}}};
++    assert(reload::lifecycleRetryBusy(busy, KaihenPluginLifecycle_Query, reply, 2) == reload::Deadline);
++    assert(busy.cursor == 2);
++    LifecycleIo cancelled;
++    cancelled.cancel = true;
++    assert(!reload::lifecycleAbort(cancelled, 10) && !cancelled.cursor);
++}
++
++void publicationRaces() {
++    struct Worker {
++        HenPluginReloadStatus live = {};
++        bool done = false;
++        unsigned reads = 0;
++        HenPluginReloadStatus status() {
++            ++reads;
++            auto snapshot = live;
++            if (!done) {
++                // Completion occurs after the snapshot but before the
++                // caller's finished check, exactly the reported race.
++                live.new_process_id = 53;
++                live.flags |= HEN_PLUGIN_RELOAD_OLD_EXITED;
++                done = true;
++            }
++            return snapshot;
++        }
++        bool finished() { return done; }
++        bool join() { assert(done); return true; }
++    } worker;
++    worker.live.old_process_id = 52;
++    HenPluginReloadStatus snapshot = {};
++    assert(reload::completedSnapshot(worker, snapshot));
++    assert(worker.reads == 2 && snapshot.new_process_id == 53);
++    assert(reload::publishable(snapshot, true, false));
++    auto broken = snapshot;
++    broken.new_process_id = 0;
++    assert(!reload::publishable(broken, true, false));
++    broken = snapshot;
++    broken.restoration_result = reload::Deadline;
++    assert(!reload::publishable(broken, true, false));
++
++    // Real host threads place the supervisor deadline inside blocked
++    // cleanup, then use the SAME finalization/publish guard as production.
++    std::mutex mutex;
++    std::condition_variable condition;
++    bool cleanup_blocked = false, cleanup_allowed = false, cancelled = false;
++    bool success = true, quarantined = false, finished = false;
++    std::thread thread([&] {
++        std::unique_lock lock(mutex);
++        cleanup_blocked = true;
++        condition.notify_all();
++        condition.wait(lock, [&] { return cleanup_allowed; });
++        reload::finalizeWorker(true, cancelled, success, quarantined, snapshot);
++        finished = true; // published under supervisor lock, as production
++    });
++    {
++        std::unique_lock lock(mutex);
++        condition.wait(lock, [&] { return cleanup_blocked; });
++        assert(!finished);
++        cancelled = true;
++        cleanup_allowed = true;
++        condition.notify_all();
++    }
++    thread.join();
++    assert(finished && !success && quarantined && snapshot.result == reload::Deadline);
++    assert(snapshot.phase == HenPluginReloadPhase_Quarantined);
++    assert(!reload::publishable(snapshot, success, quarantined));
++}
++
++void wire() {
++    static_assert(HenHomebrewCommand_GetStatus == 0);
++    static_assert(HenHomebrewCommand_GetFilesystemRoot == 16);
++    static_assert(HenHomebrewCommand_OpenPlugin == 22);
++    static_assert(sizeof(HenStatus) == 16 && sizeof(HenPluginName) == 64);
++    static_assert(sizeof(HenPluginReloadStatus) <= 64);
++    alignas(16) u8 message[0x100] = {};
++    CmifRequestFormat format = {};
++    format.request_id = HenHomebrewCommand_ReloadPlugin;
++    format.data_size = sizeof(HenPluginReloadRequest);
++    auto built = cmifMakeRequest(message, format);
++    auto input = request();
++    std::memcpy(built.data, &input, sizeof(input));
++    auto parsed = ounce::parseRequest(message);
++    assert(parsed.valid && parsed.command_id == HenHomebrewCommand_ReloadPlugin);
++    assert(parsed.data_size >= sizeof(input));
++    assert(!std::memcmp(parsed.data, &input, sizeof(input)));
++    ounce::CodeMountRequest mount = {};
++    mount.open_code = true;
++    mount.arguments = {1, 1, {}, 0x040000000000003a};
++    assert(ounce::matchesCodeMount(mount, 0x040000000000003a, 1));
++    assert(!ounce::matchesCodeMount(mount, 0x040000000000003b, 1));
++    assert(!ounce::matchesCodeMount(mount, 0x040000000000003a, 2));
++    mount.arguments.content_attributes = 0;
++    assert(!ounce::matchesCodeMount(mount, 0x040000000000003a, 1));
++}
++}
++int main() {
++    journal(); flow(); lifecycleContract(); publicationRaces(); wire();
++    std::puts("reload: real orchestration failure matrix, idempotency/expiry/quarantine and ABI envelopes passed");
++}
+--- a/libkaihen/include/kaihen.h
++++ b/libkaihen/include/kaihen.h
+@@ -24,6 +24,7 @@
+ #include <switch.h>
+ 
+ #include "kaihen/protocol.h"
++#include "kaihen/reload.h"
+ 
+ /// Gets the ldr:ro session that hbloader passes to the NRO. The Service does
+ /// not own the handle: do not close it. Returns LibnxError_NotFound when the
+@@ -167,3 +168,16 @@
+         serviceCreate(out, session);
+     return rc;
+ }
++
++NX_INLINE Result henGetPluginInfo(Service* s, const HenPluginName* name, HenPluginInfo* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginInfo, *name, *out);
++}
++NX_INLINE Result henReloadPlugin(Service* s, const HenPluginReloadRequest* request, HenPluginReloadStatus* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_ReloadPlugin, *request, *out);
++}
++NX_INLINE Result henGetPluginReloadStatus(Service* s, u64 operation_id, HenPluginReloadStatus* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginReloadStatus, operation_id, *out);
++}
++NX_INLINE Result henGetReloadCapabilities(Service* s, HenReloadCapabilities* out) {
++    return serviceDispatchOut(s, HenHomebrewCommand_GetReloadCapabilities, *out);
++}
+--- a/libkaihen/include/kaihen/plugin.h
++++ b/libkaihen/include/kaihen/plugin.h
+@@ -51,6 +51,7 @@
+ 
+ #include <switch.h>
+ #include "protocol.h"
++#include "reload.h"
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -96,6 +97,13 @@
+ /// Maximum number of client sessions that a PluginService serves at once.
+ #define KAIHEN_PLUGIN_MAX_SESSIONS 16
+ 
++typedef struct {
++    bool created;
++    bool started;
++    bool exited;
++    bool closed;
++} PluginServiceThreadState;
++
+ /**
+  * @brief A simple scalar-command server.
+  * @note Two threads serve it. The control thread answers HEN's requests to
+@@ -118,17 +126,31 @@
+     Result worker_result;
+     Result control_result;
+     bool started;
++    PluginLifecycleHandler lifecycle_handler;
++    void* lifecycle_context;
++    PluginServiceThreadState control_thread_state;
++    PluginServiceThreadState worker_thread_state;
++    bool stopping;
+ } PluginService;
+ 
+ /// Starts the threads that create client sessions through the control session and serve them.
+ Result pluginServiceStart(PluginService* service, Handle control_session,
+                           PluginServiceHandler handler, void* context);
+ 
++/** Opt-in lifecycle server. The lifecycle callback runs on the control
++ * thread and must only acknowledge/query/enqueue work for the owner thread. */
++Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
++                          PluginServiceHandler handler, void* context,
++                          PluginLifecycleHandler lifecycle, void* lifecycle_context);
++
+ /**
+  * @brief Stops the threads and closes the client sessions. The borrowed
+  *        control session stays open.
+  * @return The first failure of the worker or control thread, or 0. HEN
+  *         closing the control session is not a failure.
++ * @note On thread wait/close failure, started stays true and resources and
++ *       caller-owned contexts must remain alive. A later Stop resumes using
++ *       the recorded partial join state; it never joins/closes twice.
+  */
+ Result pluginServiceStop(PluginService* service);
+ 
+--- a/libkaihen/include/kaihen/protocol.h
++++ b/libkaihen/include/kaihen/protocol.h
+@@ -10,7 +10,7 @@
+ #include <switch/types.h>
+ 
+ /// The version of HEN's protocol, in HenStatus::protocol_version.
+-#define HEN_PROTOCOL_VERSION 6
++#define HEN_PROTOCOL_VERSION 7
+ 
+ #define HEN_PLUGIN_NAME_SIZE 64
+ #define HEN_MAX_PLUGINS 16
+@@ -86,6 +86,10 @@
+     HenHomebrewCommand_GetPluginName = 21,
+     /// Takes HenPluginName and returns a new plugin session by COPY.
+     HenHomebrewCommand_OpenPlugin = 22,
++    HenHomebrewCommand_GetPluginInfo = 23,
++    HenHomebrewCommand_ReloadPlugin = 24,
++    HenHomebrewCommand_GetPluginReloadStatus = 25,
++    HenHomebrewCommand_GetReloadCapabilities = 26,
+ } HenHomebrewCommand;
+ 
+ /// The reply of HenHomebrewCommand_GetStatus.
+--- /dev/null
++++ b/libkaihen/include/kaihen/reload.h
+@@ -0,0 +1,127 @@
++/* SPDX-License-Identifier: ISC */
++#pragma once
++#include <switch/types.h>
++#include <switch/result.h>
++
++#define KAIHEN_PLUGIN_LIFECYCLE_VERSION 1
++#define KAIHEN_PLUGIN_CONTROL_LIFECYCLE 0x100
++#define KAIHEN_PLUGIN_LIFECYCLE_BUSY MAKERESULT(345, 200)
++
++typedef enum {
++    KaihenPluginLifecycle_Query = 0,
++    KaihenPluginLifecycle_Prepare = 1,
++    KaihenPluginLifecycle_Poll = 2,
++    KaihenPluginLifecycle_Abort = 3,
++    KaihenPluginLifecycle_Commit = 4,
++    KaihenPluginLifecycle_Health = 5,
++    /* INTERNAL notification after the successful Commit reply was sent.
++     * Never accepted from IPC. Only this notification permits owner exit. */
++    KaihenPluginLifecycle_CommitAcknowledged = 6,
++} KaihenPluginLifecycleCommand;
++
++typedef enum {
++    KaihenPluginLifecycleState_Running = 0,
++    KaihenPluginLifecycleState_Draining = 1,
++    KaihenPluginLifecycleState_Quiesced = 2,
++    KaihenPluginLifecycleState_Exiting = 3,
++    KaihenPluginLifecycleState_Starting = 4,
++    KaihenPluginLifecycleState_Failed = 5,
++} KaihenPluginLifecycleState;
++
++#define KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE (1u << 0)
++#define KAIHEN_PLUGIN_LIFECYCLE_HEALTHY (1u << 1)
++
++typedef struct {
++    u32 command;
++    u32 reserved;
++    u64 operation_id;
++} KaihenPluginLifecycleRequest;
++
++typedef struct {
++    u32 version;
++    u32 flags;
++    u32 state;
++    Result result;
++    u64 operation_id;
++    u64 reserved;
++} KaihenPluginLifecycleReply;
++
++/* Query/Health use request operation_id zero and may report the plugin's
++ * current/last operation. Other requests require a matching nonzero ticket.
++ * Abort may acknowledge while Draining/Quiesced: HEN polls until Running and
++ * HEALTHY. Commit may reply Quiesced; only CommitAcknowledged permits exit.
++ * Fast control-thread callback. Queue owner-thread work; never stop/join the
++ * PluginService here. Prepare must deny busy imports before changing state.
++ * Commit returns an acknowledgement BEFORE the owner exits. All requests for
++ * an operation are idempotent. Health reports HEALTHY only after application
++ * initialization and its runtime acknowledgement, separately from IPC ready. */
++typedef Result (*PluginLifecycleHandler)(const KaihenPluginLifecycleRequest* request,
++                                        KaihenPluginLifecycleReply* reply, void* context);
++
++typedef enum {
++    HenPluginReloadPhase_Idle = 0,
++    HenPluginReloadPhase_Preparing = 1,
++    HenPluginReloadPhase_Draining = 2,
++    HenPluginReloadPhase_Exiting = 3,
++    HenPluginReloadPhase_Launching = 4,
++    HenPluginReloadPhase_Handoff = 5,
++    HenPluginReloadPhase_Health = 6,
++    HenPluginReloadPhase_Complete = 7,
++    HenPluginReloadPhase_Failed = 8,
++    HenPluginReloadPhase_Quarantined = 9,
++} HenPluginReloadPhase;
++
++#define HEN_PLUGIN_RELOAD_AVAILABLE (1u << 0)
++#define HEN_PLUGIN_RELOAD_BUSY (1u << 1)
++#define HEN_PLUGIN_RELOAD_BLOCKED (1u << 2)
++#define HEN_PLUGIN_RELOAD_OLD_EXITED (1u << 3)
++
++typedef struct {
++    u64 instance_id;
++    u64 process_id;
++    u64 generation;
++    u64 operation_id;
++    u32 flags;
++    u32 phase;
++} HenPluginInfo;
++/* GetPluginInfo succeeds with all fields zero except instance_id for true
++ * absence. Reloading/failed/quarantined managed records are never absence. */
++
++/* Name is the exact registry basename, without .nso. No path is accepted.
++ * Nonce is nonzero and monotonically increasing per caller in this HEN
++ * instance. Query info and preserve this request when a reply is lost. */
++typedef struct {
++    char name[64];
++    u64 instance_id;
++    u64 expected_process_id;
++    u64 expected_generation;
++    u64 nonce;
++} HenPluginReloadRequest;
++
++typedef struct {
++    u64 instance_id;
++    u64 operation_id;
++    u64 old_process_id;
++    u64 new_process_id;
++    u64 generation;
++    u32 phase;
++    u32 flags;
++    Result result;
++    Result restoration_result;
++} HenPluginReloadStatus;
++
++typedef struct {
++    u32 version;
++    u32 flags;
++    u64 instance_id;
++    u64 operation_id;
++} HenReloadCapabilities;
++
++#ifdef __cplusplus
++static_assert(sizeof(KaihenPluginLifecycleRequest) == 16);
++static_assert(sizeof(KaihenPluginLifecycleReply) == 32);
++static_assert(sizeof(HenPluginInfo) == 40);
++static_assert(sizeof(HenPluginReloadRequest) == 96);
++static_assert(sizeof(HenPluginReloadStatus) == 56);
++static_assert(sizeof(HenReloadCapabilities) == 24);
++#endif
+--- a/libkaihen/source/plugin_runtime.cpp
++++ b/libkaihen/source/plugin_runtime.cpp
+@@ -135,6 +135,11 @@
+     if (ounce::isQueryPointerBufferSize(request)) {
+         ounce::writePointerBufferSizeReply(message);
+         rc = 0;
++    } else if (request.valid && request.command_id == PluginStartupCommand_GetIdentity &&
++               request.hipc.meta.type == CmifCommandType_Request && ounce::hasOnlyInlineData(request)) {
++        const Handle self = CUR_PROCESS_HANDLE;
++        ounce::writeReply(message, 0, nullptr, 0, &self, 1);
++        rc = 0;
+     } else if (isAdoptHandles(request)) {
+         rc = adoptHandles(message, request, &reply, release_event);
+         *adopted = R_SUCCEEDED(rc);
+--- a/libkaihen/source/plugin_server.cpp
++++ b/libkaihen/source/plugin_server.cpp
+@@ -49,6 +49,10 @@
+ Result createClientSession(PluginService* service, Handle* out_client) {
+     Result rc = MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
+     mutexLock(&service->sessions_lock);
++    if (__atomic_load_n(&service->stopping, __ATOMIC_ACQUIRE)) {
++        mutexUnlock(&service->sessions_lock);
++        return KAIHEN_PLUGIN_LIFECYCLE_BUSY;
++    }
+     for (u32 slot = 0; slot < MaxSessions; slot++) {
+         if (service->sessions[slot] == INVALID_HANDLE) {
+             rc = svcCreateSession(&service->sessions[slot], out_client, false, 0);
+@@ -71,6 +75,26 @@
+     Result rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+     if (isCreateSession(request))
+         rc = createClientSession(service, &client);
++    else if (request.valid && request.hipc.meta.type == CmifCommandType_Request &&
++             request.command_id == KAIHEN_PLUGIN_CONTROL_LIFECYCLE &&
++             ounce::hasOnlyInlineData(request) &&
++             request.data_size >= sizeof(KaihenPluginLifecycleRequest) && service->lifecycle_handler) {
++        KaihenPluginLifecycleRequest input;
++        __builtin_memcpy(&input, request.data, sizeof(input));
++        KaihenPluginLifecycleReply reply = {};
++        rc = input.reserved || input.command > KaihenPluginLifecycle_Health
++            ? MAKERESULT(Module_Libnx, LibnxError_BadInput)
++            : service->lifecycle_handler(&input, &reply, service->lifecycle_context);
++        ounce::closeRequestHandles(request);
++        ounce::writeReply(message, rc, R_SUCCEEDED(rc) ? &reply : nullptr,
++                          R_SUCCEEDED(rc) ? sizeof(reply) : 0);
++        const Result sent = ounce::sendReply(service->control_session);
++        if (R_SUCCEEDED(rc) && R_SUCCEEDED(sent) && input.command == KaihenPluginLifecycle_Commit) {
++            input.command = KaihenPluginLifecycle_CommitAcknowledged;
++            service->lifecycle_handler(&input, &reply, service->lifecycle_context);
++        }
++        return sent;
++    }
+     ounce::closeRequestHandles(request);
+ 
+     if (R_SUCCEEDED(rc))
+@@ -263,20 +287,27 @@
+     closeAllClientSessions(service);
+ }
+ 
+-Result startThread(PluginService* service, Thread* thread, ThreadFunc entry) {
++Result startThread(PluginService* service, Thread* thread, ThreadFunc entry, PluginServiceThreadState& state) {
+     Result rc = threadCreate(thread, entry, service, nullptr, ThreadStackSize, ThreadPriority, -2);
+     if (R_FAILED(rc))
+         return rc;
+-
++    state.created = true;
+     rc = threadStart(thread);
+-    if (R_FAILED(rc))
+-        threadClose(thread);
+-    return rc;
+-}
+-
+-void stopThread(Thread* thread) {
+-    threadWaitForExit(thread);
+-    threadClose(thread);
++    if (R_SUCCEEDED(rc)) state.started = true;
++    return rc;
++}
++
++Result stopThread(Thread* thread, PluginServiceThreadState& state) {
++    if (!state.created || state.closed) return 0;
++    if (state.started && !state.exited) {
++        Result rc = threadWaitForExit(thread);
++        if (R_FAILED(rc)) return rc;
++        state.exited = true;
++    }
++    Result rc = threadClose(thread);
++    if (R_FAILED(rc)) return rc;
++    state.closed = true;
++    return 0;
+ }
+ 
+ void closeEvents(PluginService* service) {
+@@ -290,6 +321,12 @@
+ 
+ Result pluginServiceStart(PluginService* service, Handle control_session,
+                           PluginServiceHandler handler, void* context) {
++    return pluginServiceStartWithLifecycle(service, control_session, handler, context, nullptr, nullptr);
++}
++
++Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
++                          PluginServiceHandler handler, void* context,
++                          PluginLifecycleHandler lifecycle, void* lifecycle_context) {
+     if (!service || !handler || control_session == INVALID_HANDLE)
+         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+ 
+@@ -297,6 +334,8 @@
+     service->control_session = control_session;
+     service->handler = handler;
+     service->context = context;
++    service->lifecycle_handler = lifecycle;
++    service->lifecycle_context = lifecycle_context;
+     mutexInit(&service->sessions_lock);
+ 
+     Result rc = svcCreateEvent(&service->stop_write, &service->stop_read);
+@@ -307,21 +346,23 @@
+     if (R_FAILED(rc))
+         goto fail_events;
+ 
+-    rc = startThread(service, &service->worker_thread, workerThread);
++    rc = startThread(service, &service->worker_thread, workerThread, service->worker_thread_state);
+     if (R_FAILED(rc))
+         goto fail_events;
+ 
+-    rc = startThread(service, &service->control_thread, controlThread);
+-    if (R_FAILED(rc))
+-        goto fail_worker;
++    rc = startThread(service, &service->control_thread, controlThread, service->control_thread_state);
++    if (R_FAILED(rc))
++        goto fail_events;
+ 
+     service->started = true;
+     return 0;
+ 
+-fail_worker:
+-    svcSignalEvent(service->stop_write);
+-    stopThread(&service->worker_thread);
+ fail_events:
++    service->started = service->worker_thread_state.created || service->control_thread_state.created;
++    if (service->started) {
++        pluginServiceStop(service);
++        if (service->started) return rc; // retain events/contexts on uncertainty
++    }
+     closeEvents(service);
+     return rc;
+ }
+@@ -330,14 +371,17 @@
+     if (!service || !service->started)
+         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+ 
++    __atomic_store_n(&service->stopping, true, __ATOMIC_RELEASE);
+     Result rc = svcSignalEvent(service->stop_write);
+     if (R_FAILED(rc))
+         return rc;
+ 
+     // Stop the control thread first, so that no session is added while the
+     // worker closes them.
+-    stopThread(&service->control_thread);
+-    stopThread(&service->worker_thread);
++    rc = stopThread(&service->control_thread, service->control_thread_state);
++    if (R_FAILED(rc)) return rc;
++    rc = stopThread(&service->worker_thread, service->worker_thread_state);
++    if (R_FAILED(rc)) return rc;
+     closeEvents(service);
+     service->started = false;
+ 
+--- a/libkaihen/source/plugin_startup.h
++++ b/libkaihen/source/plugin_startup.h
+@@ -7,6 +7,7 @@
+ 
+ enum PluginStartupCommand : u32 {
+     PluginStartupCommand_AdoptHandles = 1,
++    PluginStartupCommand_GetIdentity = 2,
  };
  
+ /// The version of the plugin runtime's AdoptHandles reply. A later version
+@@ -14,7 +15,8 @@
+ /// Versions 0 and 1 did not exist as such: the first runtime replied with a
+ /// "publishes a service" flag in this word, and sent the third handle only
+ /// when the flag was 1.
+-constexpr u32 PluginRuntimeVersion = 2;
++// Version 3 adds GetIdentity; AdoptHandles data/handle layout stays unchanged.
++constexpr u32 PluginRuntimeVersion = 3;
  
+ /// Sends the plugin copies of the SM session and the FS root. The reply has
+ /// the release event (writable), the ready event (readable) and the client

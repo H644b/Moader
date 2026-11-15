@@ -28,3 +28,4 @@ with tempfile.TemporaryDirectory(prefix='moader-resident-') as temporary:
                       for name in ['model', 'library', 'zip', 'web', 'runtime_backend']],
                     '-lz', '-pthread', '-o', str(binary)], check=True)
     subprocess.run([str(binary), str(work)], check=True)
+    subprocess.run([str(binary), str(work), '--stop-failure'], check=True, timeout=15)
