@@ -5,7 +5,7 @@ const {guardSession,isUncertain}=require('../runtime/modloader/lib/game-files/un
 // requests in finally blocks. One child-process-wide latch covers both native
 // transports, including those helpers, without editing the pinned sources.
 function guardTransports({rpc,endpoint},state={error:null}){
- for(const [object,names]of [[rpc,['request','call','callAddress','pair','read','write','query']],[endpoint,['request','read']]]){
+ for(const [object,names]of [[rpc,['request','call','callAddress','callAddress6','pair','read','write','query','log']],[endpoint,['request','read']]]){
   for(const name of names){
    if(typeof object[name]!=='function')continue;
    const operation=object[name].bind(object);

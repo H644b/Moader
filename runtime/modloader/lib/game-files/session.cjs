@@ -106,14 +106,21 @@ async function openServiceWithFallback({ s, sm, name }) {
 
 //attach to run from ns2jb, get handles for it's stuff
 async function attachGame(run) {
+  const hosts = require('../../../../tools/host-session.cjs'); let context;
+  if (hosts.inferredId(run) === 'civ7-s8n') {
+    context = hosts.qualifyRun(run, 'civ7-s8n'); hosts.bind(context);
+    require('../../../../tools/host-transport.cjs').install(context);
+  }
   const engine = path.join(run, 'switch2');
   const read = (file) => fs.readFile(file, 'utf8').then(JSON.parse);
   const current = await read(path.join(engine, 'current-acquisition.json'));
   const proof = await read(path.join(engine, 'ro/root/current-root.json'));
-  const { Session, live } = require(path.join(engine, 'app/session.cjs'));
-  const domain = require(path.join(engine, 'app/domain.cjs'));
-  const filesystem = {...require(path.join(engine, 'app/filesystem.cjs')), ...require('./io.cjs')};
-  const original = await request(current.socketPath, { command: 'root-native-info' });
+  const load = relative => context ? hosts.load(context, relative) : require(path.join(run, relative));
+  const { Session, live } = load('switch2/app/session.cjs');
+  const domain = load('switch2/app/domain.cjs');
+  const filesystem = {...load('switch2/app/filesystem.cjs'), ...require('./io.cjs')};
+  const endpointRequest = context ? load('switch2/tools/endpoint.cjs').request : request;
+  const original = await endpointRequest(current.socketPath, { command: 'root-native-info' });
   const sm = original.services?.find((item) => item.sm)?.sm;
 
   const s = guardSession(new Session('game-attach-' + Date.now(), 0x80000));

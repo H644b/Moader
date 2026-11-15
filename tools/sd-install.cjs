@@ -26,7 +26,10 @@ async function stage(run,files){
  const inputs=require('./install-inputs.cjs');
  const frozen=await inputs.validateEntries(files,inputs.METADATA_TARGETS);
  process.env.NS2_RUN_DIR=path.resolve(run);
- const engine=path.join(project,'research/sources/ns2jb/engine'),load=rel=>require(path.join(engine,rel));
+ const hosts=require('./host-session.cjs');
+ const context=hosts.inferredId(run)==='civ7-s8n'?hosts.qualifyRun(run,'civ7-s8n'):null;
+ if(context)require('./host-transport.cjs').install(context);
+ const engine=context?.runtimeRoot||path.join(project,'research/sources/ns2jb/engine'),load=rel=>context?hosts.load(context,rel):require(path.join(engine,rel));
  const {Session,live}=load('switch2/app/session.cjs'),domain=load('switch2/app/domain.cjs'),filesystem=load('switch2/app/filesystem.cjs');
  const {guardSession,isUncertain}=require('../runtime/modloader/lib/game-files/uncertain.cjs');
  const memory=await load('switch2/tools/fs-memory.cjs').connect();

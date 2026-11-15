@@ -110,15 +110,26 @@ jobs:
       - name: Prepare checksum-pinned upstream installer inputs
         run: python3 .github/scripts/prepare-host-deps.py --installer
       - name: Fetch pinned local engine source for mocked protocol tests
-        run: python3 tools/setup-backend.py --sources-only
+        run: |
+          python3 tools/setup-backend.py --sources-only
+          python3 tools/setup-backend.py --host-profile civ7-s8n --sources-only
+      - name: Independently verify Civ7 source, materialization and native qualification gates
+        run: |
+          python3 tools/test-civ7-host.py --node node
+          node tools/test-civ7-host.cjs
+          node tools/test-civ7-kaihen.cjs
+          node tools/test-host-transport.cjs
+          node tools/test-host-imports.cjs
       - name: Installer and control safety with mocked transports
         run: |
           python3 tools/test-setup-backend.py
           node tools/test-installers.cjs
           node tools/test-control-resident.cjs
           node tools/test-inspect-hen.cjs
-      - name: Direct ns2jb precompiled host-kit preparation with public inputs
-        run: python3 tools/test-ns2jb-host.py --online --node node
+      - name: Both precompiled host profiles with public inputs and console calls blocked
+        run: |
+          python3 tools/test-ns2jb-host.py --online --node node
+          python3 tools/test-ns2jb-host.py --online --node node --host-profile civ7-s8n
       - name: Portable runtime preparation regressions
         run: |
           node runtime/modloader/tests/pchtxt.cjs

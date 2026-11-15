@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-For installation, use the [v0.1.0-dev.1 host-kit update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1) and `Moader-backend-v0.1.0-dev.1.zip`. App, resident and patched HEN bytes are unchanged; the app still displays `0.1.0-dev`. The separate [Moader-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip) supplies the SD app/plugin files, not a complete host kit.
+For installation, use the [v0.1.0-dev.2 host integration update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2) and `Moader-backend-v0.1.0-dev.2.zip`. App, resident and patched HEN bytes are unchanged; the app still displays `0.1.0-dev`. The separate [Moader-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip) supplies the SD app/plugin files, not a complete host kit.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
@@ -8,7 +8,7 @@ Unzip the kit, read `START_HERE.txt`, and enter the outer folder containing `too
 
 ## Prepare the host kit
 
-Choose either route in [Installation](INSTALLATION.md#start-the-backend-for-this-boot). Both require a fresh, verified held FS session for this boot. Leave SmileBASIC and its acquisition host open. Preparation does not acquire a new session.
+The two SmileBASIC routes below require a fresh, verified held FS session for this boot. Leave SmileBASIC and its acquisition host open. Preparation does not acquire a new session. For the experimental Civilization VII entrypoint, use the separate [CivSwitch workflow](CIV7.md), including its explicit `--host-profile civ7-s8n` selection and exact source requirements.
 
 **Direct ns2jb on Linux/WSL or macOS:** follow [Route A](INSTALLATION.md#route-a-linuxwsl-or-macos-with-ns2jb), including its pinned upstream checkout and `node run.cjs --rpc YOUR_PC_LAN_IPV4`. In a second terminal inside the extracted Moader kit, use the newly printed actual run folder and the same native POSIX Node 24:
 
@@ -68,12 +68,16 @@ The HEN rebuild is required to be byte-identical to the tested HEN. The app and 
 | --- | --- |
 | ns2jb source | `28f03b5895e5569d8fbc35cbed84906b8f0a65b2` |
 | Extracted engine tree SHA-256 | `7003335a2a426a82156c19653be5e61506a05dd02b5d0490c8bcb4516c5c354a` |
+| Experimental Civ7 source | `51a804cbce09216e1a42e65929644fd436b4c8bf` |
+| Selected Civ7 source tree SHA-256 | `d83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75` |
 | Official kaiHEN release | `20261114c` |
 | Official kaiHEN ZIP SHA-256 | `63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967` |
 | Patched HEN SHA-256 | `e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
 Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.
+
+The experimental Civ7 profile fetches the [pinned s8n archive](https://github.com/s8n/civ7-fs-kaihen/archive/51a804cbce09216e1a42e65929644fd436b4c8bf.tar.gz) instead of the kurumuz engine. Its 120 selected files total 720,866 bytes and include `engine/`, `targets/civ7/` and `bridge/civ_bridge.js`. [config/civ7-provider.json](../config/civ7-provider.json) records each source file and its materialized run counterpart. Its tree digest uses the same format. Source identity and host checks do not establish a Civ7 console installation.
 
 For offline preparation, transfer these exact upstream inputs yourself and pass `--offline --engine-archive PATH --kaihen-archive PATH`. A source checkout additionally needs `--build` with its installed SDK, or `--hen-binary PATH` plus `--programs-archive PATH --programs-sha256 SHA256`. The programs ZIP must contain `switch/Moader.nro` and `kaihen/plugins/moader.nso`. The minimal host kit already supplies the patched HEN and Moader binaries; provide both upstream archives for its first offline preparation.
 
@@ -93,7 +97,7 @@ For the same source-only operation offline:
 python3 tools/setup-backend.py --sources-only --offline --engine-archive /absolute/path/to/pinned-ns2jb.tar.gz
 ```
 
-This mode accepts only `--root`, `--offline` and `--engine-archive` alongside `--sources-only`. It rejects `--check`, `--build`, `--node`, release manifests and HEN/app archive options before work. It performs no console or installer operations.
+This mode accepts only `--root`, `--host-profile`, `--offline` and `--engine-archive` alongside `--sources-only`. It rejects `--check`, `--build`, `--node`, release manifests and HEN/app archive options before work. It performs no console or installer operations. Add `--host-profile civ7-s8n` to select the Civ7 source closure; an offline archive must match that selected profile.
 
 Run setup/wrapper tests without an SDK, network or device:
 

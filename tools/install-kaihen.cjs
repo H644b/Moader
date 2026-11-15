@@ -54,11 +54,14 @@ for (const [target,name] of [['/hbmenu.nro','hbmenu.nro'],['/kaihen/bin/game/mai
 }
 for (const item of [...prepared.bundledPrograms,...prepared.programs]) stagedInputs.set(item.target, await inputs.readInput(item,true));
 process.env.NS2_RUN_DIR = path.resolve(run);
-const upstream = path.join(rootDir, 'research/sources/ns2jb/engine');
+const hosts = require('./host-session.cjs');
+const host = hosts.inferredId(run)==='civ7-s8n' ? hosts.qualifyRun(run,'civ7-s8n') : null;
+if(host) hosts.bind(host);
+const upstream = host?.runtimeRoot || path.join(rootDir, 'research/sources/ns2jb/engine');
 const ship = prepared.kaihen;
 const output = path.join(rootDir, 'evidence/kaihen/install-' + path.basename(process.env.NS2_RUN_DIR) + '.json');
-const load = rel => require(path.join(upstream, rel));
-const transportGuard = require('./ready-kaihen.cjs').guardTransports({
+const load = rel => host ? hosts.load(host,rel) : require(path.join(upstream, rel));
+const transportGuard = host ? require('./host-transport.cjs').install(host) : require('./ready-kaihen.cjs').guardTransports({
   rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs'),
 });
 const {Session, live, check} = load('switch2/app/session.cjs');
@@ -129,7 +132,7 @@ async function execute() {
   const expectedRo = await inputs.readInput(prepared.kaihenFiles.find(item=>item.source===path.join(ship,'ro/main')),true);
   const expectedPolicy = await fs.readFile(policyPath);
   record.roInputs = {imageSha256:inputs.digest(expectedRo.data),policySha256:inputs.digest(expectedPolicy)};
-  await step('Build RO package with this console’s signed policy', () => load('switch2/ro/package-build.cjs').build(
+  await step('Build RO package with this console’s signed policy', () => (host?require('./host-kaihen.cjs').buildPackage:load('switch2/ro/package-build.cjs').build)(
     expectedRo.source, policyPath, roPackage));
   await step('Stage kaiHEN RO package on SD', () => memory.request({command: 'root-native-package-stage',
     root: rootHandle, kind: 'ro', source: roPackage}));
@@ -159,6 +162,9 @@ async function execute() {
 
   // Load the current upstream gate algorithm with run paths instead of source paths.
   // Keep the source checkout unchanged and preserve its relative dependencies.
+  let launched;
+  if(host) launched = await step('Launch the checked kaiHEN RO image', () => require('./host-kaihen.cjs').launch(host,memory));
+  else {
   const launchFilename = path.join(upstream, 'switch2/ro/launch.cjs');
   let launchCode = await fs.readFile(launchFilename, 'utf8');
   launchCode = "const {runPath} = require('../../shared/paths.cjs');\n" + launchCode
@@ -167,20 +173,22 @@ async function execute() {
   launchModule.filename = launchFilename;
   launchModule.paths = Module._nodeModulePaths(path.dirname(launchFilename));
   launchModule._compile(launchCode, launchFilename);
-  const launched = await step('Launch the checked kaiHEN RO image', () => launchModule.exports.main({memory}));
+  launched = await step('Launch the checked kaiHEN RO image', () => launchModule.exports.main({memory}));
+  }
   check(launched.imageAccepted && launched.restored, 'RO image was not accepted and restored');
   record.ro = await step('Activate kaiHEN RO and retire the identified diagnostic RO', () =>
-    runtime.activate(launched.file, execution.pid));
+    host ? require('./host-kaihen.cjs').activate(host,launched.file,execution.pid,memory) : runtime.activate(launched.file, execution.pid));
   await fs.writeFile(path.join(roDir, 'current-execution.json'), JSON.stringify({
     ...execution, verified: false, retiredForKaihen: true, kaihenPid: record.ro.pid,
     installation: output,
   }, null, 2) + '\n', {mode: 0o600});
+  if(host)host.retired=true;
   await step('Verify kaiHEN ldr:ro initialization', () => require('./ready-kaihen.cjs').ready({
     Session, argumentsWithPid:load('switch2/ro/nro.cjs').argumentsWithPid,
   }));
   await step('Verify restored Loader session', () => runtime.handoff());
   process.env.HBMENU_NRO = path.join(ship, 'hbmenu.nro');
-  record.hen = await step('Stage hbmenu and start the native HEN bootstrap', () => load('switch2/ro/start-hen.cjs').main(
+  record.hen = await step('Stage hbmenu and start the native HEN bootstrap', () => (host ? (...args)=>require('./host-kaihen.cjs').startHen(host,...args) : load('switch2/ro/start-hen.cjs').main)(
     path.join(ship, 'hen/main'), path.join(ship, 'bootstrap.bin'), path.join(ship, 'game/main'), programs));
   record.startup = await read(record.hen.file);
   check(record.startup.operation === 10 && record.startup.result === 0, 'HEN startup did not complete');
@@ -188,7 +196,7 @@ async function execute() {
   record.complete = true;
   record.finished = new Date().toISOString();
   await persist();
-  console.log('HEN running. Keep SmileBASIC open for the HEN status check before testing hbmenu.');
+  console.log('HEN running. Keep '+(host?'Civilization VII':'SmileBASIC')+' open for the HEN status check before testing hbmenu.');
 }
 try { await execute(); }
 catch (error) {

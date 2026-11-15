@@ -90,6 +90,31 @@ class SetupTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'size bounds'):
             backend.check_root(self.root)
 
+    def test_civ7_normal_setup_keeps_legacy_source_and_tested_native_inputs(self):
+        backend.setup(self.args())
+        before = self.snapshot()
+        selected = {'engine/shared/rpc.cjs': b'authenticated transport',
+                    'targets/civ7/target.json': b'{"name":"civ7"}',
+                    'bridge/civ_bridge.js': b'bridge'}
+        archive = self.base / 'civ7.zip'; archive.write_bytes(zip_bytes(selected))
+        with patch.object(backend, 'CIV7_TREE_SHA', backend.tree_sha(selected)):
+            args = self.args('--host-profile', 'civ7-s8n', '--engine-archive', str(archive))
+            result = backend.setup(args)
+            self.assertEqual(result['hostProfile'], 'civ7-s8n')
+            self.assertTrue(result['readyForInstallerCheck']); self.assertFalse(result['consoleConnected'])
+            self.assertTrue(all(self.snapshot()[name] == value for name, value in before.items()))
+            self.assertEqual(backend.tree_files(self.root / 'research/sources/civ7-fs-kaihen'), selected)
+            snapshot = self.snapshot()
+            with patch.object(backend, 'download', side_effect=AssertionError()):
+                self.assertEqual(backend.setup(args)['newFiles'], 0)
+            with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
+                backend.setup(self.args('--host-profile', 'civ7-s8n', '--check'))
+            self.assertEqual(self.snapshot(), snapshot)
+            self.put('research/sources/civ7-fs-kaihen/targets/civ7/target.json', b'wrong')
+            with self.assertRaisesRegex(ValueError, 'pinned source tree'):
+                backend.setup(self.args('--host-profile', 'civ7-s8n', '--check'))
+            self.assertEqual(backend.check_root(self.root)['hostProfile'], 'smilebasic-kurumuz')
+
     def test_check_is_readonly_and_never_downloads_or_builds(self):
         backend.setup(self.args()); before = self.snapshot()
         with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'build_inputs', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
@@ -302,6 +327,82 @@ class SourcesOnlyTests(unittest.TestCase):
                 self.assertEqual(list(self.root.iterdir()), [])
 
 
+class Civ7ProvisionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='Moader Civ7 sources '); self.addCleanup(self.temp.cleanup)
+        self.base = pathlib.Path(self.temp.name); self.root = self.base / 'kit'; self.root.mkdir()
+        self.files = {'engine/run.cjs': b'module.exports={};', 'engine/shared/rpc.cjs': b'authenticated transport',
+                      'targets/civ7/target.json': b'{"name":"civ7"}', 'targets/civ7/app/thread-code.json': b'tagged',
+                      'bridge/civ_bridge.js': b'bridge'}
+        self.archive = self.base / 'civ7.zip'
+        prefix = 'civ7-fs-kaihen-' + backend.CIV7_REV + '/'
+        self.archive.write_bytes(zip_bytes({prefix + name: data for name, data in self.files.items()} |
+            {prefix + '.git/config': b'private', prefix + 'runs/private': b'private', prefix + 'targets/smilebasic/target.json': b'unselected'}))
+        patch.object(backend, 'CIV7_TREE_SHA', backend.tree_sha(self.files)).start(); self.addCleanup(patch.stopall)
+        patch.object(backend.urllib.request, 'urlopen', side_effect=AssertionError('No network in synthetic tests')).start()
+        patch.object(backend.subprocess, 'run', side_effect=AssertionError('No target or Node execution in source mode')).start()
+
+    def args(self, *extra):
+        return backend.parser().parse_args(['--root', str(self.root), '--host-profile', 'civ7-s8n', '--sources-only', '--offline', '--engine-archive', str(self.archive), *extra])
+
+    def snapshot(self):
+        return {p.relative_to(self.root).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob('*') if p.is_file()}
+
+    def test_selected_closure_includes_bridge_and_preserves_other_profiles(self):
+        legacy = self.root / 'research/sources/ns2jb/engine/private'; legacy.parent.mkdir(parents=True); legacy.write_bytes(b'keep')
+        result = backend.setup(self.args())
+        self.assertEqual(result['hostProfile'], 'civ7-s8n'); self.assertEqual(result['engineRevision'], backend.CIV7_REV)
+        self.assertEqual(result['engineFiles'], len(self.files)); self.assertFalse(result['consoleConnected'])
+        selected = self.root / backend.source_profile('civ7-s8n')['directory']
+        self.assertEqual(backend.tree_files(selected), self.files)
+        self.assertEqual(legacy.read_bytes(), b'keep'); self.assertFalse((self.root / 'vendor').exists())
+
+    def test_existing_full_checkout_is_readonly_and_only_selected_subtrees_are_qualified(self):
+        backend.setup(self.args()); selected = self.root / backend.source_profile('civ7-s8n')['directory']
+        for name in ('README.md', '.git/config', 'runs/private', 'targets/smilebasic/target.json'):
+            file = selected / name; file.parent.mkdir(parents=True, exist_ok=True); file.write_bytes(b'keep')
+        before = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
+            self.assertEqual(backend.setup(self.args())['newFiles'], 0)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_wrong_sdk_missing_bridge_and_extra_import_are_rejected_without_overwrite(self):
+        backend.setup(self.args()); selected = self.root / backend.source_profile('civ7-s8n')['directory']
+        for name, data in (('targets/civ7/target.json', b'wrong SDK'), ('bridge/civ_bridge.js', None), ('engine/shared/extra.cjs', b'extra')):
+            with self.subTest(name=name):
+                file = selected / name; old = file.read_bytes() if file.exists() else None
+                if data is None: file.unlink()
+                else: file.write_bytes(data)
+                before = self.snapshot()
+                with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaises(ValueError):
+                    backend.setup(self.args())
+                self.assertEqual(self.snapshot(), before)
+                if old is None: file.unlink()
+                else: file.write_bytes(old)
+
+    def test_unqualified_source_provider_or_missing_bridge_never_publishes(self):
+        for files in ({'engine/run.cjs': b'another provider'}, {name: data for name, data in self.files.items() if not name.startswith('bridge/')}):
+            self.archive.write_bytes(zip_bytes(files))
+            with patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'no fallback'):
+                backend.setup(self.args())
+        self.assertEqual(self.snapshot(), {})
+
+    def test_profile_symlink_is_rejected_before_fetch(self):
+        target = self.root / 'research/sources/civ7-fs-kaihen'; target.parent.mkdir(parents=True)
+        outside = self.base / 'outside'; outside.mkdir(); target.symlink_to(outside, target_is_directory=True)
+        with patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'symlink'):
+            backend.setup(self.args())
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_real_public_pin_matches_shared_provider_descriptor(self):
+        descriptor = json.loads((backend.ROOT / 'config/civ7-provider.json').read_text())
+        self.assertEqual(descriptor['id'], 'civ7-s8n'); self.assertEqual(descriptor['revision'], backend.CIV7_REV)
+        self.assertEqual(descriptor['archiveUrl'], backend.CIV7_URL)
+        # setUp changes only the fixture hash; check the independent public literal.
+        self.assertEqual(descriptor['sourceTreeSha256'], 'd83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75')
+        self.assertIn('bridge/civ_bridge.js', descriptor['files'])
+
+
 class WrapperTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='Moader spaces '); self.addCleanup(self.temp.cleanup)
@@ -404,6 +505,21 @@ class DirectRunTests(unittest.TestCase):
         with patch.object(wrapper.shutil, 'which', side_effect=AssertionError()), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
             command = self.invoke('--node', str(self.node), '--prepare')
         self.assertEqual(command[0], str(self.node)); self.assertEqual(self.calls[0][0], str(self.node)); self.assertEqual(self.calls[2][0], str(self.node))
+
+    def test_civ7_profile_is_passed_to_local_preparation_and_bound_by_manifest(self):
+        with patch.object(wrapper.shutil, 'which', return_value=str(self.node)), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
+            command = self.invoke('--host-profile', 'civ7-s8n', '--prepare')
+        self.assertEqual(command, [str(self.node), str(self.root / 'tools/install-moader.cjs'), '--prepared', str(self.manifest), str(self.run)])
+        for call in self.calls[1:]:
+            index = call.index('--host-profile'); self.assertEqual(call[index + 1], 'civ7-s8n')
+        self.assertTrue(all(str(self.run) not in call for call in self.calls))
+
+    def test_mac2jb_civswitch_status_is_not_misidentified_as_pinned_s8n(self):
+        import shlex
+        status = shlex.join([str(self.node), str(self.root / 'rpc.cjs'), str(self.run), 'status'])
+        with patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), patch('sys.stderr', new=io.StringIO()), self.assertRaises(SystemExit) as error:
+            wrapper.main(['--status-command', status, '--host-profile', 'civ7-s8n', '--prepare'])
+        self.assertEqual(error.exception.code, 2)
 
     def test_relative_run_and_node_paths_use_invoking_directory(self):
         relative_run = self.run.relative_to(self.root).as_posix()

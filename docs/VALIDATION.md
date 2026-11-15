@@ -4,6 +4,8 @@ The first public prerelease is **v0.1.0-dev**. Its app and resident-service bina
 
 **v0.1.0-dev.1** updates the host setup and documentation. Its app, resident, filesystem runtime and patched HEN bytes are unchanged. The existing hardware results apply to those same binaries; the new direct ns2jb entry path has separate host-only coverage.
 
+**v0.1.0-dev.2** adds the experimental Civ7 host integration and documentation with unchanged app/service/HEN bytes and app display version `0.1.0-dev`. Host qualification is separate from console acceptance; no new Civ7 console validation is claimed.
+
 ## On a Switch 2
 
 - kaiHEN launched hbmenu and the graphical Moader app. Native Settings, controller navigation, screenshot/report export, six-digit pairing and browser management were exercised.
@@ -45,6 +47,25 @@ The direct helper accepts a held ns2jb run directory and a local POSIX Node 24 e
 The Linux CI integration uses the actual precompiled release bytes and pinned upstream downloads in an isolated kit. It checks preparation and read-only validation, then inspects the printed installation commands. Guards reject Node network/RPC access, companion scripts and native installation during preparation. Static run fixtures test the existing FS proof gate separately; they are not live-device evidence.
 
 No direct Linux/WSL console acquisition or installation, WSL LAN/firewall configuration, or native Windows behavior is claimed as hardware-tested. The real-console results above used macOS/mac2jb. Native source SDK provisioning remains the documented Apple Silicon macOS build path; precompiled host-kit setup does not use that SDK.
+
+## Experimental CivSwitch integration
+
+Civilization VII FS access and Civ7 HEN startup are reported by the [reviewed upstream projects](CIV7.md#reviewed-source-revisions). Those are upstream results, distinct from Moader's hardware evidence above.
+
+The initial Moader profile is `civ7-s8n`, pinned to s8n commit `51a804cbce09216e1a42e65929644fd436b4c8bf`. HerXayah and mac2jb CivSwitch runs are not admitted by the initial pin.
+
+Host validation includes:
+
+- Independent checks of the authentic 120-file source closure, upstream source digest, target materialization and unchanged diagnostic RO/process-client ABI.
+- 59 setup/wrapper tests, 39 provider/session tests and 39 HEN/package/bootstrap/thread tests, using temporary synthetic data.
+- 20 transport tests covering authentication, six-argument calls, bounded replies, truncation, disconnects, timeouts and no replay after failure.
+- Actual selected module imports and the checked launch adapter with all console/network/process calls blocked.
+- Fresh isolated precompiled-kit preparation for both host profiles using actual public release bytes and pinned upstream downloads, read-only validation and two distinct immutable commands per profile. No printed installation command was executed.
+- The existing 38 installer, 19 resident-control and 17 HEN-inspection checks still pass.
+
+These are host results with Node 24. The CI workflow repeats them on Ubuntu. Synthetic records and mocked native replies are never treated as real FS or device proof.
+
+**No Moader acquisition, installation, FS/runtime qualification, HEN transition, resident/browser lifecycle or mod behavior through CivSwitch has been verified on a console.** The same app/HEN binary bytes do not transfer the existing SmileBASIC entrypoint's hardware proof to Civ7. [Experimental workflow and requirements](CIV7.md).
 
 ## Limits
 

@@ -142,8 +142,9 @@ async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuar
 async function main(args=process.argv.slice(2)){
  check(args.length===1&&args[0]&&!args[0].startsWith('--'),'Usage: node tools/inspect-hen.cjs CURRENT_RUN_DIRECTORY');
  const protocol=await readProtocol(),run=path.resolve(args[0]);process.env.NS2_RUN_DIR=run;
- const engine=path.join(root,'research/sources/ns2jb/engine'),load=name=>require(path.join(engine,name));
- const transportGuard=guardTransports({rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs')});
+ const hosts=require('./host-session.cjs'),context=hosts.inferredId(run)==='civ7-s8n'?hosts.qualifyRun(run,'civ7-s8n',root,{retired:true}):null;
+ const engine=context?.runtimeRoot||path.join(root,'research/sources/ns2jb/engine'),load=name=>context?hosts.load(context,name):require(path.join(engine,name));
+ const transportGuard=context?require('./host-transport.cjs').install(context):guardTransports({rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs')});
  const {Session}=load('switch2/app/session.cjs'),{packet}=load('shared/ipc.cjs'),{argumentsWithPid}=load('switch2/ro/nro.cjs');
  let result,error;
  try{result=await inspect({Session,packet,argumentsWithPid,protocol,transportGuard,run});}

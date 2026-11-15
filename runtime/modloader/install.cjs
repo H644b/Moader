@@ -23,7 +23,11 @@ function options(argv){
  return o;
 }
 function verifiedRun(run){
+ if(require('../../tools/host-session.cjs').inferredId(run)==='civ7-s8n'){
+  const host=require('../../tools/host-session.cjs').qualifyRun(run,'civ7-s8n');require('../../tools/host-session.cjs').bind(host);return host.run;
+ }
  const read=f=>JSON.parse(fs.readFileSync(f,'utf8'));const result=read(path.join(run,'result.json'));
+ check(result.target===undefined||result.target==='smilebasic','Selected run has an unsupported host target');
  check(result.verified&&result.rpc?.state==='listening'&&!result.completed,'Selected ns2jb run is not a verified listening RPC session');
  const current=read(path.join(run,'switch2/fs-execution-current.json')),proof=read(path.isAbsolute(current.file)?current.file:path.resolve(run,current.file));
  check(current.verified&&proof.verified&&proof.session===path.basename(run),'Selected run has no matching verified FS 4/4 proof');return run;
