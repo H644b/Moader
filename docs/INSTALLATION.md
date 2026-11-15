@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download the unchanged [Moader-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip).
+1. Download the unchanged [Moader-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip).
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.

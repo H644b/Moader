@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-For installation, use the [v0.1.0-dev.1 host-kit update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1) and `Moader-backend-v0.1.0-dev.1.zip`. App, resident and patched HEN bytes are unchanged; the app still displays `0.1.0-dev`. The original [Moader-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip) supplies the SD app/plugin files, not a complete host kit.
+For installation, use the [v0.1.0-dev.1 host-kit update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1) and `Moader-backend-v0.1.0-dev.1.zip`. App, resident and patched HEN bytes are unchanged; the app still displays `0.1.0-dev`. The separate [Moader-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip) supplies the SD app/plugin files, not a complete host kit.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 

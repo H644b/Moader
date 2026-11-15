@@ -18,7 +18,7 @@ Start with **[v0.1.0-dev.1 — host setup update](https://github.com/H644b/Moade
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip) | The console app and matching resident plugin |
+| [Moader-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip) | The console app and matching resident plugin |
 | [Moader-backend-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-backend-v0.1.0-dev.1.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
