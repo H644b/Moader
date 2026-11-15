@@ -90,6 +90,7 @@ typedef enum {
     HenHomebrewCommand_ReloadPlugin = 24,
     HenHomebrewCommand_GetPluginReloadStatus = 25,
     HenHomebrewCommand_GetReloadCapabilities = 26,
+    HenHomebrewCommand_GetPluginReloadDiagnostics = 27,
 } HenHomebrewCommand;
 
 /// The reply of HenHomebrewCommand_GetStatus.

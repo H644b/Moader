@@ -25,6 +25,8 @@ struct State {
     bool rail_focus = false, confirm_remove = false, connected = false, message_error = false;
     bool inventory_refresh_pending = false;
     bool reload_available=false, reload_busy=false, reload_error=false;
+    bool reload_shutdown_required=false;
+    bool reload_exit_unknown=false;
     std::string reload_detail="Install the new kaiHEN build to reload the resident service.";
     uint32_t game_source = moader::ipc::CopyUnspecified;
     uint64_t game_source_title = 0;

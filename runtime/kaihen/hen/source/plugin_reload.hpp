@@ -7,8 +7,10 @@
 #include "../../common/policy_package.hpp"
 #include "reload_state.hpp"
 #include "lifecycle_client.hpp"
+#include "reload_diagnostics.hpp"
 
 class PluginReload {
+    static_assert(std::atomic<u32>::is_always_lock_free, "gate progress callback must never block");
   public:
     struct Input {
         PluginLaunchContext context;
@@ -23,6 +25,7 @@ class PluginReload {
     PluginReload() { mutexInit(&lock_); }
     Result start(const Input& input, const HenPluginReloadStatus& status);
     HenPluginReloadStatus status();
+    HenPluginReloadDiagnostics diagnostics();
     bool finished() const { return finished_.load(std::memory_order_acquire); }
     bool join();
     bool succeeded() const { return success_; }
@@ -48,6 +51,8 @@ class PluginReload {
     bool cleanup();
     Result fail(Result rc, bool quarantine);
     void phase(u32 value);
+    void diagnosticStage(u32 stage, u32 flags = 0);
+    void captureGate(Result result, bool restoration);
     Result lifecycle(u32 command, KaihenPluginLifecycleReply& out, Handle control);
     struct LifecycleIo {
         PluginReload& owner;
@@ -57,6 +62,20 @@ class PluginReload {
         bool deadline(u64 start, u64 ns) const { return now() - start >= armNsToTicks(ns); }
         bool cancelled() const { return owner.expired(); }
         void pause() const { svcSleepThread(1000000); }
+    };
+    struct PmCompletionIo {
+        PluginReload& owner;
+        u64 now() const { return armGetSystemTick(); }
+        bool deadline(u64 start, u64 ns) const { return now() - start >= armNsToTicks(ns); }
+        bool cancelled() const { return owner.expired(); }
+        void pause() const { svcSleepThread(1000000); }
+        bool finished() const { return owner.pm_finished_.load(std::memory_order_acquire); }
+        Result wait() { return threadWaitForExit(&owner.pm_thread_); }
+        Result close() { return threadClose(&owner.pm_thread_); }
+        void joined() {
+            owner.pm_joined_ = true;
+            owner.diagnosticStage(HenReloadLaunchStage_ProcessStart, HEN_RELOAD_DIAG_PM_JOINED);
+        }
     };
     Result waitLifecycle(u32 command, u32 state, u64 timeout);
     Result processProgram(u64 pid, u64* program);
@@ -68,8 +87,10 @@ class PluginReload {
     Mutex lock_ = {};
     Input input_ = {};
     HenPluginReloadStatus status_ = {};
+    HenPluginReloadDiagnostics diagnostics_ = {};
+    std::atomic<u32> live_gate_step_{0};
     Thread thread_ = {}, pm_thread_ = {};
-    bool created_ = false, joined_ = false, pm_created_ = false, pm_joined_ = false;
+    bool created_ = false, joined_ = false, pm_created_ = false, pm_started_ = false, pm_joined_ = false;
     bool success_ = false, quarantined_ = false, touched_old_ = false;
     std::atomic<bool> finished_{false}, pm_finished_{false}, cancelled_{false};
     u64 stage_tick_ = 0;

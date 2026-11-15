@@ -99,8 +99,13 @@ Result PluginReload::start(const Input& input, const HenPluginReloadStatus& stat
     if (created_ && !joined_) return reload::Busy;
     input_ = input;
     status_ = status;
+    diagnostics_ = {};
+    diagnostics_.version = 1;
+    diagnostics_.operation_id = status.operation_id;
+    diagnostics_.probe_result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+    live_gate_step_.store(0);
     stage_tick_ = armGetSystemTick();
-    created_ = joined_ = pm_created_ = pm_joined_ = false;
+    created_ = joined_ = pm_created_ = pm_started_ = pm_joined_ = false;
     success_ = quarantined_ = touched_old_ = false;
     finished_.store(false);
     pm_finished_.store(false);
@@ -133,6 +138,36 @@ HenPluginReloadStatus PluginReload::status() {
     return value;
 }
 
+HenPluginReloadDiagnostics PluginReload::diagnostics() {
+    mutexLock(&lock_);
+    auto snapshot = diagnostics_;
+    if (!(snapshot.flags & HEN_RELOAD_DIAG_PRIMARY_CAPTURED))
+        snapshot.primary_gate_step = live_gate_step_.load(std::memory_order_relaxed);
+    if (pm_finished_.load(std::memory_order_acquire)) {
+        snapshot.flags |= HEN_RELOAD_DIAG_PM_FINISHED;
+        snapshot.pm_result = pm_result_;
+    }
+    mutexUnlock(&lock_);
+    return snapshot;
+}
+
+void PluginReload::diagnosticStage(u32 stage, u32 flags) {
+    mutexLock(&lock_);
+    if (!(diagnostics_.flags & HEN_RELOAD_DIAG_PRIMARY_CAPTURED) || !diagnostics_.primary_result)
+        diagnostics_.stage = stage;
+    diagnostics_.flags |= flags;
+    mutexUnlock(&lock_);
+}
+
+void PluginReload::captureGate(Result result, bool restoration) {
+    // This is only the gate's cached local view. No probe()/RO/FS requests.
+    const auto probe = gate_->cachedProbe();
+    mutexLock(&lock_);
+    reload::captureGateDiagnostics(diagnostics_, result, restoration, gate_->diagnosticStep(), probe,
+                                    input_.context.gate.original_wait, input_.context.gate.park);
+    mutexUnlock(&lock_);
+}
+
 bool PluginReload::join() {
     if (!finished() || !created_) return false;
     if (!joined_) {
@@ -148,12 +183,13 @@ void PluginReload::worker(void* value) {
     auto& self = *static_cast<PluginReload*>(value);
     const Result rc = reload::run(self);
     self.success_ = R_SUCCEEDED(rc) && !self.cancelled_.load();
-    if (self.cancelled_.load()) self.fail(reload::Deadline, true);
+    if (self.cancelled_.load()) self.fail(reload::preservePrimary(rc, reload::Deadline), true);
     if (!self.quarantined_) self.releaseOwned();
     // Cleanup can outlive its deadline. Finalize and publish finished under
     // the supervisor's lock so cancellation cannot slip between the two.
     mutexLock(&self.lock_);
-    reload::finalizeWorker(R_SUCCEEDED(rc), self.cancelled_.load(), self.success_, self.quarantined_, self.status_);
+    reload::finalizeWorker(R_SUCCEEDED(rc), self.cancelled_.load(), self.success_, self.quarantined_,
+                            self.status_, &self.diagnostics_);
     self.finished_.store(true, std::memory_order_release);
     mutexUnlock(&self.lock_);
 }
@@ -167,9 +203,7 @@ bool PluginReload::expired() const { return cancelled_.load(); }
 Result PluginReload::fail(Result rc, bool quarantine) {
     mutexLock(&lock_);
     quarantined_ |= quarantine || cancelled_.load();
-    status_.result = rc;
-    status_.phase = quarantined_ ? HenPluginReloadPhase_Quarantined : HenPluginReloadPhase_Failed;
-    if (quarantined_) status_.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
+    reload::recordFailure(status_, diagnostics_, rc, quarantined_);
     mutexUnlock(&lock_);
     return rc;
 }
@@ -289,13 +323,40 @@ void PluginReload::pmWorker(void* value) {
 
 Result PluginReload::launch() {
     gate_.emplace(*memory_, input_.context.gate);
-    Result rc = gate_->park();
+    gate_->setProgressCallback([](void* context, u32 step) {
+        // May run between the selected-waiter write and cancellation. Never
+        // acquire a mutex or call any service from this callback.
+        static_cast<PluginReload*>(context)->live_gate_step_.store(step, std::memory_order_relaxed);
+    }, this);
+    diagnosticStage(HenReloadLaunchStage_ParkBegin, HEN_RELOAD_DIAG_PARK_ATTEMPTED);
+    Result rc = gate_->beginPark();
+    bool parked = false;
     if (R_SUCCEEDED(rc)) {
+        diagnosticStage(HenReloadLaunchStage_ParkPoll);
+        do {
+            rc = gate_->pollPark(parked);
+            if (R_FAILED(rc) || parked || expired()) break;
+            svcSleepThread(1000000);
+        } while (true); // pollStep enforces its elapsed one-second deadline
+    }
+    if (R_SUCCEEDED(rc) && parked)
+        diagnosticStage(HenReloadLaunchStage_ParkPoll, HEN_RELOAD_DIAG_PARK_COMPLETED);
+    if (expired() && R_SUCCEEDED(rc)) rc = reload::Deadline;
+    if (R_SUCCEEDED(rc)) {
+        diagnosticStage(HenReloadLaunchStage_PmCreate);
         rc = threadCreate(&pm_thread_, pmWorker, this, nullptr, 0x8000, 0x2c, -2);
         if (R_SUCCEEDED(rc)) {
             pm_created_ = true;
+            diagnosticStage(HenReloadLaunchStage_PmStart, HEN_RELOAD_DIAG_PM_CREATED);
             rc = threadStart(&pm_thread_);
-            if (R_FAILED(rc)) { threadClose(&pm_thread_); pm_created_ = false; }
+            if (R_FAILED(rc)) {
+                // Failure to close an unstarted thread still retains owned
+                // state and forces quarantine; never silently reuse it.
+                if (R_SUCCEEDED(threadClose(&pm_thread_))) pm_created_ = false;
+            } else {
+                pm_started_ = true;
+                diagnosticStage(HenReloadLaunchStage_RequestWait, HEN_RELOAD_DIAG_PM_STARTED);
+            }
         }
     }
     bool exchanged = false;
@@ -313,15 +374,37 @@ Result PluginReload::launch() {
             u32 before_count = 0, after_count = 0;
             rc = mount.snapshot(before, before_count);
             alignas(16) u8 request[ounce::LoaderRequestSize] = {};
-            if (R_SUCCEEDED(rc)) rc = gate_->step(request);
+            if (R_SUCCEEDED(rc)) {
+                diagnosticStage(HenReloadLaunchStage_RequestPoll);
+                rc = gate_->beginStep();
+                bool complete = false;
+                while (R_SUCCEEDED(rc) && !complete && !expired()) {
+                    rc = gate_->pollStep(request, complete);
+                    if (R_FAILED(rc) || complete) break;
+                    svcSleepThread(1000000);
+                }
+                if (expired() && R_SUCCEEDED(rc)) rc = reload::Deadline;
+            }
             if (R_SUCCEEDED(rc)) rc = mount.snapshot(after, after_count);
             if (R_FAILED(rc)) break;
             ounce::CodeMountRequest decoded = {};
             rc = ounce::decodeCodeMountRequest(request, input_.context.mount.root_id, decoded);
             if (R_FAILED(rc)) break;
             // Unrelated Loader requests complete normally and never count.
-            if (!ounce::matchesCodeMount(decoded, input_.spec.program_id, input_.spec.storage_id)) continue;
-            if (++matches != 2) continue;
+            if (!ounce::matchesCodeMount(decoded, input_.spec.program_id, input_.spec.storage_id)) {
+                diagnosticStage(HenReloadLaunchStage_RequestWait);
+                continue;
+            }
+            ++matches;
+            mutexLock(&lock_);
+            diagnostics_.matching_mounts = matches;
+            mutexUnlock(&lock_);
+            diagnosticStage(HenReloadLaunchStage_MountMatch);
+            if (matches != 2) {
+                diagnosticStage(HenReloadLaunchStage_RequestWait);
+                continue;
+            }
+            diagnosticStage(HenReloadLaunchStage_Exchange);
             rc = mount.added(before, before_count, after, after_count, added);
             if (R_SUCCEEDED(rc)) rc = mount.exchange(added);
             exchanged = R_SUCCEEDED(rc);
@@ -329,20 +412,23 @@ Result PluginReload::launch() {
         }
         if (R_SUCCEEDED(rc) && !exchanged) rc = reload::Deadline;
     }
+    captureGate(rc, false); // save primary step BEFORE restore overwrites it
+    mutexLock(&lock_);
+    diagnostics_.flags |= HEN_RELOAD_DIAG_RESTORE_ATTEMPTED;
+    mutexUnlock(&lock_);
     const Result restore = gate_->restore();
     const Result channel = memory_->restore();
+    captureGate(R_FAILED(restore) ? restore : channel, true);
     mutexLock(&lock_);
     status_.restoration_result = R_FAILED(restore) ? restore : channel;
     mutexUnlock(&lock_);
     if (R_FAILED(restore) || R_FAILED(channel)) return R_FAILED(rc) ? rc : status_.restoration_result;
+    if (pm_created_ && !pm_started_) return R_FAILED(rc) ? rc : reload::Invalid;
     if (pm_created_) {
-        const u64 start = armGetSystemTick();
-        while (!pm_finished_.load(std::memory_order_acquire) && !elapsed(start, 5 * Second) && !expired()) svcSleepThread(1000000);
-        if (!pm_finished_.load(std::memory_order_acquire)) return reload::Deadline;
-        Result join = threadWaitForExit(&pm_thread_);
-        if (R_SUCCEEDED(join)) join = threadClose(&pm_thread_);
-        if (R_FAILED(join)) return join;
-        pm_joined_ = true;
+        diagnosticStage(HenReloadLaunchStage_PmJoin);
+        PmCompletionIo io{*this};
+        const Result completion = reload::completePmLaunch(io, rc, 5 * Second);
+        if (R_FAILED(completion)) return completion;
     }
     if (R_FAILED(rc)) return rc;
     if (R_FAILED(pm_result_) || !pm_pid_.load() || pm_pid_.load() == input_.request.expected_process_id)
@@ -357,6 +443,7 @@ Result PluginReload::launch() {
 }
 
 Result PluginReload::handoff() {
+    diagnosticStage(HenReloadLaunchStage_Handoff);
     // This independent SM proxy session can wait in GetService without
     // blocking HEN's main thread. The supervisor retains it on a timeout.
     Service sm = {}, plugin = {};
@@ -386,6 +473,7 @@ Result PluginReload::handoff() {
 }
 
 Result PluginReload::health() {
+    diagnosticStage(HenReloadLaunchStage_Health);
     LifecycleIo io{*this, new_control_};
     return reload::lifecycleWait(io, KaihenPluginLifecycle_Health, KaihenPluginLifecycleState_Running, true, 30 * Second);
 }

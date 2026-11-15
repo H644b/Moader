@@ -6,7 +6,7 @@ The public source includes Moader source, tests, scripts, documentation, licensi
 
 ## Release layout
 
-Use the explicit prerelease tag `v0.1.0-dev.5`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.5/…` or the tag page.
+The planned prerelease tag is `v0.1.0-dev.5`; it is **not published**. Keep PR #7 in draft until the failed device reload is resolved and the repaired build is accepted on hardware. The published release remains v0.1.0-dev.4. GitHub's `releases/latest` endpoint can skip prereleases, so a future release's download links must target its explicit tag.
 
 | Artifact | Contents |
 | --- | --- |

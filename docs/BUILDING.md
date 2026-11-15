@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-For installation, use the matching [v0.1.0-dev.5 release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.5) and `Moader-backend-v0.1.0-dev.5.zip`. App, resident, HEN and bootstrap are rebuilt for the cartridge correction and plugin reload. The native filesystem hook is unchanged. The app still displays `0.1.0-dev`; see [Validation](VALIDATION.md) for host and console evidence. The separate SD ZIP supplies the app/plugin, not a complete HEN update.
+This branch builds an **unreleased v0.1.0-dev.5 candidate**. The first plugin reload failed on device; the subsequent repair has offline validation only. Do not run its device installation commands. Use [v0.1.0-dev.4's guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md) for the published release. The candidate rebuilds the app, resident, HEN and bootstrap; the native filesystem hook is unchanged. The app still displays `0.1.0-dev`; see [Validation](VALIDATION.md) for exact evidence. The workflow below documents the intended matching backend kit.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
@@ -72,8 +72,8 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Selected Civ7 source tree SHA-256 | `d83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75` |
 | Official kaiHEN release | `20261114c` |
 | Official kaiHEN ZIP SHA-256 | `63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967` |
-| Patched HEN SHA-256 | `d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22` |
-| Matched bootstrap SHA-256 | `ccf258b47dc2ef07881fbf0680491b48279ff220588d23930aa4fe32c45e0e71` |
+| Patched HEN SHA-256 | `4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02` |
+| Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
 Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.

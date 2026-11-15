@@ -40,6 +40,10 @@ class RetainedMemory {
     }
 
     Result read(u64 address, void* output, u64 size) {
+        // The SDK response parser forms all eight output-handle addresses
+        // even when every attribute is None. Supply real storage instead of
+        // permitting pointer arithmetic on its default null out_handles.
+        Handle unused_handles[8] = {};
         const struct {
             u64 process_id;
             u64 address;
@@ -52,6 +56,7 @@ class RetainedMemory {
             .buffers = {{output, size}},
             .in_num_handles = 1,
             .in_handles = {filesystem_process_},
+            .out_handles = unused_handles,
         );
     }
 
@@ -166,6 +171,7 @@ class RetainedMemory {
 
   private:
     Result writeThroughReader(u64 address, const void* input, u64 size) {
+        Handle unused_handles[8] = {};
         const struct {
             u64 process_id;
             u64 address;
@@ -178,6 +184,7 @@ class RetainedMemory {
             .buffers = {{input, size}},
             .in_num_handles = 1,
             .in_handles = {filesystem_process_},
+            .out_handles = unused_handles,
         );
     }
 

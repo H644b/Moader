@@ -420,6 +420,17 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
         if (entry) reply.setData(entry->status);
         break;
     }
+    case HenHomebrewCommand_GetPluginReloadDiagnostics: {
+        u64 id = 0;
+        if (request.data_size < sizeof(id)) break;
+        std::memcpy(&id, request.data, sizeof(id));
+        // Only copy the snapshot published by advanceReload. In particular,
+        // never probe the gate or issue RO/FS IPC from the query thread.
+        const auto* entry = reload_journal_.find(id);
+        reply.result = entry ? 0 : reload::Expired;
+        if (entry) reply.setData(entry->diagnostics);
+        break;
+    }
     case HenHomebrewCommand_GetFilesystemRoot:
         if (fs_root_ == INVALID_HANDLE) {
             reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
@@ -684,6 +695,7 @@ Result HenServer::submitReload(u32 caller, const HenPluginReloadRequest& request
         ounce::closeHandle(&fs);
         ounce::closeHandle(&sm);
         entry->status.result = rc;
+        entry->diagnostics.primary_result = rc;
         entry->status.phase = HenPluginReloadPhase_Failed;
         reload_journal_.finish(entry->status.operation_id, false);
         game_.releaseReloadLease();
@@ -697,7 +709,9 @@ void HenServer::advanceReload() {
     if (!reload_journal_.active) return;
     auto* entry = reload_journal_.find(reload_journal_.active);
     if (!entry) return;
-    if (!reload::completedSnapshot(reload_, entry->status)) return;
+    const bool complete = reload::completedSnapshot(reload_, entry->status);
+    entry->diagnostics = reload_.diagnostics();
+    if (!complete) return;
     auto* plugin = findPlugin(entry->request.name);
     bool quarantine = reload_.quarantined();
     if (reload::publishable(entry->status, reload_.succeeded(), quarantine) &&

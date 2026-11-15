@@ -4,23 +4,23 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "ce649ef5f41e0c4bef4d11b56043f3e519df001e45682002578a640b7cd23af9",
+  "patch_sha256": "dcc41b0720955b49a9c8461d4a054b4012d22d5c6021e748ef049f992a0635d2",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "ae4e492a1c24e529cb48816342b10b2aea2fb8fe9869e1400e826fd726ed1d67",
+  "source_tree_sha256": "f4a91eae6a41748b5307833560dff081d6def465f69fb5ec68e5c7ccf80f0078",
   "protocol_version": 7,
-  "hen_sha256": "d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22",
+  "hen_sha256": "4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02",
   "components": {
     "hen/main": {
-      "bytes": 128611,
-      "sha256": "d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22"
+      "bytes": 130764,
+      "sha256": "4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02"
     },
     "bootstrap.bin": {
-      "bytes": 29952,
-      "sha256": "ccf258b47dc2ef07881fbf0680491b48279ff220588d23930aa4fe32c45e0e71"
+      "bytes": 30080,
+      "sha256": "df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801"
     }
   },
   "native_build_passed": true,
   "console_retest_passed": false,
-  "reason": "Add cooperative selected-plugin reload, retained launch capability and guarded async publication, preserving pending-launch fix and read-only trace query.",
-  "validation_scope": "Pinned SDK final link and host sanitizer coverage passed. This protocol-7 HEN/bootstrap pair and reload command have not been console-tested. Original protocol-6 device results remain separate; see docs/VALIDATION.md."
+  "reason": "Cooperative plugin reload with timed Loader polling, cached diagnostics and preserved primary/restoration outcomes; paired with guarded app exit and matching-card correction.",
+  "validation_scope": "This repaired HEN/bootstrap pair has final SDK build and host sanitizer validation only; it has not been installed or device-tested. An earlier protocol-7 candidate passed installation and matching Z-A cartridge routing, then reload failed with 0xEA01/restoration 0x1759 and app exit required a forced power cycle. Reload remains unreleased and not accepted. See docs/VALIDATION.md."
 }

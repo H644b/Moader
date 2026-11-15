@@ -181,3 +181,7 @@ NX_INLINE Result henGetPluginReloadStatus(Service* s, u64 operation_id, HenPlugi
 NX_INLINE Result henGetReloadCapabilities(Service* s, HenReloadCapabilities* out) {
     return serviceDispatchOut(s, HenHomebrewCommand_GetReloadCapabilities, *out);
 }
+
+NX_INLINE Result henGetPluginReloadDiagnostics(Service* s, u64 operation_id, HenPluginReloadDiagnostics* out) {
+    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginReloadDiagnostics, operation_id, *out);
+}

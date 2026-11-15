@@ -1,5 +1,7 @@
 # Moader
 
+> Unreleased development branch: the cartridge correction passed a device check, but the new plugin reload timed out, failed Loader restoration and left the console unresponsive after app exit. The console recovered after a forced power cycle. Do not install this branch for reload; [PR #7](https://github.com/H644b/Moader/pull/7) remains a draft while the failure is investigated. Published releases do not contain this reload implementation.
+
 **Manage Switch 2 mods from your controller or a browser.**
 
 Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable controls and native debug output. Its resident backend keeps the web interface available while you play or close the Moader app. The browser interface is served by your Switch; no cloud account is needed.
@@ -14,12 +16,12 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev.5 — cartridge correction and plugin reload](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.5)**. The physical-copy guard now uses consistent matching-card observations. The patched HEN adds a command to reload a cooperative resident plugin, exposed in **Settings → Advanced → Reload Moader service**. This release rebuilds the app, resident, HEN and bootstrap; the native filesystem hook is unchanged. Install the matching kit once to add the command. See [reload instructions](docs/PLUGIN_RELOAD.md) and the precise [validation scope](docs/VALIDATION.md).
+The published prerelease is **[v0.1.0-dev.4](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)**. Use its [matching installation guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md). It can incorrectly block Z-A even with the matching cartridge inserted. This branch contains the correction and an unreleased plugin-reload candidate; the failed reload and offline repair are recorded in [Validation](docs/VALIDATION.md).
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-v0.1.0-dev.5.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-backend-v0.1.0-dev.5.zip) | Backend setup kit with matching patched HEN/bootstrap; pinned dependencies are fetched at first use |
+| [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) | The published console app and matching resident plugin |
+| [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip) | Published backend setup kit; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 

@@ -7,25 +7,25 @@
   "binaries": {
     "Moader.nro": {
       "source": "dist/Moader.nro",
-      "bytes": 1929144,
-      "sha256": "fec4e47b8bb5bf0bd23ba094fd30df230a3b7dbf385b2693cf6c1a9d6d2728a7"
+      "bytes": 1937336,
+      "sha256": "3876999ecff3675c660c6b0cae08be95db43e8359f77f846e3ce48ad3236f331"
     },
     "moader.nso": {
       "source": "dist/moader.nso",
       "bytes": 683176,
-      "sha256": "283887a02d38542f7b956d7d26f91b225353e910e01929e18e6f4da72181017c"
+      "sha256": "f444e0fb1185da1b95655d89510b3efa931883b13b2997d8a9db6b805480137a"
     }
   },
   "patched_hen": {
     "source": "vendor/kaihen-mo/hen/main",
-    "bytes": 128611,
-    "sha256": "d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22"
+    "bytes": 130764,
+    "sha256": "4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02"
   },
   "validation": "docs/VALIDATION.md",
   "appAndResidentHardwareTested": false,
   "patched_bootstrap": {
     "source": "vendor/kaihen-mo/bootstrap.bin",
-    "bytes": 29952,
-    "sha256": "ccf258b47dc2ef07881fbf0680491b48279ff220588d23930aa4fe32c45e0e71"
+    "bytes": 30080,
+    "sha256": "df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801"
   }
 }

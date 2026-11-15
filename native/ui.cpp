@@ -272,7 +272,9 @@ struct Renderer::Impl {
                 else text(805,y+8,"A  Open",18,action,88);
             }
             rect(249,menu_y,646,2,focus);rect(249,menu_y+59,646,2,focus);
-            paragraph(250,510,s.reload_detail,18,s.reload_error?bad:s.reload_busy?warn:muted,625,3);
+            paragraph(250,510,s.reload_shutdown_required?
+                "Loader recovery failed. Save Debug and a screen, then hold POWER for 20 seconds. Do not return to hbmenu.":s.reload_detail,
+                18,s.reload_error?bad:s.reload_busy?warn:muted,625,3);
             text(250,580,s.port_edit?"Left / Right  Digit     Up / Down  Value":"Up / Down  Select     A  Open or export",18,muted);
             text(250,609,s.port_edit?"A  Save port     B  Cancel edit":"B  Settings",18,muted);
         }else if(s.view==View::Credits){
@@ -293,10 +295,14 @@ struct Renderer::Impl {
             paragraph(250,556+panel,s.summary.flags&moader::ipc::Foreground?"Keep Moader open while using the web interface.":"The resident service remains available after this app closes.",19,muted,622,2);
         }else if(s.view==View::Debug){
             text(250,103+panel,s.connected?"Runtime diagnostics":"Saved diagnostics",29,ink);
-            paragraph(250,155+panel,s.connected?"Scroll the event history in the right pane. Save a report to share the current library and runtime evidence.":"The service disconnected. You can scroll the last-known events and save a local report while it is unavailable.",22,muted,622,3);
+            paragraph(250,155+panel,s.reload_shutdown_required?
+                "Loader restoration is unverified. Save the report and screen here. Returning to hbmenu is disabled in this state.":
+                s.connected?"Scroll the event history in the right pane. Save a report to share the current library and runtime evidence.":"The service disconnected. You can scroll the last-known events and save a local report while it is unavailable.",22,s.reload_shutdown_required?bad:muted,622,3);
             button(250,273+panel,234,"A  Save debug report");
             text(250,341+panel,"Report location",19,muted);text(250,372+panel,"sdmc:/moader/app-diagnostics.txt",21,ink,623);
-            paragraph(250,430+panel,s.runtime_detail.empty()?"No runtime detail reported.":s.runtime_detail,21,s.summary.last_result?bad:muted,622,3);
+            paragraph(250,430+panel,s.reload_shutdown_required?
+                "After saving, hold the physical POWER button for at least 20 seconds to force the console off.":
+                s.runtime_detail.empty()?"No runtime detail reported.":s.runtime_detail,21,s.reload_shutdown_required||s.summary.last_result?bad:muted,622,3);
             text(250,523,"Historical events can predate this run.",18,muted);
             text(250,562,"Minus  Save screenshot to SD",19,action);
             text(250,594,"Up / Down  Scroll events     B  Back",18,muted,626);
@@ -342,10 +348,17 @@ struct Renderer::Impl {
         if(s.view==View::Debug){rect(920,72,2,572,focus);rect(1278,72,2,572,focus);rect(920,72,360,2,focus);rect(920,642,360,2,focus);}
         rect(0,644,1280,76,surface);rect(0,644,1280,1,line);
         if(!s.message.empty())text(24,650,ellipsis(s.message,18,1230),18,s.message_error?bad:ink,1230);
-        else text(24,650,!s.connected?"Status is unavailable. Press Y to reconnect.":s.summary.flags&moader::ipc::Foreground?"Web access stays available while Moader is open.":"Library changes are saved independently of runtime acknowledgement.",18,muted,1230);
-        key(24,685,"Y",s.connected?(s.summary.flags&moader::ipc::WebRunning?"Web off":"Web on"):"Reconnect");
+        else text(24,650,s.reload_shutdown_required?"Loader restoration is unverified. Save Debug and a screen, then hold POWER for 20 seconds.":
+            s.reload_exit_unknown||s.reload_busy?"Returning to hbmenu is paused. Press Y to check the existing reload state.":
+            !s.connected?"Status is unavailable. Press Y to reconnect.":s.summary.flags&moader::ipc::Foreground?"Web access stays available while Moader is open.":"Library changes are saved independently of runtime acknowledgement.",18,s.reload_shutdown_required?bad:muted,1230);
+        key(24,685,"Y",s.reload_shutdown_required||s.reload_exit_unknown||s.reload_busy?"Check state":
+            s.connected?(s.summary.flags&moader::ipc::WebRunning?"Web off":"Web on"):"Reconnect");
         if(s.connected)key(180,685,"ZR","Connect");
-        key(342,685,"ZL","Debug");key(480,685,"L stick","Settings");key(671,685,"B","Back");key(806,685,"D-pad","Navigate");key(1054,685,"+","hbmenu");
+        key(342,685,"ZL","Debug");key(480,685,"L stick","Settings");key(671,685,"B","Back");key(806,685,"D-pad","Navigate");
+        if(s.reload_shutdown_required)text(1054,690,"Power off required",17,bad,210);
+        else if(s.reload_exit_unknown)text(1054,690,"Check reload state",17,warn,210);
+        else if(s.reload_busy)text(1054,690,"Wait for reload",17,warn,210);
+        else key(1054,685,"+","hbmenu");
 
     }
 };

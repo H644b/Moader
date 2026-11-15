@@ -1,5 +1,7 @@
 # Reload the resident plugin
 
+**Unreleased and not accepted on hardware.** The first device reload returned `0x0000EA01` with restoration `0x00001759`; returning to hbmenu then left the console unresponsive. It recovered after a forced power cycle. The instructions below describe the implementation under investigation, not an approved update workflow. Keep this branch uninstalled until the failure is resolved and retested.
+
 The patched kaiHEN provides **ReloadPlugin**, an asynchronous command that restarts one registered, cooperative plugin. Moader exposes it in **Settings → Advanced → Reload Moader service**. It uses ordinary homebrew IPC after installation; a new FS acquisition is not part of each reload.
 
 ## First install
@@ -13,7 +15,7 @@ After that, an updated `kaihen/plugins/moader.nso` can be loaded by the reload c
 1. Finish uploads and imports. Save changes before leaving any other tool that writes Moader files.
 2. Open Moader and choose **Settings → Advanced → Reload Moader service**.
 3. Follow the progress message. Keep Moader open until it reconnects or reports a specific failure. Pressing the action repeatedly does not submit another reload.
-4. A successful reload reconnects the app to the replacement service. A browser connection closes during the restart; reconnect to the displayed address with the saved pairing code. Saved library requests, game-copy choices and preferences stay on SD.
+4. A successful reload reconnects the app to the replacement service. A browser connection closes during the restart. The replacement uses **Start web automatically**; if that setting is off, press **Y** to start its listener again, then reconnect with the saved pairing code. Saved library requests, game-copy choices and preferences stay on SD.
 
 Reload restarts the manager service, not the running game. It does not clear game caches or apply executable changes that require a game relaunch. FS-owned routing and retained game filesystem objects remain in the FS process while the resident restarts.
 
@@ -31,12 +33,14 @@ The replacement must complete its startup handshake and application health check
 - **Busy:** an import, library write or game-launch transition is using a required resource. Finish that activity and make a new explicit attempt.
 - **Preflight failure:** the replacement or required capability failed validation before shutdown. Read the result; the existing plugin remains running when shutdown has not begun.
 - **Failed after exit:** the old plugin has stopped, but its replacement did not become healthy. The selected service is unavailable. HEN reports the failed stage and cleanup result; it does not claim rollback.
-- **Quarantined / outcome unknown:** cleanup, process exit or Loader restoration could not be proved. Do not keep submitting reloads or start a competing foreground writer. Save diagnostics and use a fresh per-boot setup when directed by the reported state.
+- **Quarantined / outcome unknown:** cleanup, process exit or Loader restoration could not be proved. Do not keep submitting reloads or start a competing foreground writer. Save the diagnostic report and screen while the app is still open. If Loader restoration is unverified, force the console off by holding its physical POWER button for at least 20 seconds; returning to hbmenu is not a recovery step. Reinstall only a corrected build after a fresh per-boot setup.
 
 If a reply is lost, the app queries HEN's recorded operation rather than replaying shutdown or launch. A client-side timeout does not cancel work or establish that a process exited. HEN keeps authoritative status after the requesting app disconnects.
 
 ## Developer command
 
-The additive homebrew commands are `GetPluginInfo` (23), `ReloadPlugin` (24), `GetPluginReloadStatus` (25) and `GetReloadCapabilities` (26). The C helpers and fixed request/reply layouts are in [kaihen.h](../runtime/kaihen/libkaihen/include/kaihen.h) and [reload.h](../runtime/kaihen/libkaihen/include/kaihen/reload.h). Existing command numbers and scalar reply sizes remain compatible. Plugins opt in through `pluginServiceStartWithLifecycle`; ordinary plugins keep the existing start API.
+The additive homebrew commands are `GetPluginInfo` (23), `ReloadPlugin` (24), `GetPluginReloadStatus` (25), `GetReloadCapabilities` (26) and `GetPluginReloadDiagnostics` (27). The C helpers and fixed request/reply layouts are in [kaihen.h](../runtime/kaihen/libkaihen/include/kaihen.h) and [reload.h](../runtime/kaihen/libkaihen/include/kaihen/reload.h). Existing command numbers and scalar reply sizes remain compatible. Operation status remains 56 bytes; the separate diagnostics reply is 64 bytes. Plugins opt in through `pluginServiceStartWithLifecycle`; ordinary plugins keep the existing start API.
+
+Diagnostics query a cached snapshot. They perform no Loader, RO or filesystem operations in HEN's query handler. The saved app report includes launch stage, whether the PM worker was created/started/finished/joined, and separate primary/restoration gate steps and results. A zero replacement PID alone cannot establish that a PM worker never started. Probe fields describe the last cached observation, not an independent restoration check.
 
 The command, installer and health paths have separate validation boundaries. See [Validation](VALIDATION.md) for the current build's host checks and console status, and [kaiHEN modifications](KAIHEN_CHANGES.md) for the complete patch and provenance.

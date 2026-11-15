@@ -2,6 +2,8 @@
 
 Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload alongside the earlier pending-launch fix and read-only game trace. The application, resident service and FS hook have separate roles and validation records.
 
+**Development branch:** the first device reload failed and required a power cycle after app exit. The subsequent repair has offline validation only and remains unreleased. See [Validation](VALIDATION.md).
+
 | Record | Value |
 | --- | --- |
 | Upstream project | [ouncebrew/kaihen](https://github.com/ouncebrew/kaihen) |
@@ -22,13 +24,15 @@ An R-button press can occur while SmileBASIC is still active or before opening a
 
 ## Cooperative plugin reload
 
-HEN protocol discovery is now **7**. Existing homebrew command IDs, `HenStatus`, `HenPluginName` and scalar reply layouts remain in place. Additive commands 23–26 expose selected-plugin identity, one reload submission, authoritative operation status and capabilities. [reload.h](../runtime/kaihen/libkaihen/include/kaihen/reload.h) gives the exact layouts; the 96-byte submission fits the existing inline request envelope and the largest new reply is 56 bytes.
+HEN protocol discovery is now **7**. Existing homebrew command IDs, `HenStatus`, `HenPluginName` and scalar reply layouts remain in place. Additive commands 23–27 expose selected-plugin identity, one reload submission, authoritative operation status, capabilities and cached launch diagnostics. [reload.h](../runtime/kaihen/libkaihen/include/kaihen/reload.h) gives the exact layouts; the 96-byte submission fits the existing inline request envelope. Operation status remains 56 bytes; the separate diagnostics reply is 64 bytes.
 
 The reload manager runs outside HEN's request loop. It binds a submission to the actual calling process, selected registry name, expected PID/generation and HEN instance, with nonce deduplication. One Loader lease serializes it with game arming. The lease permits the existing safe WaitForInput/WaitExit checkpoints and preserves the running host's tracking state. Matching the donor program and storage prevents unrelated Loader requests from counting as the selected mount.
 
 The worker stages the selected fixed-path executable and prepares its package before asking the old plugin to stop. An opt-in lifecycle protocol handles busy denial, drain, asynchronous abort, post-reply exit acknowledgement and replacement health. The exact old PID must exit before one replacement is launched. HEN verifies the new startup peer, transfers the required services, waits for transport readiness and separately checks application health before publishing the new generation. Legacy plugins without the handshake are refused before shutdown; there is no forced termination fallback for the old plugin.
 
 Deadlines record uncertainty; they do not cancel native IPC or prove a process exited. Restoration errors remain separate from the primary failure. Unproved cleanup quarantines the operation and retains its resources instead of allowing another writer or launch attempt. [Usage and recovery](PLUGIN_RELOAD.md).
+
+The offline repair uses elapsed-time polling for reload's initial empty park and subsequent real Loader requests. It preserves the established synchronous Bootstrap/GameArm parking entry points and all gate invariant/receipt checks. Progress reporting uses a lock-free atomic store; it adds no service call between waiter selection and cancellation. Diagnostics retain primary gate steps before restoration changes them, and command 27 returns cached state without probing Loader. RO memory requests also provide valid output-handle storage to the SDK response parser. These changes address weaknesses reproduced in host fixtures; they do not establish the exact cause of the earlier device failure.
 
 The bootstrap now transfers a retained PM launch capability and the donor launch specification to HEN through an additive control command. Its host input layout stays unchanged. This needs a **matching modified HEN and bootstrap pair**, plus the rebuilt plugin runtime and cooperative resident. Updating a file cannot add commands to an older running HEN.
 
@@ -40,11 +44,12 @@ The complete patch includes the following areas; its individual file diffs are a
 | --- | --- |
 | Bootstrap and shared launch metadata | `bootstrap/source/main.cpp`, `common/control.h`, new `common/plugin_launch.hpp`: retained launch session/specification handoff. |
 | Package and mount handling | `common/code_mount_request.hpp`, `common/domain_mount.hpp`, `common/policy_package.cpp/.hpp`: exact target matching and checked package digest generation. |
+| Gate and memory transport | `common/loader_gate.hpp`, `common/retained_memory.hpp`: timed reload parking/request polling, cached observations and valid SDK response storage. |
 | HEN owner and server | `hen/source/game_arm.cpp/.hpp`, `hen/source/server.cpp/.hpp`: serialized Loader lease, managed records, submission/status and publication. |
-| Reload worker | New `hen/source/plugin_reload.cpp/.hpp`, `reload_state.hpp` and `lifecycle_client.hpp`: staging, lifecycle, PM/Loader startup, health, cleanup and bounded retry contracts. |
+| Reload worker | New `hen/source/plugin_reload.cpp/.hpp`, `reload_state.hpp`, `reload_diagnostics.hpp` and `lifecycle_client.hpp`: staging, lifecycle, PM/Loader startup, cached diagnostics, health, cleanup and bounded retry contracts. |
 | Public and plugin APIs | `libkaihen/include/kaihen.h`, `kaihen/protocol.h`, `kaihen/plugin.h`, new `kaihen/reload.h`: additive commands, source-compatible start API and opt-in lifecycle. |
 | Plugin runtime/server | `libkaihen/source/plugin_runtime.cpp`, `plugin_server.cpp`, `plugin_startup.h`: startup identity, lifecycle dispatch, guaranteed post-reply notification and retained ownership on failed thread joins. |
-| Host regressions | `hen/test.sh`, `hen/tests/reload_test.cpp`, `lifecycle_server_test.cpp` and host declarations: actual protocol/orchestration/server tests with controlled transports. |
+| Host regressions | `hen/test.sh`, `hen/tests/reload_test.cpp`, `lifecycle_server_test.cpp`, `loader_gate_test.cpp` and host declarations: actual protocol/orchestration/server/gate tests with controlled transports. |
 
 The `PluginService` source structure gains lifecycle and thread ownership fields. Rebuild plugins against the matching headers and library; mixing the new headers with a stock precompiled plugin library is unsupported. Already-built legacy plugins carry their own runtime and retain their existing enumeration/open behavior.
 

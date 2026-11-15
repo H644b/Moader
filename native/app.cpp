@@ -21,6 +21,10 @@ bool service_missing=false;
 std::unique_ptr<moader_native::Foreground> foreground;
 moader_native::ReloadClient reload;
 bool modern_hen=false;
+bool hen_protocol_known=false;
+HenPluginReloadDiagnostics reload_diagnostics{};
+bool reload_diagnostics_valid=false;
+Result reload_diagnostics_result=MAKERESULT(Module_Libnx,LibnxError_NotInitialized);
 u64 monotonic_ms(){return armTicksToNs(armGetSystemTick())/1000000;}
 HenPluginName moader_name(){HenPluginName name{};std::memcpy(name.name,"moader",7);return name;}
 Result open_hen(){
@@ -36,17 +40,20 @@ struct ReloadTransport {
         if(R_FAILED(rc)&&R_SUCCEEDED(open_hen()))rc=henGetPluginInfo(&hen,&name,&out);
         if(R_SUCCEEDED(rc)){
             HenReloadCapabilities caps{};const auto capability=henGetReloadCapabilities(&hen,&caps);
-            reload.supported=R_SUCCEEDED(capability)&&caps.version>=1&&(caps.flags&HEN_PLUGIN_RELOAD_AVAILABLE);
-            reload.manager_flags=R_SUCCEEDED(capability)?caps.flags:HEN_PLUGIN_RELOAD_BLOCKED;
-        }
+            const bool valid=R_SUCCEEDED(capability)&&caps.version==1&&caps.instance_id==out.instance_id&&!(caps.flags&~7u);
+            reload.supported=valid&&(caps.flags&HEN_PLUGIN_RELOAD_AVAILABLE);
+            reload.observe_manager(caps.flags,valid);
+        }else reload.observe_manager(0,false);
         return rc;
     }
     Result submit(const HenPluginReloadRequest& in,HenPluginReloadStatus& out){return henReloadPlugin(&hen,&in,&out);}
     Result get_status(u64 operation,HenPluginReloadStatus& out){return henGetPluginReloadStatus(&hen,operation,&out);}
 } reload_transport;
 void sync_reload_ui(){
-    ui.reload_available=!foreground&&reload.can_submit();ui.reload_busy=reload.active;
+    ui.reload_available=!foreground&&reload.can_submit();ui.reload_busy=reload.in_progress();
     ui.reload_error=reload.timed_out||reload.status.phase==HenPluginReloadPhase_Failed||reload.status.phase==HenPluginReloadPhase_Quarantined;
+    ui.reload_shutdown_required=reload.shutdown_required();
+    ui.reload_exit_unknown=reload.exit_state_unknown();
     ui.reload_detail=reload.detail;
 }
 Result dispatch(u32 id,const void* input,size_t input_size,void* output,size_t capacity) {
@@ -65,38 +72,46 @@ void error(Result rc){char text[64]{};
 }
 Result connect(){
     if(foreground){reload.unavailable(true);sync_reload_ui();return 0;}
-    service_missing=false;modern_hen=false;
+    service_missing=false;
     if(serviceIsActive(&service))serviceClose(&service);
     Result rc=open_hen();if(R_FAILED(rc))return rc;
     HenStatus status{};rc=henGetStatus(&hen,&status);if(R_FAILED(rc))return rc;
+    hen_protocol_known=true;
     modern_hen=status.protocol_version>=7;
     if(modern_hen){
         HenReloadCapabilities caps{};rc=henGetReloadCapabilities(&hen,&caps);
-        if(R_FAILED(rc)){reload.detail=moader_native::ReloadClient::transport_text("Could not inspect kaiHEN reload capability",rc);sync_reload_ui();return rc;}
-        reload.supported=caps.version>=1&&(caps.flags&HEN_PLUGIN_RELOAD_AVAILABLE);reload.manager_flags=caps.flags;
+        if(R_FAILED(rc)||caps.version!=1||(caps.flags&~7u)){
+            reload.observe_manager(0,false);
+            if(R_SUCCEEDED(rc))rc=MAKERESULT(Module_Libnx,LibnxError_BadInput);
+            reload.detail=moader_native::ReloadClient::transport_text("Could not inspect kaiHEN reload capability",rc);sync_reload_ui();return rc;}
+        reload.supported=caps.flags&HEN_PLUGIN_RELOAD_AVAILABLE;reload.observe_manager(caps.flags,true);
         HenPluginInfo info{};rc=reload_transport.get_info(info);
         if(R_FAILED(rc)){
             reload.info_valid=false;reload.detail=moader_native::ReloadClient::transport_text("Could not inspect managed Moader; foreground fallback paused",rc);sync_reload_ui();return rc;
         }
         reload.observe(info);
         if(info.operation_id){HenPluginReloadStatus operation{};
-            if(R_SUCCEEDED(henGetPluginReloadStatus(&hen,info.operation_id,&operation))&&operation.instance_id==info.instance_id)
-                reload.status=operation;
-        }else reload.status={};
-        if(moader_native::ReloadClient::unmanaged(info)){service_missing=true;sync_reload_ui();return MAKERESULT(Module_Libnx,LibnxError_NotFound);}
+            if(R_SUCCEEDED(henGetPluginReloadStatus(&hen,info.operation_id,&operation))&&
+               operation.instance_id==info.instance_id&&operation.operation_id==info.operation_id)
+                reload.observe_status(operation);
+        }else reload.observe_status({});
+        if(moader_native::ReloadClient::unmanaged(info)){
+            if(!reload.can_exit()){
+                reload.detail="kaiHEN has unresolved Loader activity. Foreground fallback is paused; press Y to check again.";
+                sync_reload_ui();return MAKERESULT(Module_Libnx,LibnxError_BadInput);
+            }
+            service_missing=true;sync_reload_ui();return MAKERESULT(Module_Libnx,LibnxError_NotFound);}
         if(!moader_native::ReloadClient::attachable(info)){
             reload.detail="kaiHEN is reloading Moader or has blocked this plugin. Foreground fallback is paused; press Y to check again.";
-            if(info.operation_id){HenPluginReloadStatus operation{};
-                if(R_SUCCEEDED(henGetPluginReloadStatus(&hen,info.operation_id,&operation))&&
-                   (operation.phase==HenPluginReloadPhase_Failed||operation.phase==HenPluginReloadPhase_Quarantined))
-                    reload.detail=moader_native::ReloadClient::result_text("Resident reload failed; foreground fallback paused",operation.result,operation.restoration_result);
-            }
+            if(reload.status.operation_id==info.operation_id&&reload.status.instance_id==info.instance_id&&
+               (reload.status.phase==HenPluginReloadPhase_Failed||reload.status.phase==HenPluginReloadPhase_Quarantined))
+                reload.detail=moader_native::ReloadClient::result_text("Resident reload failed; foreground fallback paused",reload.status.result,reload.status.restoration_result);
             sync_reload_ui();return MAKERESULT(Module_Libnx,LibnxError_BadInput);
         }
         reload.detail=reload.supported?"Reload restarts the resident Moader plugin and verifies the new process before reconnecting.":"Install the new kaiHEN build with plugin reload enabled.";
         const auto name=moader_name();rc=henOpenPlugin(&hen,&name,&service);sync_reload_ui();return rc;
     }
-    reload.unavailable(false);sync_reload_ui();
+    reload.observe_manager(0,true);reload.unavailable(false);sync_reload_ui();
     u32 count=0;rc=henGetPluginCount(&hen,&count);if(R_FAILED(rc))return rc;
     for(u32 i=0;i<count;++i){HenPluginName name{};rc=henGetPluginName(&hen,i,&name);if(R_FAILED(rc))return rc;
         if(!std::strncmp(name.name,"moader",sizeof(name.name)))return henOpenPlugin(&hen,&name,&service);}
@@ -129,7 +144,20 @@ void refresh_debug(){
                 while(std::getline(file,line))if(!line.empty()){ui.events.push_back(line.substr(0,1024));if(ui.events.size()>128)ui.events.erase(ui.events.begin());}}
         }}
 }
-void save_debug(){if(ui.connected)refresh_debug();
+void refresh_reload_diagnostics(){
+    reload_diagnostics_valid=false;
+    if(!modern_hen||!reload.status.operation_id)return;
+    HenPluginInfo current{};reload_diagnostics_result=reload_transport.get_info(current);
+    if(R_FAILED(reload_diagnostics_result))return;
+    if(current.instance_id!=reload.status.instance_id){reload_diagnostics_result=MAKERESULT(Module_Libnx,LibnxError_BadInput);return;}
+    HenPluginReloadDiagnostics next{};
+    reload_diagnostics_result=henGetPluginReloadDiagnostics(&hen,reload.status.operation_id,&next);
+    if(R_FAILED(reload_diagnostics_result))return;
+    if(next.version!=1||next.operation_id!=reload.status.operation_id||next.stage>HenReloadLaunchStage_Health||
+       (next.flags&~511u)){reload_diagnostics_result=MAKERESULT(Module_Libnx,LibnxError_BadInput);return;}
+    reload_diagnostics=next;reload_diagnostics_valid=true;
+}
+void save_debug(){if(ui.connected)refresh_debug();refresh_reload_diagnostics();sync_reload_ui();
     std::ofstream file("sdmc:/moader/app-diagnostics.txt",std::ios::binary);
     file<<"Moader 0.1.0-dev\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
         <<"\nFS acknowledged generation: "<<ui.summary.applied_generation<<"\nBackend channel connected (summary): "<<bool(ui.summary.flags&moader::ipc::BackendConnected)
@@ -149,7 +177,23 @@ void save_debug(){if(ui.connected)refresh_debug();
         <<"\nPlugin PID: "<<reload.info.process_id<<"\nPlugin generation: "<<reload.info.generation
         <<"\nReload old PID: "<<reload.status.old_process_id<<"\nReload new PID: "<<reload.status.new_process_id
         <<"\nReload flags: "<<reload.status.flags
-        <<"\nReload outcome unverified: "<<(reload.uncertain||reload.timed_out)<<"\n\n";
+        <<"\nReload outcome unverified: "<<(reload.uncertain||reload.timed_out||reload.shutdown_required())
+        <<"\nPower cycle required: "<<reload.shutdown_required()<<"\n\n";
+    file<<"Gate diagnostics verified: "<<reload_diagnostics_valid
+        <<"\nGate diagnostic query result: 0x"<<std::hex<<reload_diagnostics_result<<std::dec<<'\n';
+    if(reload_diagnostics_valid){const auto& d=reload_diagnostics;
+        file<<"Gate diagnostic operation: "<<d.operation_id<<"\nGate launch stage: "<<d.stage
+            <<"\nGate diagnostic flags: "<<d.flags
+            <<"\nPrimary gate step: 0x"<<std::hex<<d.primary_gate_step
+            <<"\nRestoration gate step: 0x"<<d.restoration_gate_step
+            <<"\nGate primary result: 0x"<<d.primary_result<<"\nGate restoration result: 0x"<<d.restoration_result
+            <<"\nPM result: 0x"<<d.pm_result<<std::dec
+            <<"\nPM result finished: "<<bool(d.flags&HEN_RELOAD_DIAG_PM_FINISHED)
+            <<"\nMatching mounts: "<<d.matching_mounts<<"\nCached gate probe result: 0x"<<std::hex<<d.probe_result<<std::dec
+            <<"\nCached gate state: "<<d.probe_state<<"\nCached gate wait kind: "<<d.probe_wait_kind
+            <<"\nCached selected waiter mask: "<<d.probe_selected_mask<<"\nCached receive result: "<<d.probe_receive_result<<'\n';
+    }
+    file<<'\n';
     for(const auto& line:ui.events)file<<line<<'\n';
     file.close();
     message(file?"Saved sdmc:/moader/app-diagnostics.txt":"Could not save the diagnostic report.",!file);
@@ -247,7 +291,11 @@ void begin_reload(){
     sync_reload_ui();
 }
 void poll_reload(Result& connection){
-    if(!reload.active)return;
+    if(!modern_hen||foreground)return;
+    if(!reload.active){
+        reload.poll_presence(reload_transport,monotonic_ms());sync_reload_ui();
+        return;
+    }
     reload.poll(reload_transport,monotonic_ms());sync_reload_ui();
     if(reload.ready){
         // Check publication again immediately before opening a fresh session.
@@ -268,19 +316,72 @@ void poll_reload(Result& connection){
     }else if(!reload.active){message(reload.detail,true);}
 }
 
+bool allow_hbmenu_return(){
+    if(foreground)return reload.can_exit();
+    // Framebuffer initialization can fail before establish(). Obtain protocol
+    // identity here without constructing a foreground writer or submitting work.
+    if(!hen_protocol_known){
+        HenStatus status{};Result rc=open_hen();
+        if(R_SUCCEEDED(rc))rc=henGetStatus(&hen,&status);
+        if(R_FAILED(rc)){
+            reload.observe_manager(0,false);sync_reload_ui();return false;
+        }
+        hen_protocol_known=true;modern_hen=status.protocol_version>=7;
+        if(!modern_hen)reload.observe_manager(0,true);
+    }
+    const bool allowed=modern_hen?reload.inspect_exit(reload_transport,monotonic_ms()):reload.can_exit();
+    sync_reload_ui();return allowed;
+}
+
+int framebuffer_failure(PadState& pad,Framebuffer* framebuffer){
+    bool allowed=allow_hbmenu_return();
+    // No framebuffer is available for recovery text. Retain the same bounded
+    // query-only monitoring and controller retry instead of an unsafe return.
+    // Forced system termination remains outside this voluntary-exit guard.
+    while(!allowed&&appletMainLoop()){
+        padUpdate(&pad);const auto down=padGetButtonsDown(&pad);
+        if(down&(HidNpadButton_Y|HidNpadButton_Plus))allowed=allow_hbmenu_return();
+        else if(modern_hen){
+            reload.poll_presence(reload_transport,monotonic_ms());sync_reload_ui();
+            if(reload.can_exit())allowed=allow_hbmenu_return();
+        }
+        svcSleepThread(16000000);
+    }
+    if(serviceIsActive(&service))serviceClose(&service);
+    if(serviceIsActive(&hen))serviceClose(&hen);
+    if(framebuffer)framebufferClose(framebuffer);
+    return 1;
+}
+
 }
 int main(){
-    Framebuffer framebuffer{};Result rc=framebufferCreate(&framebuffer,nwindowGetDefault(),1280,720,PIXEL_FORMAT_RGBA_8888,2);
-    if(R_FAILED(rc))return 1;
-    rc=framebufferMakeLinear(&framebuffer);if(R_FAILED(rc)){framebufferClose(&framebuffer);return 1;}
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
+    Framebuffer framebuffer{};Result rc=framebufferCreate(&framebuffer,nwindowGetDefault(),1280,720,PIXEL_FORMAT_RGBA_8888,2);
+    if(R_FAILED(rc))return framebuffer_failure(pad,nullptr);
+    rc=framebufferMakeLinear(&framebuffer);if(R_FAILED(rc))return framebuffer_failure(pad,&framebuffer);
     moader_ui::Renderer renderer;Result connection=establish();if(R_SUCCEEDED(connection))connection=refresh();
     if(R_FAILED(connection)){ui.connected=false;if(modern_hen)message(reload.detail,true);else error(connection);}
     u64 next_refresh=0,last_tick=armGetSystemTick(),repeat_at=0;u64 previous_direction=0;
+    // System termination remains under the OS's control. The guards below
+    // cover this app's voluntary return paths; they cannot repair Loader or
+    // guarantee safety if the system forcibly terminates the host process.
     while(appletMainLoop()){
         padUpdate(&pad);u64 down=padGetButtonsDown(&pad);const u64 held=padGetButtons(&pad),now=armGetSystemTick();
-        if(down&HidNpadButton_Plus)break;
         poll_reload(connection);
+        if(down&HidNpadButton_Plus){
+            if(allow_hbmenu_return())break;
+            message(reload.shutdown_required()?
+                "Loader recovery is unverified. Save Debug and a screen, then hold POWER for 20 seconds to shut down.":
+                reload.exit_state_unknown()?"Loader state is unverified. Press Y to query it again; returning to hbmenu is paused.":
+                "Reload is in progress. Wait for its result before returning to hbmenu.",true);
+        }
+        if((down&HidNpadButton_Y)&&modern_hen&&!reload.can_exit()){
+            reload.resume(monotonic_ms());poll_reload(connection);
+            message(reload.shutdown_required()?
+                "Loader recovery remains unverified. Save Debug and a screen, then force the console off with POWER.":
+                "Checking the existing Loader state. No new reload request was sent.",reload.shutdown_required());
+            down&=~u64(HidNpadButton_Y);
+        }
         constexpr u64 directions=HidNpadButton_Up|HidNpadButton_Down|HidNpadButton_Left|HidNpadButton_Right;
         const u64 direction=held&directions;
         if(direction!=previous_direction){repeat_at=now+armNsToTicks(350000000);previous_direction=direction;}
@@ -345,7 +446,13 @@ int main(){
             if(now>=next_refresh){next_refresh=now+armNsToTicks(2000000000);update(connection);}
         }
         u32 stride=0;auto* pixels=static_cast<uint32_t*>(framebufferBegin(&framebuffer,&stride));
-        if(!pixels)break;
+        if(!pixels){
+            if(reload.can_exit()&&allow_hbmenu_return())break;
+            // A missing framebuffer is not permission to return through an
+            // unverified Loader. Keep report/input handling alive for recovery.
+            svcSleepThread(16000000);
+            continue;
+        }
         renderer.draw(pixels,1280,720,stride,ui,float(armTicksToNs(now-last_tick))/1000000000.f);last_tick=now;
         if((down&HidNpadButton_Minus)||(local_actions&moader_ui::SaveScreenshot))save_screenshot(pixels,stride);
         framebufferEnd(&framebuffer);

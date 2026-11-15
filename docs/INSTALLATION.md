@@ -1,6 +1,6 @@
 # Install Moader
 
-Use **[v0.1.0-dev.5](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.5)** for the matching-card correction and cooperative plugin reload. It includes the earlier library recovery and ZIP fixes. The app, resident, HEN and bootstrap are rebuilt; the native filesystem hook is unchanged. The app version remains `0.1.0-dev`. Read the current [validation scope](VALIDATION.md) before installation.
+**Unreleased candidate:** v0.1.0-dev.5 has not been published. Its first plugin-reload attempt failed on the console; the offline repair still needs device testing. Do not install this branch or run its device commands. The instructions below describe the intended matched kit. For the published v0.1.0-dev.4 release, use [that tag's installation guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md). Read the current [validation scope](VALIDATION.md).
 
 | Situation | What to do |
 | --- | --- |
@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download [Moader-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-v0.1.0-dev.5.zip).
+1. Once the candidate is accepted and published, download its matching `Moader-v0.1.0-dev.5.zip`.
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.
@@ -21,7 +21,7 @@ If the matching resident service is running, the app connects to it. Otherwise i
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.0-dev.5.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-backend-v0.1.0-dev.5.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+Once accepted and published, extract the matching `Moader-backend-v0.1.0-dev.5.zip`. Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
 
 Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
 

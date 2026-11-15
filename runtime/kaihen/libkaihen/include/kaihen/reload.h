@@ -117,6 +117,63 @@ typedef struct {
     u64 operation_id;
 } HenReloadCapabilities;
 
+#define HEN_RELOAD_DIAG_PARK_ATTEMPTED (1u << 0)
+#define HEN_RELOAD_DIAG_PARK_COMPLETED (1u << 1)
+#define HEN_RELOAD_DIAG_PM_CREATED (1u << 2)
+#define HEN_RELOAD_DIAG_PM_STARTED (1u << 3)
+#define HEN_RELOAD_DIAG_PM_FINISHED (1u << 4)
+#define HEN_RELOAD_DIAG_PM_JOINED (1u << 5)
+#define HEN_RELOAD_DIAG_PROBE_VALID (1u << 6)
+#define HEN_RELOAD_DIAG_RESTORE_ATTEMPTED (1u << 7)
+#define HEN_RELOAD_DIAG_PRIMARY_CAPTURED (1u << 8)
+
+typedef enum {
+    HenReloadLaunchStage_None = 0,
+    HenReloadLaunchStage_ParkBegin = 1,
+    HenReloadLaunchStage_ParkPoll = 2,
+    HenReloadLaunchStage_PmCreate = 3,
+    HenReloadLaunchStage_PmStart = 4,
+    HenReloadLaunchStage_RequestWait = 5,
+    HenReloadLaunchStage_RequestPoll = 6,
+    HenReloadLaunchStage_MountMatch = 7,
+    HenReloadLaunchStage_Exchange = 8,
+    HenReloadLaunchStage_Restore = 9,
+    HenReloadLaunchStage_PmJoin = 10,
+    HenReloadLaunchStage_ProcessStart = 11,
+    HenReloadLaunchStage_Handoff = 12,
+    HenReloadLaunchStage_Health = 13,
+} HenReloadLaunchStage;
+
+/* Command 27, input u64 operation_id. Cached memory only: querying never
+ * performs filesystem, RO-memory or gate operations. Fields have meaning
+ * only with their associated flags. wait_kind: 0 unknown, 1 original,
+ * 2 park, 3 other. selected_mask identifies the seven cached waiter slots.
+ * PROBE_VALID means only that the cached read succeeded, not that gate
+ * restoration or process safety is established. The primary gate step is
+ * captured BEFORE restoration changes it. Once PRIMARY_CAPTURED is set,
+ * primary_result (including zero) is frozen; later failures are reported in
+ * HenPluginReloadStatus.result. Before capture it may describe a preflight
+ * failure. PM flags are historical
+ * milestones, not proof that a candidate is currently alive or absent.
+ * Existing HenPluginReloadStatus remains 56 bytes. */
+typedef struct {
+    u32 version;
+    u32 flags;
+    u64 operation_id;
+    u32 stage;
+    u32 primary_gate_step;
+    u32 restoration_gate_step;
+    u32 matching_mounts;
+    Result primary_result;
+    Result restoration_result;
+    Result pm_result;
+    Result probe_result;
+    u32 probe_state;
+    u32 probe_wait_kind;
+    u32 probe_selected_mask;
+    u32 probe_receive_result;
+} HenPluginReloadDiagnostics;
+
 #ifdef __cplusplus
 static_assert(sizeof(KaihenPluginLifecycleRequest) == 16);
 static_assert(sizeof(KaihenPluginLifecycleReply) == 32);
@@ -124,4 +181,5 @@ static_assert(sizeof(HenPluginInfo) == 40);
 static_assert(sizeof(HenPluginReloadRequest) == 96);
 static_assert(sizeof(HenPluginReloadStatus) == 56);
 static_assert(sizeof(HenReloadCapabilities) == 24);
+static_assert(sizeof(HenPluginReloadDiagnostics) == 64);
 #endif

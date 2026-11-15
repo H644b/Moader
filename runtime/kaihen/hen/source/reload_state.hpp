@@ -3,6 +3,7 @@
 #include <cstring>
 #include <switch/result.h>
 #include "../../libkaihen/include/kaihen/reload.h"
+#include "reload_diagnostics.hpp"
 
 namespace reload {
 // Dedicated results, independent of libnx's evolving error enum.
@@ -14,6 +15,25 @@ constexpr Result Invalid = MAKERESULT(345, 5);
 constexpr Result Exhausted = MAKERESULT(345, 6);
 constexpr Result Deadline = MAKERESULT(345, 7);
 constexpr Result Identity = MAKERESULT(345, 8);
+
+inline Result preservePrimary(Result primary, Result later) {
+    return R_FAILED(primary) ? primary : later;
+}
+
+// Performs the real PM completion policy with injectable kernel/clock calls.
+// On timeout/wait/close failure it retains all ownership: joined() is never
+// called, and an earlier gate error wins over the later cleanup error.
+template <typename Io>
+Result completePmLaunch(Io& io, Result primary, u64 timeout) {
+    const u64 start = io.now();
+    while (!io.finished() && !io.deadline(start, timeout) && !io.cancelled()) io.pause();
+    if (!io.finished()) return preservePrimary(primary, Deadline);
+    Result result = io.wait();
+    if (R_SUCCEEDED(result)) result = io.close();
+    if (R_FAILED(result)) return preservePrimary(primary, result);
+    io.joined();
+    return primary;
+}
 
 inline bool validName(const char name[64]) {
     for (unsigned i = 0; i != 64; ++i) {
@@ -29,14 +49,15 @@ inline bool validName(const char name[64]) {
 // finished must be published before releasing that lock, closing the window
 // between checking cancellation and exposing completion.
 inline void finalizeWorker(bool eligible, bool cancelled, bool& success, bool& quarantined,
-                           HenPluginReloadStatus& status) {
+                           HenPluginReloadStatus& status, HenPluginReloadDiagnostics* diagnostics = nullptr) {
     quarantined |= cancelled;
     success = eligible && !quarantined;
-    if (cancelled) status.result = Deadline;
+    if (cancelled) status.result = preservePrimary(status.result, Deadline);
     if (quarantined) {
         status.phase = HenPluginReloadPhase_Quarantined;
         status.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
     }
+    if (diagnostics && R_FAILED(status.result)) recordUncapturedPrimary(*diagnostics, status.result);
 }
 
 inline bool publishable(const HenPluginReloadStatus& status, bool success, bool quarantined) {
@@ -61,6 +82,7 @@ class Journal {
         u64 caller = 0;
         HenPluginReloadRequest request = {};
         HenPluginReloadStatus status = {};
+        HenPluginReloadDiagnostics diagnostics = {};
     };
     struct Caller { u64 pid = 0; u64 high = 0; };
     static constexpr unsigned Capacity = 8;
@@ -106,6 +128,9 @@ class Journal {
         entry.status.generation = request.expected_generation;
         entry.status.phase = HenPluginReloadPhase_Preparing;
         entry.status.flags = HEN_PLUGIN_RELOAD_BUSY;
+        entry.diagnostics.version = 1;
+        entry.diagnostics.operation_id = entry.status.operation_id;
+        entry.diagnostics.probe_result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
         active = serial;
         *out = &entry;
         return 0;
