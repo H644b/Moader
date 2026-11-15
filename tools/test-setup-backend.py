@@ -305,7 +305,7 @@ class SourcesOnlyTests(unittest.TestCase):
 class WrapperTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='Moader spaces '); self.addCleanup(self.temp.cleanup)
-        self.root = pathlib.Path(self.temp.name)
+        self.root = pathlib.Path(self.temp.name).resolve()
         self.node = self.root / 'mac2jb Node 24/node'; self.node.parent.mkdir(); self.node.write_bytes(b'fake node'); self.node.chmod(0o700)
         self.run = self.root / 'runs/switch2-AbC123'; self.run.mkdir(parents=True)
         self.rpc = self.root / 'untrusted rpc/rpc.cjs'
@@ -360,6 +360,155 @@ class WrapperTests(unittest.TestCase):
         manifest = self.root / 'build/install/prepared-abc/manifest.json'
         with self.assertRaisesRegex(ValueError, 'symlink'):
             wrapper.prepared_manifest(wrapper.PREFIX + str(manifest) + wrapper.SUFFIX, self.root)
+
+
+class DirectRunTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='Moader direct POSIX '); self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name).resolve()
+        self.node = self.root / 'Linux Node 24/bin/node'; self.node.parent.mkdir(parents=True)
+        self.node.write_bytes(b'fake POSIX node'); self.node.chmod(0o700)
+        self.run = self.root / 'mnt/c/Example Projects/ns2jb/runs/switch2-AbC123'; self.run.mkdir(parents=True)
+        self.manifest = self.root / 'build/install/prepared-new/manifest.json'; self.manifest.parent.mkdir(parents=True); self.manifest.write_text('{}')
+        self.calls = []
+        self.output = wrapper.PREFIX + str(self.manifest) + wrapper.SUFFIX + '\n'
+
+    def execute(self, command, **kwargs):
+        self.calls.append(command); self.assertNotIn('shell', kwargs)
+        if command[1:] == ['--version']:
+            return subprocess.CompletedProcess(command, 0, 'v24.14.0\n', '')
+        if command[-1] == '--check':
+            return subprocess.CompletedProcess(command, 0, self.output, '')
+        return subprocess.CompletedProcess(command, 0)
+
+    def invoke(self, *flags):
+        return wrapper.main(['--root', str(self.root), '--run-dir', str(self.run), *flags])
+
+    def test_linux_bare_node_default_preserved_and_only_local_checks_execute(self):
+        (self.run / 'rpc.cjs').write_text('must never run'); (self.run / 'run.cjs').write_text('must never run')
+        stale = self.root / 'build/install/manifest.json'; stale.write_text('stale mutable pointer')
+        with patch.object(wrapper.sys, 'platform', 'linux'), patch.object(wrapper.shutil, 'which', return_value=str(self.node)) as which, patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()) as output:
+            command = self.invoke('--prepare')
+        which.assert_called_once_with('node')
+        self.assertEqual(command, [str(self.node), str(self.root / 'tools/install-moader.cjs'), '--prepared', str(self.manifest), str(self.run)])
+        import shlex
+        self.assertEqual(shlex.split(output.getvalue().splitlines()[-1]), command)
+        self.assertEqual(len(self.calls), 3)
+        self.assertEqual(self.calls[0], [str(self.node), '--version'])
+        self.assertEqual(self.calls[1], [sys.executable, str(self.root / 'tools/setup-backend.py'), '--root', str(self.root), '--node', str(self.node)])
+        self.assertEqual(self.calls[2], [str(self.node), str(self.root / 'tools/install-moader.cjs'), '--check'])
+        self.assertTrue(all(str(self.run) not in command and '--prepared' not in command for command in self.calls))
+        self.assertEqual(stale.read_text(), 'stale mutable pointer')
+
+    def test_explicit_node_path_with_spaces_bypasses_path_search(self):
+        with patch.object(wrapper.shutil, 'which', side_effect=AssertionError()), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
+            command = self.invoke('--node', str(self.node), '--prepare')
+        self.assertEqual(command[0], str(self.node)); self.assertEqual(self.calls[0][0], str(self.node)); self.assertEqual(self.calls[2][0], str(self.node))
+
+    def test_relative_run_and_node_paths_use_invoking_directory(self):
+        relative_run = self.run.relative_to(self.root).as_posix()
+        relative_node = './' + self.node.relative_to(self.root).as_posix()
+        with patch.object(wrapper.pathlib.Path, 'cwd', return_value=self.root), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
+            command = wrapper.main(['--root', str(self.root), '--run-dir', relative_run, '--node', relative_node, '--prepare'])
+        self.assertEqual(command[0], str(self.node)); self.assertEqual(command[-1], str(self.run))
+
+    def test_parse_only_resolves_paths_without_executing_any_command(self):
+        with patch.object(wrapper.shutil, 'which', return_value=str(self.node)), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), patch('sys.stdout', new=io.StringIO()) as output:
+            self.assertIsNone(self.invoke())
+        self.assertIn(str(self.node), output.getvalue()); self.assertIn(str(self.run), output.getvalue())
+
+    def test_legitimate_posix_node_symlink_is_preserved(self):
+        selected = self.node.parent / 'node24'; selected.symlink_to(self.node)
+        with patch.object(wrapper.shutil, 'which', return_value=str(selected)), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
+            command = self.invoke('--node', 'node24', '--prepare')
+        self.assertEqual(command[0], str(selected)); self.assertEqual(self.calls[0][0], str(selected)); self.assertEqual(self.calls[2][0], str(selected))
+
+    def test_conflicting_routes_or_status_node_override_fail_without_execution(self):
+        import shlex
+        status = shlex.join([str(self.node), str(self.root / 'rpc.cjs'), str(self.run), 'status'])
+        variants = [['--run-dir', str(self.run), '--status-command', status], ['--status-command', status, '--node', str(self.node)], []]
+        for flags in variants:
+            with self.subTest(flags=flags), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), patch('sys.stderr', new=io.StringIO()), self.assertRaises(SystemExit) as error:
+                wrapper.main(flags)
+            self.assertEqual(error.exception.code, 2)
+
+    def test_missing_not_executable_and_missing_path_node_are_actionable(self):
+        not_executable = self.node.parent / 'not-executable'; not_executable.write_text('not executable')
+        for node in (str(self.node.parent / 'missing'), str(not_executable)):
+            with self.subTest(node=node), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'executable.*Node.js 24'):
+                wrapper.prepare(self.root, node, self.run)
+        with patch.object(wrapper.shutil, 'which', return_value=None), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'not found on PATH'):
+            wrapper.prepare(self.root, 'node', self.run)
+
+    def test_wrong_node_versions_fail_before_setup_without_retry(self):
+        for version in ('v22.0.0', 'v26.11.1', 'not node', ''):
+            with self.subTest(version=version), patch.object(wrapper.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, version + '\n', '')) as execute, self.assertRaisesRegex(ValueError, 'Node.js 24'):
+                wrapper.prepare(self.root, str(self.node), self.run)
+            self.assertEqual(execute.call_count, 1)
+
+    def test_node_launch_failure_is_actionable_and_not_retried(self):
+        for error in (OSError('Exec format error'), subprocess.CalledProcessError(1, [str(self.node), '--version'])):
+            with self.subTest(error=error), patch.object(wrapper.subprocess, 'run', side_effect=error) as execute, self.assertRaisesRegex(ValueError, 'working POSIX Node.js 24'):
+                wrapper.prepare(self.root, str(self.node), self.run)
+            self.assertEqual(execute.call_count, 1)
+
+    def test_wsl_windows_node_executables_and_aliases_fail_without_execution(self):
+        windows_node = self.root / 'mnt/c/Program Files/nodejs/node.exe'; windows_node.parent.mkdir(parents=True); windows_node.write_bytes(b'MZfake executable'); windows_node.chmod(0o700)
+        alias = self.node.parent / 'windows-node'; alias.symlink_to(windows_node)
+        renamed = self.node.parent / 'renamed-node'; renamed.write_bytes(b'MZfake executable'); renamed.chmod(0o700)
+        for node in (str(windows_node), str(alias), str(renamed), '/mnt/c/Program Files/nodejs/NODE.EXE', 'node.exe'):
+            with self.subTest(node=node), patch.object(wrapper.sys, 'platform', 'linux'), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'WSL install Linux Node.js 24'):
+                wrapper.prepare(self.root, node, self.run)
+        with patch.object(wrapper.shutil, 'which', return_value=str(windows_node)), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'WSL install Linux Node.js 24'):
+            wrapper.prepare(self.root, 'node', self.run)
+
+    def test_windows_paths_native_windows_and_controls_are_refused(self):
+        for value in ('C:\\Users\\Example\\node.exe', 'C:/Example/Tools/node.exe', '\\\\host\\share\\node'):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'POSIX path'):
+                wrapper.resolve_node(value)
+            with self.assertRaisesRegex(ValueError, 'POSIX path'):
+                wrapper.run_directory(value)
+        for character in ('\n', '\r', '\t', '\0', '\x7f'):
+            with self.subTest(character=repr(character)), self.assertRaisesRegex(ValueError, 'control characters'):
+                wrapper.run_directory(str(self.run) + character)
+            with self.assertRaisesRegex(ValueError, 'control characters'):
+                wrapper.resolve_node(str(self.node) + character)
+        with patch.object(wrapper.sys, 'platform', 'win32'), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'Native Windows is unsupported'):
+            self.invoke('--node', str(self.node), '--prepare')
+
+    def test_invalid_missing_and_non_directory_runs_fail_before_node_execution(self):
+        file = self.root / 'switch2-test'; file.write_text('not a directory')
+        for value in (self.root / 'switch2-Other', file, self.root, ''):
+            with self.subTest(value=value), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaises(ValueError):
+                wrapper.run_directory(value)
+
+    def test_run_symlinks_and_symlink_parent_traversal_are_refused(self):
+        leaf = self.root / 'switch2-safe'; leaf.symlink_to(self.run, target_is_directory=True)
+        parent = self.root / 'run-parent'; parent.symlink_to(self.run.parent, target_is_directory=True)
+        outside = self.root / 'other'; outside.mkdir()
+        lexical_link = self.root / 'link'; lexical_link.symlink_to(outside, target_is_directory=True)
+        valid = self.root / 'switch2-normal'; valid.mkdir()
+        for path in (leaf, parent / self.run.name, self.root / 'link/../switch2-normal'):
+            with self.subTest(path=path), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'symlink'):
+                wrapper.prepare(self.root, str(self.node), path)
+        with patch.object(wrapper.pathlib.Path, 'cwd', return_value=self.root), self.assertRaisesRegex(ValueError, 'symlink'):
+            wrapper.run_directory('link/../switch2-normal')
+
+    def test_direct_route_rejects_mutable_pointer_output(self):
+        self.output = wrapper.PREFIX + str(self.root / 'build/install/manifest.json') + wrapper.SUFFIX
+        with patch.object(wrapper.subprocess, 'run', side_effect=self.execute), self.assertRaisesRegex(ValueError, 'unique'):
+            wrapper.prepare(self.root, str(self.node), self.run)
+        self.assertEqual(len(self.calls), 3)
+
+    def test_setup_failure_stops_without_installer_or_automatic_retry(self):
+        def fail_setup(command, **kwargs):
+            self.calls.append(command)
+            if command[1:] == ['--version']:
+                return subprocess.CompletedProcess(command, 0, 'v24.14.0\n', '')
+            raise subprocess.CalledProcessError(1, command)
+        with patch.object(wrapper.subprocess, 'run', side_effect=fail_setup), self.assertRaises(subprocess.CalledProcessError):
+            wrapper.prepare(self.root, str(self.node), self.run)
+        self.assertEqual(len(self.calls), 2)
 
 
 if __name__ == '__main__':

@@ -65,11 +65,29 @@ For a **game-only** crash, the separate resident service/FS runtime is expected 
 
 Deliberate crash recovery was not tested. FS, HEN or system crashes—and a console reboot—can invalidate the backend context and require fresh qualified setup. If the service is unavailable, preserve the error/report and establish the current console state before choosing recovery.
 
+## Direct ns2jb never reaches the held FS-ready state
+
+Check the [pinned upstream setup](https://gitlab.com/kurumuz/ns2jb/-/blob/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/README.md) and [Route A](INSTALLATION.md#route-a-linuxwsl-or-macos-with-ns2jb). Use the fresh printed SmileBASIC `V=START(...)` and run folder, not an earlier run. The expected bootstrap **Out of memory** step is described upstream. Moader requires **4/4 verified** plus the held RPC/FS-ready state; an earlier progress message is insufficient.
+
+Acquisition must use `node run.cjs --rpc YOUR_PC_LAN_IPV4`. A normal run without `--rpc` closes its endpoint after checks. Keep that terminal, SmileBASIC and the host awake/open through installation. Do not run `hen.cjs` first: Moader's combined installer owns HEN bootstrap. Preserve an unexpected failure rather than scripting repeated acquisition attempts.
+
+## WSL cannot bind or the Switch cannot reach the host
+
+Complete [WSL2 networking preparation](INSTALLATION.md#wsl2-networking-before-acquisition) before acquiring a held session. The pinned runner uses the same IPv4 for its local bind and the address printed for SmileBASIC. An `EADDRNOTAVAIL` error can mean the selected Windows LAN IPv4 is absent inside the Linux distro. A NAT port proxy alone does not fix that bind; use a confirmed bindable/reachable mirrored LAN path or native Linux.
+
+Check initial inbound TCP **39380**, host/Linux firewall rules, VPN and LAN isolation. The separate generated RPC bridge is loopback-only and unauthenticated: **never forward it**. Both acquisition and Moader preparation/install must stay inside the same WSL distro.
+
+## The helper rejects Node or the run folder
+
+For direct ns2jb, choose native Linux/macOS **Node 24**, using `--node "$(command -v node)"` or its explicit executable path. In WSL, `node -p 'process.platform'` must print `linux`; Windows `node.exe` is unsupported. For mac2jb, paste the full newly generated four-token status command so the helper retains its exact bundled Node. Do not combine the two helper routes.
+
+Use the actual existing run folder printed by the held runner. The helper accepts relative or absolute POSIX paths, rejects symlinked run paths and expects the upstream `switch2-…` folder name. Use the real nonsymlink path, keep spaces quoted, and avoid Windows drive/UNC paths. A local preparation error does not justify changing native proof flags.
+
 ## Backend setup failed or timed out
 
 Stop and keep the helper's report. A timed-out native operation may already have completed; rerunning the old command can be unsafe. Do not edit proof flags, erase journals, replay old handles or reuse an earlier boot's session to bypass the checks.
 
-Follow the release's supported recovery instructions. Backend installation needs a **fresh verified current-boot mac2jb session** when a new setup is required. Routine mod upload/enable/disable/removal uses the running backend and does not require repeated FS acquisition. See [Installation](INSTALLATION.md).
+Follow the release's supported recovery instructions. Backend installation needs a **fresh verified current-boot held FS session**, from either direct ns2jb or mac2jb, when a new setup is required. Routine mod upload/enable/disable/removal uses the running backend and does not require repeated FS acquisition. See [Installation](INSTALLATION.md).
 
 ## Reporting a problem
 

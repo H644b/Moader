@@ -1,33 +1,45 @@
 # Building and preparing the backend
 
-For installation, use the [v0.1.0-dev release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) and its `Moader-backend-v0.1.0-dev.zip` host kit. The kit supplies the app, resident, patched HEN, corresponding source and portable native runtime assets. Preparation downloads the other required upstream components; no compiler is needed. The separate `Moader-v0.1.0-dev.zip` contains the SD app/plugin files; it is not a complete host kit.
+For installation, use the [v0.1.0-dev.1 host-kit update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1) and `Moader-backend-v0.1.0-dev.1.zip`. App, resident and patched HEN bytes are unchanged; the app still displays `0.1.0-dev`. The original [Moader-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip) supplies the SD app/plugin files, not a complete host kit.
 
-Unzip the host kit, open its `START_HERE.txt`, and enter the outer `Moader-backend-v0.1.0-dev` folder. The commands below run from that directory containing `tools/`. Python 3.10+ is required. Reuse the exact Node 24 executable supplied by mac2jb for installation; a different Node executable can behave differently even when both are installed on the same Mac. Host-only setup checks accept Node 22+.
+The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
+
+Unzip the kit, read `START_HERE.txt`, and enter the outer folder containing `tools/`. Install Python 3.10+. Either acquisition route needs its exact Node **24** for preparation and installation; host-only setup checks accept Node 22+.
 
 ## Prepare the host kit
 
-Obtain a fresh, held mac2jb session using mac2jb's own instructions. Copy its complete status command, which has four tokens: Node executable, `rpc.cjs`, run folder, and `status`. Do not run a new acquisition through Moader.
+Choose either route in [Installation](INSTALLATION.md#start-the-backend-for-this-boot). Both require a fresh, verified held FS session for this boot. Leave SmileBASIC and its acquisition host open. Preparation does not acquire a new session.
 
-Run this and paste that complete status command at the prompt:
+**Direct ns2jb on Linux/WSL or macOS:** follow [Route A](INSTALLATION.md#route-a-linuxwsl-or-macos-with-ns2jb), including its pinned upstream checkout and `node run.cjs --rpc YOUR_PC_LAN_IPV4`. In a second terminal inside the extracted Moader kit, use the newly printed actual run folder and the same native POSIX Node 24:
+
+```sh
+python3 tools/install-from-rpc.py --prepare \
+  --run-dir "/path/to/ns2jb/runs/<actual-run>" \
+  --node "$(command -v node)"
+```
+
+Git is only needed to obtain the acquisition checkout. On WSL, both terminals must use Linux Node in the same distro; complete [LAN networking preparation](INSTALLATION.md#wsl2-networking-before-acquisition) first. No new Linux/WSL device validation is claimed by this documentation.
+
+**mac2jb on macOS:** follow [Route B](INSTALLATION.md#route-b-macos-with-mac2jb). Copy its complete four-token status command, including its bundled Node 24, `rpc.cjs`, run folder and `status`. In macOS's default zsh:
 
 ```sh
 read -r "MOADER_STATUS_COMMAND?Paste the full mac2jb status command: "
 python3 tools/install-from-rpc.py --prepare --status-command "$MOADER_STATUS_COMMAND"
 ```
 
-The prompt syntax above is for macOS's default zsh. In bash, use `read -r -p 'Paste the full mac2jb status command: ' MOADER_STATUS_COMMAND` instead.
+In bash, use `read -r -p 'Paste the full mac2jb status command: ' MOADER_STATUS_COMMAND` for the first line. Do not combine `--status-command` with `--run-dir` or `--node`; the status command supplies mac2jb's exact executable.
 
-Preparation downloads the checksum-pinned official kaiHEN archive and pinned ns2jb source directly from upstream if missing. It verifies the engine tree, fills the required kaiHEN components while retaining the exact patched HEN, checks the kit, and creates a unique local installer snapshot. It creates an empty `vendor/kaihen-mo/programs` directory and does not extract OunceShell or other optional programs. The pasted `rpc.cjs` is never executed. Preparation opens no console connection and prints an installation command that uses the same Node executable and the unique `--prepared` manifest. Review it and run it once when ready to install. Keep the mac2jb session open. Follow [INSTALLATION.md](INSTALLATION.md) for the device workflow and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if anything stops.
+Preparation downloads the checksum-pinned official kaiHEN archive and pinned ns2jb source directly from upstream if missing. It verifies the engine tree, fills the required kaiHEN components while retaining the exact patched HEN, checks the kit, and creates a unique local installer snapshot. It creates an empty `vendor/kaihen-mo/programs` directory and does not extract OunceShell or other optional programs. Neither route executes an acquisition/status script. Preparation opens no console connection and prints an installation command that uses the selected Node executable and unique `--prepared` manifest. Review it, then run that exact command once for privileged installation while the original held session stays open. Do not run `hen.cjs` first; the combined installer owns HEN bootstrap. Follow [INSTALLATION.md](INSTALLATION.md) for the device workflow and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if anything stops.
 
-The ns2jb engine is fetched into `research/sources/ns2jb/engine` on the user's machine. It is omitted from the public repository and kit because an explicit upstream redistribution license has not been identified. Moader does not copy mac2jb runs, credentials or captured device state into the kit.
+The ns2jb engine is fetched into `research/sources/ns2jb/engine` on the user's machine. It is omitted from the public repository and kit because an explicit upstream redistribution license has not been identified. Moader does not copy ns2jb/mac2jb runs, credentials or captured device state into the kit.
 
 To validate already prepared inputs without downloading, compiling or creating an installer snapshot:
 
 ```sh
-python3 tools/setup-backend.py --check --node /absolute/path/to/mac2jb/node
+python3 tools/setup-backend.py --check --node /absolute/path/to/node24
 ```
 
-On a kit that still needs its upstream inputs, run `python3 tools/setup-backend.py --node /absolute/path/to/mac2jb/node` first. The fetched official archive is kept locally at `research/artifacts/kaiHEN-20261114c.zip` for installer qualification; only the pinned engine is retained from the ns2jb source archive. No existing research checkout or copied private state is needed. Setup refuses to replace changed existing inputs. Use a fresh kit directory to change versions.
+On a kit that still needs its upstream inputs, run `python3 tools/setup-backend.py --node /absolute/path/to/node24` first. The fetched official archive is kept locally at `research/artifacts/kaiHEN-20261114c.zip` for installer qualification; only the pinned engine is retained from the ns2jb source archive. No existing research checkout or copied private state is needed. Setup refuses to replace changed existing inputs. Use a fresh kit directory to change versions.
 
 Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnostics if supplied there, are preserved and appear as `bundledPrograms` in check output. The installer includes them. A fresh minimal kit has no such programs; setup never adds OunceShell.
 

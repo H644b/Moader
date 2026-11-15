@@ -6,7 +6,7 @@ Useful information includes the affected Moader version, the component involved,
 
 ## Supported scope
 
-The current release is the **v0.1.0-dev prerelease**. Reports against that release or current `main` are welcome on a best-effort basis. Older development snapshots may require updating before investigation. There is no guaranteed response time, fix deadline, long-term support policy or bounty program.
+The current release is the **v0.1.0-dev.1 prerelease**; its application binaries display `0.1.0-dev`. Reports against that release or current `main` are welcome on a best-effort basis. Older development snapshots may require updating before investigation. There is no guaranteed response time, fix deadline, long-term support policy or bounty program.
 
 Security-sensitive areas include ZIP/path validation, browser pairing and authorization, HTTP request bounds, filesystem catalogue validation, native object lifetime, diagnostic snapshots, installation input qualification and transport uncertainty handling. A successful control request is not evidence that a game modification was applied.
 

@@ -39,6 +39,8 @@ jobs:
           python3 .github/tests/test_host_deps.py
       - name: Scan clean public checkout
         run: python3 tools/check-public-tree.py .
+      - name: Generate GitHub Wiki from public guides
+        run: python3 tools/build-wiki.py
 
   host-core:
     name: Host core and HTTP
@@ -115,6 +117,8 @@ jobs:
           node tools/test-installers.cjs
           node tools/test-control-resident.cjs
           node tools/test-inspect-hen.cjs
+      - name: Direct ns2jb precompiled host-kit preparation with public inputs
+        run: python3 tools/test-ns2jb-host.py --online --node node
       - name: Portable runtime preparation regressions
         run: |
           node runtime/modloader/tests/pchtxt.cjs

@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.0-dev.1 — host setup update
+
+- Direct setup from a held kurumuz ns2jb session on Linux or WSL, alongside the existing mac2jb workflow. The preparation helper accepts a run directory and a local Node 24 executable.
+- Beginner Linux/WSL instructions, including WSL LAN networking requirements, plus the official GitHub Wiki for setup and everyday use.
+- Real Linux host-kit preparation coverage in CI. Console acquisition and WSL-to-console networking remain separate from host checks.
+
+The app still displays `0.1.0-dev`. App, resident service, filesystem runtime and patched HEN binaries are unchanged from the first prerelease; this update changes the host tools and documentation.
+
 ## v0.1.0-dev — prerelease
 
 Initial public development release. Application binaries identify themselves as `0.1.0-dev`.

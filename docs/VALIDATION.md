@@ -2,6 +2,8 @@
 
 The first public prerelease is **v0.1.0-dev**. Its app and resident-service binaries are the same bytes used for the device tests below. This is an early release with a deliberately narrow hardware compatibility claim, rather than a promise that every game or mod updates instantly.
 
+**v0.1.0-dev.1** updates the host setup and documentation. Its app, resident, filesystem runtime and patched HEN bytes are unchanged. The existing hardware results apply to those same binaries; the new direct ns2jb entry path has separate host-only coverage.
+
 ## On a Switch 2
 
 - kaiHEN launched hbmenu and the graphical Moader app. Native Settings, controller navigation, screenshot/report export, six-digit pairing and browser management were exercised.
@@ -35,6 +37,14 @@ Sanitizer-backed checks cover ZIP/path validation, conflicts, persistence and in
 The interfaces were reviewed with the Impeccable workflow. Source-based captures and Chromium checks cover keyboard/controller flows, shared Settings, Credits/Advanced, long names, narrow layouts, reduced motion and the unified logo. The public illustrations use synthetic sample libraries; they are not game captures.
 
 CI repeats the portable checks listed in [the workflow](../.github/workflows/ci.yml). A successful host check does not replace Switch hardware testing.
+
+### Direct ns2jb host preparation
+
+The direct helper accepts a held ns2jb run directory and a local POSIX Node 24 executable, including Linux/WSL paths with spaces. Tests exercise executable selection, Windows-binary rejection in WSL, conflicting routes, symlink traversal, unique immutable snapshots and the preserved mac2jb route.
+
+The Linux CI integration uses the actual precompiled release bytes and pinned upstream downloads in an isolated kit. It checks preparation and read-only validation, then inspects the printed installation commands. Guards reject Node network/RPC access, companion scripts and native installation during preparation. Static run fixtures test the existing FS proof gate separately; they are not live-device evidence.
+
+No direct Linux/WSL console acquisition or installation, WSL LAN/firewall configuration, or native Windows behavior is claimed as hardware-tested. The real-console results above used macOS/mac2jb. Native source SDK provisioning remains the documented Apple Silicon macOS build path; precompiled host-kit setup does not use that SDK.
 
 ## Limits
 
