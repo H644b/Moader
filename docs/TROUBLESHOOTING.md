@@ -75,7 +75,7 @@ Acquisition must use `node run.cjs --rpc YOUR_PC_LAN_IPV4`. A normal run without
 
 Complete [WSL2 networking preparation](INSTALLATION.md#wsl2-networking-before-acquisition) before acquiring a held session. The pinned runner uses the same IPv4 for its local bind and the address printed for SmileBASIC. An `EADDRNOTAVAIL` error can mean the selected Windows LAN IPv4 is absent inside the Linux distro. A NAT port proxy alone does not fix that bind; use a confirmed bindable/reachable mirrored LAN path or native Linux.
 
-Check initial inbound TCP **39380**, host/Linux firewall rules, VPN and LAN isolation. The separate generated RPC bridge is loopback-only and unauthenticated: **never forward it**. Both acquisition and Moader preparation/install must stay inside the same WSL distro.
+Check initial inbound TCP **39380**, host/Linux firewall rules, VPN and LAN isolation. The separate generated kurumuz RPC bridge is loopback-only and unauthenticated: **never forward it**. Both acquisition and Moader preparation/install must stay inside the same WSL distro.
 
 ## The helper rejects Node or the run folder
 
@@ -83,11 +83,19 @@ For direct ns2jb, choose native Linux/macOS **Node 24**, using `--node "$(comman
 
 Use the actual existing run folder printed by the held runner. The helper accepts relative or absolute POSIX paths, rejects symlinked run paths and expects the upstream `switch2-…` folder name. Use the real nonsymlink path, keep spaces quoted, and avoid Windows drive/UNC paths. A local preparation error does not justify changing native proof flags.
 
+## CivSwitch shows Awaiting payload, but Moader is not ready
+
+**Awaiting payload** means the JavaScript loader is listening on the console's TCP9026. Moader's experimental `civ7-s8n` profile requires a verified, current held **FS-only** run from its exact admitted s8n revision. App-only, completed/released, uncertain or already-HEN/RO-frontend runs are different states. HerXayah and mac2jb CivSwitch runs are not admitted by that source pin. See the [CivSwitch guide](CIV7.md).
+
+If the correct FS-only session is already held, preserve it and its original host for qualification; do not reacquire merely because the entrypoint is Civ7. Use `--host-profile civ7-s8n` for both local setup and `install-from-rpc.py --prepare`, with the real run directory and native Node24. A legacy/SmileBASIC prepared snapshot cannot substitute for this profile. Never edit proof or source hashes to override rejection.
+
+The s8n runner takes the **console** IP and sends the bridge to TCP9026; the console then connects back to the computer on TCP39380 by default. Verify both directions. Successful outgoing loader access alone does not establish WSL return-path reachability. Its separate localhost RPC bridge requires a per-run bearer token: keep it local and out of shared logs. Do not run upstream `hen.cjs` first; Moader owns its combined HEN handoff. No Moader Civ7 hardware test is claimed by these troubleshooting steps.
+
 ## Backend setup failed or timed out
 
 Stop and keep the helper's report. A timed-out native operation may already have completed; rerunning the old command can be unsafe. Do not edit proof flags, erase journals, replay old handles or reuse an earlier boot's session to bypass the checks.
 
-Follow the release's supported recovery instructions. Backend installation needs a **fresh verified current-boot held FS session**, from either direct ns2jb or mac2jb, when a new setup is required. Routine mod upload/enable/disable/removal uses the running backend and does not require repeated FS acquisition. See [Installation](INSTALLATION.md).
+Follow the release's supported recovery instructions. Backend installation needs a **verified current-boot held FS session from the selected admitted profile**. The normal routes use SmileBASIC through direct ns2jb or mac2jb; experimental Civ7 uses only the pinned s8n FS-only route. If the correct session is still held, preserve it for qualification rather than acquiring again merely to change host setup. A rejected, completed or uncertain session must not be relabeled or replayed. Routine mod upload/enable/disable/removal uses the running backend and does not require repeated FS acquisition. See [Installation](INSTALLATION.md).
 
 ## Reporting a problem
 

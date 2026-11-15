@@ -3,18 +3,23 @@
 // One fresh FS-capable run, one guarded native installation. Never acquire or retry.
 const fs=require('node:fs/promises'),path=require('node:path');
 const project=path.resolve(__dirname,'..'),check=(value,text)=>{if(!value)throw Error(text);};
-function guardRuntimeTransports(run){
+function guardRuntimeTransports(run,host){
  process.env.NS2_RUN_DIR=path.resolve(run);
+ if(!host){const hosts=require('./host-session.cjs');if(hosts.inferredId(run)==='civ7-s8n')host=hosts.qualifyRun(run,'civ7-s8n');}
  const {guardTransports}=require('./ready-kaihen.cjs'),state={error:null};
+ if(host?.target==='civ7')return require('./host-transport.cjs').install(host,state);
  // Runtime clients load the selected run's sources; SD staging uses the
  // retained engine. Both must stop after either transport becomes uncertain.
- for(const engine of new Set([path.resolve(run),path.join(project,'research/sources/ns2jb/engine')]))
+ for(const engine of new Set(host?.target==='civ7'?[host.runtimeRoot]:[path.resolve(run),path.join(project,'research/sources/ns2jb/engine')]))
   guardTransports({rpc:require(path.join(engine,'shared/rpc.cjs')),endpoint:require(path.join(engine,'switch2/tools/endpoint.cjs'))},state);
  return state;
 }
-async function install(run,directory,prepared){
+async function install(run,directory,prepared,host){
  run=path.resolve(run);directory=path.resolve(directory);
  require('../runtime/modloader/install.cjs').verifiedRun(run);
+ const hosts=require('./host-session.cjs');
+ if(!host){const id=prepared.hostProfile?.id||hosts.inferredId(run);host=id==='civ7-s8n'?hosts.qualifyRun(run,id):{profile:hosts.resolveProfile(),run,target:'smilebasic',runtimeRoot:path.join(project,'research/sources/ns2jb/engine')};}
+ hosts.bind(host);
  await fs.mkdir(directory,{recursive:true});
  const journal=path.join(directory,'moader-runtime.json');
  const record={session:path.basename(run),started:new Date().toISOString(),stage:'preflight',complete:false};
@@ -25,7 +30,7 @@ async function install(run,directory,prepared){
  try{
   const inputs=require('./install-inputs.cjs');
   await inputs.validateMoaderPrepared(prepared);
-  transportGuard=guardRuntimeTransports(run);
+  transportGuard=guardRuntimeTransports(run,host);
   const {captureNative}=require('../runtime/modloader/lib/native-capture.cjs');
   const capture=await phase('qualify fresh FS code and mappings',()=>captureNative(run,directory));
   const profile=JSON.parse(await fs.readFile(path.join(directory,'native-fs/manifest.json')));

@@ -73,4 +73,4 @@ A normal **game-only** software error is expected to leave the resident service 
 
 The catalogue/receipt checks, retained routing objects and snapshot diagnostics have host regression coverage, including sanitizer tests. Host checks complement the bounded hardware validation above; they do not establish compatibility with an untested console environment or mod.
 
-See [Building](BUILDING.md) for the toolchain/tests and [Maintaining](MAINTAINING.md) for backend/release maintenance. End users can use the matched precompiled [release downloads](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1).
+See [Building](BUILDING.md) for the toolchain/tests and [Maintaining](MAINTAINING.md) for backend/release maintenance. End users can use the matched precompiled [release downloads](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2).

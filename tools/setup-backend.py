@@ -7,6 +7,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 NS2JB_REV = '28f03b5895e5569d8fbc35cbed84906b8f0a65b2'
 ENGINE_TREE_SHA = '7003335a2a426a82156c19653be5e61506a05dd02b5d0490c8bcb4516c5c354a'
 ENGINE_URL = f'https://gitlab.com/kurumuz/ns2jb/-/archive/{NS2JB_REV}/ns2jb-{NS2JB_REV}.tar.gz'
+CIV7_REV = '51a804cbce09216e1a42e65929644fd436b4c8bf'
+CIV7_TREE_SHA = 'd83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75'
+CIV7_URL = f'https://github.com/s8n/civ7-fs-kaihen/archive/{CIV7_REV}.tar.gz'
+HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n')
 KAIHEN_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip'
 KAIHEN_SHA = '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967'
 HEN_SHA = 'e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c'
@@ -18,6 +22,15 @@ MAX_ARCHIVE, MAX_FILE, MAX_TOTAL, MAX_ENTRIES = 64 << 20, 32 << 20, 96 << 20, 40
 def require(ok, message):
     if not ok:
         raise ValueError(message)
+
+
+def source_profile(name='smilebasic-kurumuz'):
+    require(name in HOST_PROFILES, 'Unknown host profile; choose smilebasic-kurumuz or civ7-s8n')
+    if name == 'civ7-s8n':
+        return {'id': name, 'revision': CIV7_REV, 'sha256': CIV7_TREE_SHA, 'url': CIV7_URL,
+                'directory': 'research/sources/civ7-fs-kaihen', 'label': 'Civ7 s8n source'}
+    return {'id': name, 'revision': NS2JB_REV, 'sha256': ENGINE_TREE_SHA, 'url': ENGINE_URL,
+            'directory': 'research/sources/ns2jb/engine', 'label': 'ns2jb engine'}
 
 
 def digest(data):
@@ -70,9 +83,11 @@ def tree_files(root):
     return result
 
 
-def engine_files(archive):
+def engine_files(archive, host_profile='smilebasic-kurumuz'):
     selected, total = {}, 0
-    prefixes = (f'ns2jb-{NS2JB_REV}/engine/', 'engine/', 'research/sources/ns2jb/engine/')
+    profile = source_profile(host_profile)
+    prefixes = ((f'civ7-fs-kaihen-{CIV7_REV}/', '') if host_profile == 'civ7-s8n' else
+                (f'ns2jb-{NS2JB_REV}/engine/', 'engine/', 'research/sources/ns2jb/engine/'))
     if zipfile.is_zipfile(archive):
         entries = zip_files(archive)
     else:
@@ -95,10 +110,27 @@ def engine_files(archive):
         prefix = next((prefix for prefix in prefixes if name.startswith(prefix)), None)
         if prefix is not None:
             relative = name[len(prefix):]; safe_name(relative)
+            if host_profile == 'civ7-s8n' and not (relative.startswith(('engine/', 'targets/civ7/')) or relative == 'bridge/civ_bridge.js'):
+                continue
             require(relative not in selected, 'Duplicate pinned engine path')
             selected[relative] = data
-    require(selected and tree_sha(selected) == ENGINE_TREE_SHA, 'Pinned ns2jb engine content differs; no fallback to another revision')
+    require(selected and tree_sha(selected) == profile['sha256'], 'Pinned ' + profile['label'] + ' content differs; no fallback to another revision')
     return selected
+
+
+def profile_files(root, profile):
+    directory = safe_destination(root, profile['directory'])
+    if profile['id'] != 'civ7-s8n':
+        return tree_files(directory)
+    # A full upstream checkout can coexist with the selected closure. Inspect
+    # every file in executable/profile subtrees, not its .git, runs or README.
+    result = {}
+    for part in ('engine', 'targets/civ7'):
+        target = safe_destination(root, profile['directory'] + '/' + part)
+        result.update({part + '/' + name: data for name, data in tree_files(target).items()})
+    bridge = safe_destination(root, profile['directory'] + '/bridge/civ_bridge.js')
+    result['bridge/civ_bridge.js'] = regular(bridge).read_bytes()
+    return result
 
 
 def download(url, target, expected=None, offline=False):
@@ -212,12 +244,13 @@ def bundled_programs(root, allow_missing=False):
     return result
 
 
-def check_root(root, node='node'):
+def check_root(root, node='node', host_profile='smilebasic-kurumuz'):
+    profile = source_profile(host_profile)
     proof(root)
     archive = checked_archive(root / 'research/artifacts/kaiHEN-20261114c.zip', KAIHEN_SHA)
     shipped = zip_files(archive)
-    engine = tree_files(root / 'research/sources/ns2jb/engine')
-    require(tree_sha(engine) == ENGINE_TREE_SHA, 'Local engine is not the pinned source tree')
+    engine = profile_files(root, profile)
+    require(tree_sha(engine) == profile['sha256'], 'Local engine is not the pinned source tree')
     for name in KAIHEN_COMPONENTS:
         require(name in shipped, 'Incomplete official kaiHEN archive: ' + name)
         data = shipped[name]
@@ -226,48 +259,50 @@ def check_root(root, node='node'):
     bundled = bundled_programs(root)
     built = {name: regular(root / name).read_bytes() for name in PROGRAM_ENTRIES}; validate_programs(built)
     version = node_check(root, node)
-    return {'readyForInstallerCheck': True, 'consoleConnected': False, 'node': version, 'engineRevision': NS2JB_REV,
-            'engineTreeSha256': ENGINE_TREE_SHA, 'henSha256': HEN_SHA, 'bundledPrograms': sorted(bundled),
+    return {'readyForInstallerCheck': True, 'consoleConnected': False, 'node': version, 'hostProfile': profile['id'], 'engineRevision': profile['revision'],
+            'engineTreeSha256': profile['sha256'], 'henSha256': HEN_SHA, 'bundledPrograms': sorted(bundled),
             'programs': {name: {'bytes': len(data), 'sha256': digest(data)} for name, data in built.items()}}
 
 
 def setup_sources(root, args):
-    target = safe_destination(root, 'research/sources/ns2jb/engine')
+    profile = source_profile(args.host_profile)
+    target = safe_destination(root, profile['directory'])
     written = 0
     if target.exists():
-        engine = tree_files(target)
-        require(tree_sha(engine) == ENGINE_TREE_SHA, 'Existing engine differs; use a separate clean checkout')
+        engine = profile_files(root, profile)
+        require(tree_sha(engine) == profile['sha256'], 'Existing engine differs; use a separate clean checkout')
     else:
         with tempfile.TemporaryDirectory(prefix='moader-engine-source-') as temporary:
-            archive = args.engine_archive or download(ENGINE_URL, pathlib.Path(temporary) / 'engine.tar.gz', offline=args.offline)
+            archive = args.engine_archive or download(profile['url'], pathlib.Path(temporary) / 'engine.tar.gz', offline=args.offline)
             regular(archive)
             require(archive.stat().st_size <= MAX_ARCHIVE, 'Source archive exceeds size bound')
-            engine = engine_files(archive)
-            written = publish_new(root, {'research/sources/ns2jb/engine/' + name: data for name, data in engine.items()})
-        require(tree_sha(tree_files(target)) == ENGINE_TREE_SHA, 'Published engine differs from pinned source tree')
-    return {'mode': 'sources-only', 'consoleConnected': False, 'engineRevision': NS2JB_REV,
-            'engineTreeSha256': ENGINE_TREE_SHA, 'engineFiles': len(engine),
+            engine = engine_files(archive, args.host_profile)
+            written = publish_new(root, {profile['directory'] + '/' + name: data for name, data in engine.items()})
+        require(tree_sha(profile_files(root, profile)) == profile['sha256'], 'Published engine differs from pinned source tree')
+    return {'mode': 'sources-only', 'consoleConnected': False, 'hostProfile': profile['id'], 'engineRevision': profile['revision'],
+            'engineTreeSha256': profile['sha256'], 'engineFiles': len(engine),
             'engineBytes': sum(map(len, engine.values())), 'newFiles': written}
 
 
 def setup(args):
+    profile = source_profile(args.host_profile)
     require(not (args.check and args.build), '--check cannot build')
     if args.sources_only:
         conflicts = [name.replace('_', '-') for name in ('check', 'build', 'node', 'release_manifest', 'kaihen_archive', 'programs_archive', 'programs_sha256', 'hen_binary') if getattr(args, name) not in (None, False)]
-        require(not conflicts, '--sources-only accepts only --root, --offline and --engine-archive; conflicting options: ' + ', '.join('--' + name for name in conflicts))
+        require(not conflicts, '--sources-only accepts only --root, --host-profile, --offline and --engine-archive; conflicting options: ' + ', '.join('--' + name for name in conflicts))
         return setup_sources(args.root.resolve(), args)
     root = args.root.resolve(); proof(root)
     if args.check:
-        return check_root(root, args.node or 'node')
+        return check_root(root, args.node or 'node', args.host_profile)
     if args.build:
         sdk(root)  # Reject unsupported/missing toolchains before any download or write.
     manifest_file = args.release_manifest or root / 'release/backend-inputs.json'
     manifest = json.loads(manifest_file.read_text()) if manifest_file.exists() else {'schema': 1}
     require(manifest.get('schema') == 1, 'Unsupported public backend-input manifest')
     # Existing source trees are never replaced, even by a correct download.
-    engine_target = root / 'research/sources/ns2jb/engine'
+    engine_target = safe_destination(root, profile['directory'])
     if engine_target.exists():
-        require(tree_sha(tree_files(engine_target)) == ENGINE_TREE_SHA, 'Existing engine differs; use a separate clean checkout')
+        require(tree_sha(profile_files(root, profile)) == profile['sha256'], 'Existing engine differs; use a separate clean checkout')
     existing_archive = root / 'research/artifacts/kaiHEN-20261114c.zip'
     if existing_archive.exists():
         checked_archive(existing_archive, KAIHEN_SHA)
@@ -278,10 +313,10 @@ def setup(args):
         require(all(name in shipped for name in KAIHEN_COMPONENTS), 'Incomplete official kaiHEN archive')
         bundled_programs(root, allow_missing=True)
         if engine_target.exists():
-            engine = tree_files(engine_target)
+            engine = profile_files(root, profile)
         else:
-            engine_archive = args.engine_archive or download(ENGINE_URL, work / 'engine.tar.gz', offline=args.offline)
-            engine = engine_files(engine_archive)
+            engine_archive = args.engine_archive or download(profile['url'], work / 'engine.tar.gz', offline=args.offline)
+            engine = engine_files(engine_archive, args.host_profile)
         hen, app = None, None
         if args.build:
             hen, app = build_inputs(root, work)
@@ -305,24 +340,25 @@ def setup(args):
                 program_archive = args.programs_archive or download(release.get('url', ''), work / 'programs.zip', expected, args.offline)
                 checked_archive(program_archive, expected); app = programs(zip_files(program_archive))
         files = {'research/artifacts/kaiHEN-20261114c.zip': archive.read_bytes(), **app}
-        files.update({'research/sources/ns2jb/engine/' + name: data for name, data in engine.items()})
+        files.update({profile['directory'] + '/' + name: data for name, data in engine.items()})
         # Optional programs such as OunceShell are deliberately not extracted.
         files.update({'vendor/kaihen-mo/' + name: hen if name == 'hen/main' else shipped[name] for name in KAIHEN_COMPONENTS})
         written = publish_new(root, files, directories=('vendor/kaihen-mo/programs',))
-    result = check_root(root, args.node or 'node'); result['newFiles'] = written; return result
+    result = check_root(root, args.node or 'node', args.host_profile); result['newFiles'] = written; return result
 
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', type=pathlib.Path, default=ROOT, help='isolated public checkout/host-kit root')
+    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned held-session consumer; Civ7 is experimental and hardware untested')
     p.add_argument('--check', action='store_true', help='read-only local validation; no downloads/builds/preparation')
-    p.add_argument('--sources-only', action='store_true', help='fetch/validate only the pinned ns2jb engine; no HEN/app/SDK/Node work')
+    p.add_argument('--sources-only', action='store_true', help='fetch/validate only selected host sources; no acquisition/HEN/app/SDK/Node work')
     p.add_argument('--offline', action='store_true', help='refuse downloads; use supplied/host-kit inputs')
     p.add_argument('--build', action='store_true', help='explicit isolated HEN/app rebuild with existing Apple Silicon SDK')
     p.add_argument('--node', help='Node executable (default: node); pass mac2jb Node 24 path when appropriate')
     p.add_argument('--release-manifest', type=pathlib.Path)
     p.add_argument('--kaihen-archive', type=pathlib.Path)
-    p.add_argument('--engine-archive', type=pathlib.Path)
+    p.add_argument('--engine-archive', type=pathlib.Path, help='offline archive for the selected pinned host profile')
     p.add_argument('--programs-archive', type=pathlib.Path)
     p.add_argument('--programs-sha256')
     p.add_argument('--hen-binary', type=pathlib.Path)

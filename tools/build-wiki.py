@@ -9,6 +9,7 @@ import re
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
     'Installation': 'docs/INSTALLATION.md',
+    'CivSwitch-Entrypoint': 'docs/CIV7.md',
     'Using-Moader': 'docs/USAGE.md',
     'Troubleshooting': 'docs/TROUBLESHOOTING.md',
     'How-Moader-Works': 'docs/RUNTIME.md',
@@ -16,6 +17,7 @@ PAGES = {
     'Building': 'docs/BUILDING.md',
     'Maintaining': 'docs/MAINTAINING.md',
     'Credits-and-Licenses': 'THIRD_PARTY.md',
+    'kaiHEN-Modifications': 'docs/KAIHEN_CHANGES.md',
     'Contributing': 'CONTRIBUTING.md',
     'Security': 'SECURITY.md',
 }
@@ -76,11 +78,13 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | Guide | Covers |
 | --- | --- |
 | [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
+| [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
 | [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, crashes and setup recovery |
 | [How Moader works](How-Moader-Works) | Console app, resident service, filesystem runtime, apply states and component lifetimes |
 | [Frequently asked questions](FAQ) | Quick answers about reboot, live changes, removal and game errors |
 | [Validation](Validation) | What was tested on hardware and what the host checks establish |
+| [kaiHEN modifications](kaiHEN-Modifications) | The four changed source files, complete patch, upstream base and shipped HEN hash |
 
 ## Interface previews
 
@@ -109,6 +113,18 @@ Use the direct kurumuz ns2jb route on Linux or WSL. macOS users can choose ns2jb
 ## Do I need FS access every time I toggle a mod?
 
 Backend installation uses a fresh verified held FS session once per boot. After installation, upload, enable, disable and removal use the resident service. A console reboot needs fresh backend setup; it does not erase your library.
+
+## Can Civilization VII provide FS access?
+
+Yes. CivSwitch has an upstream FS route. Moader's separate integration has an exact source profile and validation limits; see [CivSwitch entrypoint](CivSwitch-Entrypoint). Loader readiness on port 9026 alone is not FS readiness, and another fork's session is not interchangeable.
+
+## Where do mods go on SD?
+
+Use `/moader/library/TITLE_ID/mod-folder/romfs/`, with a lowercase Title ID and lowercase `romfs`. Each mod has its own folder. Browser ZIP uploads create this structure automatically. See [SD card layout](Using-Moader#sd-card-layout).
+
+## How is kaiHEN modified?
+
+Moader publishes the complete four-file HEN patch, upstream revision and shipped hash. The [kaiHEN modification disclosure](kaiHEN-Modifications) explains the pending-launch fix and read-only trace query, separately from Moader's resident service and filesystem runtime.
 
 ## Can I close Moader while playing?
 
@@ -146,7 +162,9 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
 
 - [Home](Home)
 - [Install / Linux / WSL / macOS](Installation)
+- [CivSwitch entrypoint](CivSwitch-Entrypoint)
 - [App and browser usage](Using-Moader)
+- [SD card layout](Using-Moader#sd-card-layout)
 - [Settings and Advanced](Using-Moader#settings)
 - [Debugging and screenshots](Using-Moader#debugging-and-screenshots)
 - [Troubleshooting](Troubleshooting)
@@ -160,6 +178,7 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
 - [Maintaining](Maintaining)
 - [Contributing](Contributing)
 - [Credits and licenses](Credits-and-Licenses)
+- [kaiHEN modifications](kaiHEN-Modifications)
 - [Security](Security)
 '''
     pages['_Footer'] = f'[Moader]({base}) · [Downloads]({base}/releases/tag/{tag}) · [Issues]({base}/issues) · [Discussions]({base}/discussions)\n\nDocs for {tag}; app version `{release["version"]}`.\n'

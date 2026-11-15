@@ -54,6 +54,25 @@ The path inside `romfs/` must match the path used by the game. One enclosing fol
 
 Supported payload roots include `romfs/`, `exefs/`, `exefs_patches/` with binary `.ips` patches, `romfs.bin` and `exefs.nsp`. Text IPSwitch scripts are not compiled by this release. ZIPs are limited to **128 MiB**, with at most **64 MiB per expanded file** and **256 MiB expanded total**. Links, unsafe paths and conflicting enabled replacements are rejected.
 
+## SD card layout
+
+Moader stores each mod separately under `/moader/library/`, grouped by the game's Title ID. Browser uploads create this structure automatically:
+
+```text
+/moader/library/YOUR_16_DIGIT_TITLE_ID/
+├── mod1/
+│   ├── mod.meta                 optional display name, plain text
+│   └── romfs/
+│       └── [original game folders and replacement files]
+└── mod2/
+    └── romfs/
+        └── [original game folders and replacement files]
+```
+
+For manual copies, use a lowercase Title ID and mod folder names of at most 48 characters containing only lowercase letters, digits, `-` or `_`. Spell the payload folder **`romfs`** in lowercase. `exefs/`, `exefs_patches/`, `romfs.bin` and `exefs.nsp` go at the same level as `romfs/` inside the mod folder.
+
+Enable copied mods through Moader. Let the app manage its state files; do not move, edit or delete an enabled payload while a game is using it. Recoverable removal retains payloads for older open filesystem objects, as described below.
+
 ## Enable, disable and remove
 
 Select a mod and switch its requested state, or press **A** in the app. Read the apply state and detail text afterward:

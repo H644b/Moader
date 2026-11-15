@@ -82,7 +82,7 @@ async function readExtra(file){
 
 // Read mutable originals once, then publish a unique read-only tree. Build
 // jobs can replace dist files without changing this installation's inputs.
-async function snapshot({output,kaihen,programs=[],metadata=[],nativeRuntime}){
+async function snapshot({output,kaihen,programs=[],metadata=[],nativeRuntime,hostProfile}){
  const components=[];
  for(const name of COMPONENTS)components.push({...await readInput({source:path.resolve(kaihen,name)}),name});
  const bundled=[];
@@ -126,7 +126,7 @@ async function snapshot({output,kaihen,programs=[],metadata=[],nativeRuntime}){
  for(const item of meta)frozenMetadata.push(await store('metadata/'+path.basename(item.target),item.data,item.target));
  const extraFile=path.join(directory,'programs.json'),manifestFile=path.join(directory,'manifest.json');
  await fs.writeFile(extraFile,JSON.stringify(frozenPrograms,null,2)+'\n',{flag:'wx',mode:0o400});
- const manifest={schema:1,preparedAt:new Date().toISOString(),directory,manifestFile,kaihen:path.join(directory,'kaihen'),kaihenFiles,...(nativeRuntime?{nativeRuntime}:{}),
+ const manifest={schema:1,preparedAt:new Date().toISOString(),directory,manifestFile,kaihen:path.join(directory,'kaihen'),kaihenFiles,...(nativeRuntime?{nativeRuntime}:{}),...(hostProfile?{hostProfile}:{}),
   bundledPrograms,programs:frozenPrograms,metadata:frozenMetadata,extraFile,consoleTested:false};
  await fs.writeFile(manifestFile,JSON.stringify(manifest,null,2)+'\n',{flag:'wx',mode:0o400});
  for(const name of [...directories].sort((a,b)=>b.length-a.length))await fs.chmod(name,0o500);

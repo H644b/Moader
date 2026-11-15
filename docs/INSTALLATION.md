@@ -1,6 +1,6 @@
 # Install Moader
 
-Use **[v0.1.0-dev.1](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1)** for the updated host kit. This is a host-setup update: app/service/HEN bytes are unchanged and the app version remains `0.1.0-dev`. The [original release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) and its app ZIP remain available.
+Use **[v0.1.0-dev.2](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2)** for the host integration update. This updates the host installer and guides: app/service/HEN bytes are unchanged and the app version remains `0.1.0-dev`. The [original release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) and its app ZIP remain available.
 
 | Situation | What to do |
 | --- | --- |
@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download the unchanged [Moader-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip).
+1. Download the unchanged [Moader-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip).
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.
@@ -21,7 +21,7 @@ If the matching resident service is running, the app connects to it. Otherwise i
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-backend-v0.1.0-dev.1.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+Download and extract [Moader-backend-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-backend-v0.1.0-dev.2.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
 
 Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
 
@@ -32,7 +32,13 @@ Choose **one** route. Both end by printing Moader's privileged installation comm
 
 WSL2 users must complete [networking preparation](#wsl2-networking-before-acquisition) **before** Route A. Use Linux Node and two terminals in the **same WSL distro**; do not use `node.exe`, Windows run paths or a Windows terminal outside that distro for preparation/install.
 
-The direct route is documented from pinned source/helper contracts. No new Linux/WSL device verification is claimed here; the published real-console validation used macOS/mac2jb. Use upstream requirements for console/application compatibility; no alternate CivSwitch entrypoint or stock-console installer is qualified.
+The direct route is documented from pinned source/helper contracts. No new Linux/WSL device verification is claimed here; the published real-console validation used macOS/mac2jb. Use upstream requirements for console/application compatibility; a stock-console installer is not included. CivSwitch uses the separate experimental profile below.
+
+## Experimental CivSwitch route
+
+Civilization VII FS access exists upstream. Moader's initial experimental profile is **`civ7-s8n`**, restricted to `s8n/civ7-fs-kaihen` commit `51a804cbce09216e1a42e65929644fd436b4c8bf`. Host tests pass; **no Moader Civ7 console installation is claimed**. This is separate from the two SmileBASIC routes below and from modding Civilization VII itself.
+
+Follow the [CivSwitch guide](CIV7.md#experimental-setup) for prerequisites, source fetch, FS-only acquisition and profile-aware local preparation. If you already hold a current admitted s8n FS-only session, keep it open for qualification rather than acquiring again. HerXayah and mac2jb CivSwitch sessions require their own admitted profile; do not pass them under the s8n pin. The ordinary TCP9026 loader state or already-running upstream HEN is not the required FS-only starting state.
 
 ## Route A: Linux/WSL or macOS with ns2jb
 
@@ -123,6 +129,6 @@ In WSL, `node -p 'process.platform'` must print `linux`. Keep acquisition and in
 
 ## Updating
 
-`v0.1.0-dev.1` changes the host kit/docs only; existing app/service/HEN bytes and app display version stay `0.1.0-dev`. Keep matched components. A later backend update needs its own qualified bootstrap; copying a new NSO does not hot-reload it.
+`v0.1.0-dev.2` changes the host kit/docs only; existing app/service/HEN bytes and app display version stay `0.1.0-dev`. Keep matched components. A later backend update needs its own qualified bootstrap; copying a new NSO does not hot-reload it.
 
 Preserve user mods and preferences. Recoverable removal retains payloads for older open game objects; do not manually purge them during the boot. See [Troubleshooting](TROUBLESHOOTING.md), [Building](BUILDING.md) and [Maintaining](MAINTAINING.md).

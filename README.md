@@ -14,12 +14,12 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev.1 — host setup update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1)**. This updates the host kit/docs; the app, resident service and HEN bytes are unchanged, and the app still displays `0.1.0-dev`. The [original prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) remains available.
+Start with **[v0.1.0-dev.2 — experimental CivSwitch host integration](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2)**. This updates the host kit and guides; the app, resident service and HEN bytes are unchanged, and the app still displays `0.1.0-dev`. The [original prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) remains available.
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-backend-v0.1.0-dev.1.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
+| [Moader-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip) | The console app and matching resident plugin |
+| [Moader-backend-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-backend-v0.1.0-dev.2.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 
@@ -34,7 +34,7 @@ Choose either route to obtain the fresh, held SmileBASIC/FS session that Moader 
 
 The precompiled kit needs Python 3.10+ and the route's Node 24; Git is only needed to obtain the direct ns2jb checkout. WSL uses Linux Node and both terminals in the same distro; [configure its LAN access before acquisition](docs/INSTALLATION.md#wsl2-networking-before-acquisition).
 
-Use the chosen upstream tool's current console/application requirements. A stock-console installer is not included; alternate entrypoints such as CivSwitch have not been qualified. The direct Linux/WSL instructions follow pinned source and helper contracts; they do not add a new Linux/WSL console-verification claim to the existing macOS/mac2jb hardware results.
+Use the chosen upstream tool's current console/application requirements. A stock-console installer is not included; CivSwitch has a separate [experimental s8n host profile](docs/CIV7.md), with no Moader Civ7 hardware validation. HerXayah and mac2jb CivSwitch runs are not admitted by that profile. The direct Linux/WSL instructions follow pinned source and helper contracts; they do not add a new Linux/WSL console-verification claim to the existing macOS/mac2jb hardware results.
 
 **kaiHEN** is the homebrew environment; **hbmenu** is the launcher for homebrew apps; **FS** means the filesystem service, whose verified access is needed to install Moader's backend. Everyday mod management uses the running backend rather than repeating that setup.
 
@@ -70,6 +70,8 @@ This is a bounded test of one loose RomFS replacement. Game caches, new/resized 
 
 - [Wiki](https://github.com/H644b/Moader/wiki) — browse all user guides
 - [Installation](docs/INSTALLATION.md) — app copy, both backend setup routes and updates
+- [kaiHEN modifications](docs/KAIHEN_CHANGES.md) — exact four-file patch, upstream base and binary hash
+- [CivSwitch / Civilization VII](docs/CIV7.md) — experimental entrypoint, exact source pin and validation limits
 - [Usage](docs/USAGE.md) — controller controls, pairing, ZIP layout and settings
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — connection, apply-state and recovery help
 - [How it works](docs/RUNTIME.md) — the three components and their limits

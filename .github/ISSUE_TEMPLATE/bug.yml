@@ -21,17 +21,27 @@ body:
     id: version
     attributes:
       label: Moader version
-      description: Release tag or source commit; the current prerelease is v0.1.0-dev.1. The unchanged app binary displays 0.1.0-dev.
-      placeholder: v0.1.0-dev.1
+      description: Release tag or source commit; the current prerelease is v0.1.0-dev.2. The unchanged app binary displays 0.1.0-dev.
+      placeholder: v0.1.0-dev.2
     validations:
       required: true
   - type: textarea
     id: environment
     attributes:
       label: Environment
-      description: Console/firmware, kaiHEN version, native app or browser, and browser version if relevant. Leave unknown values unknown; omit addresses and account details.
+      description: Console/firmware, kaiHEN version, host OS/Node version for setup problems, native app or browser, and browser version if relevant. Leave unknown values unknown; omit addresses and account details.
     validations:
       required: true
+  - type: dropdown
+    id: entrypoint
+    attributes:
+      label: Backend entrypoint
+      options:
+        - Unknown or manager only
+        - SmileBASIC through kurumuz ns2jb
+        - SmileBASIC through mac2jb
+        - CivSwitch through pinned s8n profile (experimental)
+        - Another source or entrypoint (describe below)
   - type: dropdown
     id: runtime
     attributes:

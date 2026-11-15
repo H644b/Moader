@@ -6,17 +6,17 @@ The public source includes Moader source, tests, scripts, documentation, licensi
 
 ## Release layout
 
-Use the explicit prerelease tag `v0.1.0-dev.1`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.1/…` or the tag page.
+Use the explicit prerelease tag `v0.1.0-dev.2`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.2/…` or the tag page.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.0-dev.1.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.0-dev.1.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev.1` folder includes `START_HERE.txt` |
+| `Moader-v0.1.0-dev.2.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.1.0-dev.2.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev.2` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the tested app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
-**Omit ns2jb engine bytes from both public source and host kit unless explicit redistribution terms are located and reviewed.** The setup helper fetches the exact upstream revision directly for each user and extracts only its engine. Do not invent a license or infer redistribution permission from a public repository. Preserve upstream attribution separately from license claims.
+**Omit the ns2jb and Civ7 source dependencies from public source and host kits unless explicit redistribution terms are located and reviewed.** The setup helper fetches the exact upstream revision directly for each user. The default profile selects the kurumuz engine; `civ7-s8n` selects its engine, Civ7 target tables and acquisition bridge, as pinned by [config/civ7-provider.json](../config/civ7-provider.json). Do not invent a license or infer redistribution permission from a public repository. Preserve upstream attribution separately from license claims.
 
 The minimal host kit has no `research/` content and does not bundle the full official kaiHEN ZIP, other upstream binaries or OunceShell. First-run setup fetches the pinned archive and extracts only `ro/main`, `game/main`, `bootstrap.bin` and `hbmenu.nro`, while retaining the kit's patched `hen/main`. It creates `vendor/kaihen-mo/programs` empty. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private captures, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
 
@@ -26,7 +26,7 @@ The minimal host kit has no `research/` content and does not bundle the full off
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
@@ -47,7 +47,7 @@ Finish the intended build and checks, audit the public source, and commit all re
 python3 tools/package-release.py
 ```
 
-The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.1.zip`, `Moader-backend-v0.1.0-dev.1.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
+The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.2.zip`, `Moader-backend-v0.1.0-dev.2.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
 
 ## Native changes
 
@@ -71,7 +71,8 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries except the patched HEN, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the patched HEN is unchanged, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
 4. Run `python3 tools/setup-backend.py --check --node /absolute/path/to/node24` twice. It must not download, compile or change files. Run the local installer `--check` with that same Node executable and confirm it prints a unique `build/install/prepared-*/manifest.json`, validates both programs and performs no console connection.
 5. Exercise the direct ns2jb wrapper with `--run-dir PATH --node node` and separately the existing mac2jb status-command route. Both must preserve the selected Node 24, execute local Moader scripts only, create a unique local snapshot and print a matching `--prepared` install command. The wrapper never performs installation itself. `python3 tools/test-ns2jb-host.py --online --node node` checks real precompiled-kit preparation with public inputs and transport calls blocked; it does not acquire FS or install on a console.
-6. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
+6. Exercise `--host-profile civ7-s8n` separately: `python3 tools/test-civ7-host.py --online --node node` checks the upstream source/materialization and native ABI; `node tools/test-civ7-host.cjs` checks synthetic held sessions against the actual provider; `python3 tools/test-ns2jb-host.py --online --node node --host-profile civ7-s8n` checks real precompiled-kit preparation with endpoint/process calls blocked. These establish host behavior only.
+7. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
 
 Use [INSTALLATION.md](INSTALLATION.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
 
@@ -84,7 +85,7 @@ The [GitHub Wiki](https://github.com/H644b/Moader/wiki) uses the same guides as 
 python3 tools/build-wiki.py
 ```
 
-This writes 14 Markdown pages under `build/wiki/`, including Home, navigation and FAQ. It rewrites repository-relative links for the wiki and keeps interface images in the main public repository. It never publishes by itself. CI checks generation alongside the public source guard.
+This writes the linked Markdown guides under `build/wiki/`, including Home, navigation and FAQ. The command reports the current page count. It rewrites repository-relative links for the wiki and keeps interface images in the main public repository. It never publishes by itself. CI checks generation alongside the public source guard.
 
 For a repository maintainer, clone the official wiki, copy the generated pages, review the diff, then commit and push:
 

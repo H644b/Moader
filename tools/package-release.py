@@ -134,7 +134,8 @@ def main():
         'The kit includes the tested Moader app/service and patched HEN.\n'
         'Preparation fetches pinned official HEN components and upstream host source.\n'
         'It needs Node 24, Python 3.10+ and internet access, not a compiler/SDK.\n'
-        'On Linux/WSL, use kurumuz ns2jb; on macOS, use ns2jb or mac2jb.\n'
+        'For SmileBASIC, use kurumuz ns2jb on Linux/WSL, or ns2jb/mac2jb on macOS.\n'
+        'The experimental CivSwitch profile is documented separately in docs/CIV7.md.\n'
         'It never acquires FS. Follow the guide with a fresh verified held FS session.\n\n'
         'Corresponding source: https://github.com/' + spec['repository'] + '/tree/' + tag + '\n'
     ).encode(), 0o100644)

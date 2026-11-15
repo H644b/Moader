@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Host-only direct ns2jb preparation test; --online fetches pinned public data.
+"""Host-only selected-profile preparation test; --online fetches pinned public data.
 
 Never run upstream run.cjs/rpc.cjs, execute a target binary, or execute the
 printed installation command. Synthetic run files are not live device proof.
@@ -39,7 +39,7 @@ for(const key of ['spawn','spawnSync','exec','execSync','execFile','execFileSync
 const load=Module._load;
 Module._load=function(name,parent,main){
  const file=Module._resolveFilename(name,parent,main);
- if(typeof file==='string' && (file.includes('/research/sources/ns2jb/engine/') || /\/(?:run|rpc|endpoint)\.cjs$/.test(file)))deny();
+ if(typeof file==='string' && (file.includes('/research/sources/') || /\/(?:run|rpc|endpoint)\.cjs$/.test(file)))deny();
  return load.apply(this,arguments);
 };
 '''
@@ -53,6 +53,8 @@ import json,os,sys
 from pathlib import Path
 node=os.environ['MOADER_HOST_NODE'];kit=Path(os.environ['MOADER_HOST_KIT'])
 python=os.environ['MOADER_HOST_PYTHON']
+profile=os.environ['MOADER_HOST_PROFILE']
+profile_args=['--host-profile',profile] if profile!='smilebasic-kurumuz' else []
 probe='require("./runtime/modloader/lib/native/artifacts.cjs").artifacts(); console.log("Native source/prebuilt hashes verified (local only)")'
 def audit(event,values):
  if event!='subprocess.Popen':return
@@ -61,8 +63,8 @@ def audit(event,values):
  if isinstance(argv,(list,tuple)):
   if list(argv)==[node,'--version']:kind='node-version'
   elif list(argv)==[node,'-e',probe]:kind='prebuilt-probe'
-  elif list(argv)==[node,str(kit/'tools/install-moader.cjs'),'--check']:kind='installer-check'
-  elif len(argv)==6 and list(argv[1:])==[str(kit/'tools/setup-backend.py'),'--root',str(kit),'--node',node] and Path(argv[0]).samefile(python):kind='local-setup'
+  elif list(argv)==[node,str(kit/'tools/install-moader.cjs'),*profile_args,'--check']:kind='installer-check'
+  elif list(argv[1:])==[str(kit/'tools/setup-backend.py'),'--root',str(kit),'--node',node,*profile_args] and Path(argv[0]).samefile(python):kind='local-setup'
  if kind is None or str(executable)!=str(argv[0]):
   Path(os.environ['MOADER_HOST_IO_SENTINEL']).write_text('unexpected Python child execution')
   raise RuntimeError('Host test forbids companion CLI/RPC/target process execution')
@@ -132,7 +134,8 @@ def copy_source(kit):
     ignore=shutil.ignore_patterns('__pycache__','.git','state','logs','build','node_modules','.DS_Store')
     for directory in ['include','runtime/modloader/lib','runtime/modloader/native']:
         shutil.copytree(ROOT/directory,kit/directory,ignore=ignore)
-    for name in [*(f'tools/{name}' for name in TOOLS),'runtime/modloader/install.cjs',
+    for name in [*(f'tools/{name}' for name in TOOLS),*(p.relative_to(ROOT).as_posix() for p in (ROOT / 'tools').glob('*.cjs')),
+                 *(p.relative_to(ROOT).as_posix() for p in (ROOT / 'config').glob('*.json')),'runtime/modloader/install.cjs',
                  'software-builds/kaihen-mo.json','software-builds/kaihen-mo.patch']:
         destination=kit/name;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(ROOT/name,destination)
 
@@ -159,6 +162,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--online',action='store_true',help='Fetch pinned public release/dependencies and exercise real local preparation.')
     parser.add_argument('--node',default='node')
+    parser.add_argument('--host-profile', choices=['smilebasic-kurumuz','civ7-s8n'], default='smilebasic-kurumuz')
     args=parser.parse_args()
     node=shutil.which(args.node);require(node is not None,'Node executable is unavailable')
     version=subprocess.check_output([node,'--version'],text=True).strip()
@@ -170,10 +174,11 @@ def main():
         python_guard=work/'python process guard';python_guard.mkdir()
         (python_guard/'sitecustomize.py').write_text(PYTHON_GUARD)
         process_audit=work/'preparation-processes.txt'
-        env={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','MOADER_HOST_IO_SENTINEL':str(sentinel),
+        env={**{key:value for key,value in os.environ.items() if not key.startswith(('NS2_', 'MOADER_HOST_'))},'PYTHONDONTWRITEBYTECODE':'1','MOADER_HOST_IO_SENTINEL':str(sentinel),
              'NODE_OPTIONS':'--require='+json.dumps(str(guard)),
              'PYTHONPATH':str(python_guard)+os.pathsep+os.environ.get('PYTHONPATH',''),
              'MOADER_HOST_NODE':node,'MOADER_HOST_PYTHON':sys.executable,'MOADER_HOST_KIT':str(kit),
+             'MOADER_HOST_PROFILE':args.host_profile,
              'MOADER_HOST_PROCESS_AUDIT':str(process_audit),
              'PATH':str(Path(node).parent)+os.pathsep+os.environ.get('PATH','')}
         directory,result,current,proof=synthetic_run(work)
@@ -182,13 +187,14 @@ def main():
             print('PASS: host-only static gate checks; online preparation not requested.');return
         release_binaries(kit,work)
         original_run=tree(directory)
-        setup=[sys.executable,str(kit/'tools/setup-backend.py'),'--root',str(kit),'--node',node]
+        profile_args=['--host-profile',args.host_profile] if args.host_profile!='smilebasic-kurumuz' else []
+        setup=[sys.executable,str(kit/'tools/setup-backend.py'),'--root',str(kit),'--node',node,*profile_args]
         run(setup,kit,env)
         before=tree(kit)
         run([*setup,'--check'],kit,env)
         require(tree(kit)==before,'Read-only setup check changed local inputs')
         for name,expected in BINARY_SHA.items():require(sha((kit/name).read_bytes())==expected,'Setup replaced a tested binary')
-        wrapper=[sys.executable,str(kit/'tools/install-from-rpc.py'),'--root',str(kit)]
+        wrapper=[sys.executable,str(kit/'tools/install-from-rpc.py'),'--root',str(kit),*profile_args]
         relative_run=os.path.relpath(directory,kit)
         before=tree(kit);run([*wrapper,'--run-dir',relative_run,'--node','node'],kit,env)
         require(tree(kit)==before,'Direct-path parsing changed local setup')
@@ -201,6 +207,8 @@ def main():
             require(command[:3]==[node,str(kit/'tools/install-moader.cjs'),'--prepared'] and command[4]==str(directory),'Printed direct command changed Node/run/installer')
             require(manifest.is_file() and manifest.name=='manifest.json' and manifest.parent.name.startswith('prepared-') and manifest.parent.parent==kit/'build/install','Printed manifest is not a unique local snapshot')
             require(manifest.stat().st_mode & 0o222==0,'Prepared manifest is writable')
+            if args.host_profile=='civ7-s8n':
+                require(json.loads(manifest.read_text()).get('hostProfile',{}).get('id')=='civ7-s8n','Prepared snapshot lost its Civ7 host-profile binding')
             manifests.append(manifest)
         require(manifests[0]!=manifests[1],'Preparation reused a mutable snapshot')
         require(tree(directory)==original_run,'Host preparation changed the upstream run')
@@ -211,7 +219,7 @@ def main():
                 processes.count('installer-check')==2 and processes.count('local-setup')==2,
                 'Preparation process audit differs from the local-only command contract')
         for name,expected in BINARY_SHA.items():require(sha((kit/name).read_bytes())==expected,'Preparation replaced a tested binary')
-        print('PASS: real pinned public downloads, local kit setup, read-only check, shell paths with spaces and two unique direct --prepared commands; no console/RPC/target execution.')
+        print('PASS: '+args.host_profile+' real pinned public downloads, local kit setup, read-only check, shell paths with spaces and two unique direct --prepared commands; no console/RPC/target execution.')
     print('Scope: host preparation only; real Linux/WSL networking, ns2jb acquisition and native installation require separate device qualification.')
 
 

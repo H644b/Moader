@@ -3,8 +3,16 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const {isIP} = require('node:net');
-const host = process.argv[2];
-if (process.argv.length !== 3 || isIP(host || '') !== 4) {
+const args=process.argv.slice(2),profileAt=args.indexOf('--host-profile');
+if(profileAt>=0){
+ if(args[profileAt+1]!=='smilebasic-kurumuz'){
+  console.error('This listener only reconnects SmileBASIC. For Civ7 keep the qualified held FS run open and use tools/inspect-hen.cjs RUN or tools/control-resident.cjs RUN error. No Civ7 acquisition or reconnect is performed.');process.exit(2);
+ }
+ args.splice(profileAt,2);
+}
+if(args.length===1&&args[0]==='--help'){console.log('SmileBASIC application-only reconnect: node tools/kaihen-diagnostics.cjs YOUR_COMPUTER_LAN_IP. Civ7 uses the existing held run with inspect-hen/control-resident.');process.exit(0);}
+const host = args[0];
+if (args.length !== 1 || isIP(host || '') !== 4) {
   console.error('Usage: node tools/kaihen-diagnostics.cjs YOUR_COMPUTER_LAN_IP');
   process.exit(2);
 }
