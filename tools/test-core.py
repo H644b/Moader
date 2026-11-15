@@ -30,6 +30,49 @@ with tempfile.TemporaryDirectory(prefix='moader-core-') as temp:
     pos = data.index(b'PK\x01\x02')
     struct.pack_into('<I', data, pos + 24, 4)
     (fixtures / 'underdeclared.zip').write_bytes(data)
+
+    def raw_deflate_archive(name, packed, expanded, crc=None, declared_size=None):
+        # Construct the compressed stream independently of the ZIP writer so
+        # exact decoder buffer boundaries remain reproducible across zlib builds.
+        entry = b'romfs/boundary.bin'
+        crc = zlib.crc32(expanded) if crc is None else crc
+        size = len(expanded) if declared_size is None else declared_size
+        local = (struct.pack('<IHHHHHIIIHH', 0x04034b50, 20, 0, 8, 0, 0,
+                             crc, len(packed), size, len(entry), 0) + entry + packed)
+        central = (struct.pack('<IHHHHHHIIIHHHHHII', 0x02014b50, 20, 20, 0, 8, 0, 0,
+                               crc, len(packed), size, len(entry), 0, 0, 0, 0, 0, 0) + entry)
+        end = struct.pack('<IHHHHIIH', 0x06054b50, 0, 0, 1, 1, len(central), len(local), 0)
+        (fixtures / (name + '.zip')).write_bytes(local + central + end)
+
+    compressor = zlib.compressobj(wbits=-15)
+    prefix = compressor.compress(b'A' * 15) + compressor.flush(zlib.Z_SYNC_FLUSH)
+    assert len(prefix) == 10
+    payload = b'B' * (32768 - len(prefix) - 5)
+    stored = struct.pack('<HH', len(payload), len(payload) ^ 0xffff) + payload
+    chunk = prefix + b'\x00' + stored
+    expanded_chunk = b'A' * 15 + payload
+    assert len(chunk) == len(expanded_chunk) == 32768
+    final = b'\x01\x01\x00\xfe\xffZ'
+    packed, expanded = chunk + final, expanded_chunk + b'Z'
+    variants = {
+        'boundary': (packed, expanded),
+        'boundary-repeated': (chunk * 4 + final, expanded_chunk * 4 + b'Z'),
+        'boundary-empty-final': (chunk + b'\x01\x00\x00\xff\xff', expanded_chunk),
+        'boundary-final': (prefix + b'\x01' + stored, expanded_chunk),
+    }
+    for name, (compressed, expected) in variants.items():
+        assert zlib.decompress(compressed, -15) == expected
+        raw_deflate_archive(name, compressed, expected)
+        with zipfile.ZipFile(fixtures / (name + '.zip')) as z:
+            assert z.testzip() is None and z.read('romfs/boundary.bin') == expected
+        (fixtures / (name + '.bin')).write_bytes(expected)
+    raw_deflate_archive('boundary-truncated', packed[:-1], expanded)
+    raw_deflate_archive('boundary-no-end', chunk, expanded_chunk)
+    raw_deflate_archive('boundary-trailing', packed + b'junk', expanded)
+    raw_deflate_archive('boundary-trailing-unread', variants['boundary-final'][0] + b'junk', expanded_chunk)
+    raw_deflate_archive('boundary-corrupt', chunk + b'\x07', expanded)
+    raw_deflate_archive('boundary-crc', packed, expanded, crc=zlib.crc32(expanded) ^ 1)
+    raw_deflate_archive('boundary-underdeclared', packed, expanded, declared_size=len(expanded) - 1)
     binary = BUILD / 'core-test'
     subprocess.run(['clang++', '-std=c++17', '-g', '-O1', '-Wall', '-Wextra', '-Werror',
                     '-fsanitize=address,undefined', '-I' + str(ROOT / 'include'),

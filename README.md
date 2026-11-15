@@ -14,12 +14,12 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev.2 — experimental CivSwitch host integration](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.2)**. This updates the host kit and guides; the app, resident service and HEN bytes are unchanged, and the app still displays `0.1.0-dev`. The [original prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) remains available.
+Start with **[v0.1.0-dev.3 — compressed ZIP import fix](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3)**. The rebuilt app and resident service fix valid ZIP imports at a 32 KiB DEFLATE boundary. HEN and the native filesystem runtime are unchanged; the app still displays `0.1.0-dev`. The fix passes host checks; these rebuilt binaries have not been tested on a console. The [original prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) remains available.
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-v0.1.0-dev.2.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.2/Moader-backend-v0.1.0-dev.2.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
+| [Moader-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-v0.1.0-dev.3.zip) | The console app and matching resident plugin |
+| [Moader-backend-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-backend-v0.1.0-dev.3.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 
@@ -60,7 +60,7 @@ Settings are saved on the Switch and shared by both interfaces: game names/Title
 
 ## What has been tested?
 
-On real hardware, one equal-sized Mario Kart 8 Deluxe course-preview texture changed from the usual candy image to a distinct replacement preview, back to candy, back to the replacement, then back to candy after removal—all within the same running game, without a console reboot.
+On real hardware with the original app/resident binaries, one equal-sized Mario Kart 8 Deluxe course-preview texture changed from the usual candy image to a distinct replacement preview, back to candy, back to the replacement, then back to candy after removal—all within the same running game, without a console reboot.
 
 The preview needed a scene reload: **start a race → pause/quit to the main menu → VS Race/course selection**. Returning only to character selection did not refresh it. Native debugging worked in the app and browser, and **31/31 authenticated web checks** succeeded across a normal game close/reopen interval.
 

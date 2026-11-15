@@ -45,6 +45,8 @@ Check the correct game/version, Title ID and internal file path. Native debug ou
 
 ## My ZIP is rejected
 
+If a valid ZIP fails with `ZIP decompression failed.` on v0.1.0-dev through v0.1.0-dev.2, it may hit the decoder's 32 KiB boundary bug. [v0.1.0-dev.3](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3) fixes that case and adds the entry name/zlib status to decoder errors. Update both app and service as described in [Updating](INSTALLATION.md#updating); the old resident service continues using its old ZIP reader until it is replaced through supported backend setup. A stored/uncompressed ZIP is a workaround within the normal size limits.
+
 Use the supported [ZIP layout](USAGE.md#upload-your-first-mod). The archive must contain a supported payload, such as `romfs/`, optionally within one enclosing folder. Check the size limits, unsafe/linked paths and duplicate/conflicting files. Text IPSwitch scripts need conversion outside Moader; this release accepts binary IPS patches.
 
 If two enabled mods replace the same path, disable one and review the conflict. A successful import still does not establish game/version compatibility.

@@ -48,7 +48,7 @@ An already-current **FS-only held session** from the exact s8n revision is a can
 
 ## Prepare the local dependencies
 
-Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.0-dev.2** backend kit or a matching source checkout. The app still displays `0.1.0-dev`.
+Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.0-dev.3** backend kit or a matching source checkout. The app still displays `0.1.0-dev`.
 
 To fetch or verify only the pinned host source, without Node/SDK setup, acquisition or console contact:
 
@@ -72,7 +72,7 @@ These commands fetch/check the pinned source and inputs locally; they do not lau
 
 ## Experimental setup
 
-This experimental workflow has passed host checks using pinned upstream sources and synthetic sessions. Its privileged installation and console handoff remain unverified on hardware. Use the v0.1.0-dev.2 backend kit or a matching checkout.
+This experimental workflow has passed host checks using pinned upstream sources and synthetic sessions. Its privileged installation and console handoff remain unverified on hardware. Use the v0.1.0-dev.3 backend kit or a matching checkout.
 
 ### 1. Keep an existing session, or acquire FS separately
 

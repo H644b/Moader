@@ -115,7 +115,12 @@ void extract_mod_zip(const std::string& archive, const std::string& destination)
         try {
             unsigned char source[32768], output[32768]; uint64_t remaining = ent.packed, written = 0;
             uint32_t crc = crc32(0, Z_NULL, 0); int result = Z_OK;
-            if (ent.method == 8) { require(inflateInit2(&stream, -MAX_WBITS) == Z_OK, "Cannot initialize ZIP decoder."); inflating = true; }
+            if (ent.method == 8) {
+                const int initialized = inflateInit2(&stream, -MAX_WBITS);
+                if (initialized != Z_OK) throw std::runtime_error("Cannot initialize ZIP decoder for \"" + ent.target +
+                    "\" (zlib " + std::to_string(initialized) + ").");
+                inflating = true;
+            }
             in.clear(); in.seekg(data_at);
             while (remaining) {
                 const size_t n = std::min<uint64_t>(remaining, sizeof(source));
@@ -126,8 +131,15 @@ void extract_mod_zip(const std::string& archive, const std::string& destination)
                     const unsigned char* data = source;
                     if (inflating) {
                         stream.next_out = output; stream.avail_out = sizeof(output);
+                        const auto input_before = stream.avail_in;
                         result = inflate(&stream, Z_NO_FLUSH);
-                        require(result == Z_OK || result == Z_STREAM_END, "ZIP decompression failed.");
+                        // An exact output boundary can trigger an empty-input
+                        // pump. Refill only with no progress and input remaining;
+                        // the same result at actual EOF must still reject.
+                        if (result == Z_BUF_ERROR && !input_before && !stream.avail_in &&
+                            stream.avail_out == sizeof(output) && remaining) break;
+                        if (result != Z_OK && result != Z_STREAM_END) throw std::runtime_error("ZIP decompression failed for \"" +
+                            ent.target + "\" (zlib " + std::to_string(result) + ").");
                         produced = sizeof(output) - stream.avail_out; data = output;
                     }
                     require(written + produced <= ent.size, "ZIP expands beyond its declared size.");
@@ -137,7 +149,9 @@ void extract_mod_zip(const std::string& archive, const std::string& destination)
                 } while (stream.avail_in || !stream.avail_out);
                 require(result != Z_STREAM_END || (!remaining && !stream.avail_in), "ZIP has trailing compressed data.");
             }
-            require((!inflating || result == Z_STREAM_END) && written == ent.size && crc == ent.crc, "ZIP size or CRC verification failed.");
+            if ((inflating && result != Z_STREAM_END) || written != ent.size || crc != ent.crc)
+                throw std::runtime_error("ZIP size or CRC verification failed for \"" + ent.target +
+                    "\" (zlib " + std::to_string(result) + ").");
             if (inflating) { inflateEnd(&stream); inflating = false; }
             const int close_result = std::fclose(out); out = nullptr;
             require(close_result == 0, "Cannot close extracted file.");

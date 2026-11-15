@@ -44,11 +44,17 @@ https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/USAGE.md
 https://github.com/H644b/Moader/wiki
 
 Native debug output in this build requires the matching updated filesystem
-runtime, which publishes closed log snapshots. Resident browser management,
+runtime, which publishes closed log snapshots. The app and resident include
+the compressed ZIP boundary fix, verified by host tests. These rebuilt binaries
+have not been console-tested. Resident browser management,
 native debug output and live enable/disable/removal of an MK8 course-preview
-texture passed device checks. That preview refreshed after a race, quitting
+texture passed device checks with the original binaries. That preview refreshed after a race, quitting
 to the main menu and reopening course selection, without closing the game.
 Copying the new app/plugin does not update FS hooks.
+
+Resident browser uploads use the running service's ZIP reader. Copying only
+the new NRO does not fix uploads handled by an older resident. Use the matched
+updated backend kit for the next supported per-boot setup.
 
 Requested settings and runtime acknowledgement are separate. Same-sized
 loose-file replacements support live reads; the MK8 texture test confirmed
