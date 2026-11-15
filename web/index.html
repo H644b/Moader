@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Moader</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<svg class="symbol-bank" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-moader" viewBox="0 0 64 64"><path fill="currentColor" stroke="none" d="M8 52V12h12l12 12 12-12h12v40H44V28L32 40 20 28v24Z"/></symbol>
+  <symbol id="i-stack" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 10a8 8 0 0 0-14-5L3 8m0-5v5h5M4 14a8 8 0 0 0 14 5l3-3m0 5v-5h-5"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7M14 10v7"/></symbol>
+  <symbol id="i-log" viewBox="0 0 24 24"><path d="m4 6 4 4-4 4M11 16h9"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3" fill="var(--surface)"/><circle cx="15" cy="17" r="3" fill="var(--surface)"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="m9 15 6-6m-7 9-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 8a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-1 1"/></symbol>
+</svg>
+<header class="app-header">
+  <a class="brand" href="/" aria-label="Moader home"><svg aria-hidden="true"><use href="#i-moader"/></svg><span>Moader</span><span class="version">Development</span></a>
+  <div class="header-right"><span id="connection-status" class="connection"><span class="status-dot"></span>Not paired</span><div class="header-actions"><button id="show-settings" class="quiet" aria-controls="settings-pane" aria-expanded="false" hidden><svg aria-hidden="true"><use href="#i-settings"/></svg>Settings</button><button id="disconnect" class="quiet" hidden>Disconnect</button></div></div>
+</header>
+
+<main id="pair-screen" class="pair-screen">
+  <div class="pair-content">
+    <svg class="pair-icon"><use href="#i-link"/></svg>
+    <h1>Pair with your Switch</h1>
+    <p>Turn on the web GUI in Moader, then enter the pairing code from its connection screen.</p>
+    <form id="pair-form">
+      <label for="pair-code">Six-digit pairing code</label>
+      <div class="pair-fields"><input id="pair-code" aria-describedby="pair-error" type="text" inputmode="numeric" autocomplete="one-time-code" spellcheck="false" pattern="[0-9]{6}" minlength="6" maxlength="6" required placeholder="000000"><button class="primary" type="submit">Connect</button></div>
+      <p id="pair-error" class="error-text" role="alert"></p>
+    </form>
+    <div class="pair-address"><span>Connecting to</span><code id="pair-address"></code></div>
+    <p class="small-copy">Moader is served by your Switch. No cloud account is needed.</p>
+  </div>
+</main>
+
+<main id="workbench" class="workbench" hidden>
+  <aside class="game-rail" aria-label="Game library">
+    <div class="rail-heading"><h2>Games</h2><span id="game-count" class="count">0</span></div>
+    <div id="games" class="game-list"></div>
+    <p id="games-empty" class="rail-empty">Games appear here when you upload a mod.</p>
+    
+  </aside>
+
+  <section class="library-pane" aria-label="Mod workspace">
+    <div id="library-content" class="library-content">
+    <div class="library-heading">
+      <div><h1 id="library-title">Your mod library</h1><div class="game-subtitle"><code id="title-id">Choose a game or upload a mod</code><button id="copy-title" class="icon-button" aria-label="Copy Title ID" title="Copy Title ID" hidden><svg><use href="#i-copy"/></svg></button></div></div>
+      <button id="show-upload" class="primary" aria-controls="upload-pane" aria-expanded="false"><svg><use href="#i-plus"/></svg>Upload mod</button>
+    </div>
+    <label class="mobile-game" for="game-select">Game<select id="game-select"></select></label>
+    <details id="game-name-details" class="game-name-details" hidden><summary>Full game name</summary><p id="game-full-name"></p></details>
+    <div id="runtime-notice" class="runtime-notice"><span class="notice-mark"></span><p id="runtime-detail"></p></div>
+
+    <section id="upload-pane" class="upload-pane" aria-labelledby="upload-title" hidden>
+      <div class="section-heading"><h2 id="upload-title">Upload a mod</h2><button id="hide-upload" class="icon-button" aria-label="Close upload"><svg><use href="#i-close"/></svg></button></div>
+      <form id="upload-form">
+        <div id="drop-zone" class="drop-zone"><svg><use href="#i-upload"/></svg><label for="mod-file"><strong id="file-label">Choose a ZIP or drop it here</strong><span>RomFS and ExeFS folders · up to 128 MiB</span></label><input id="mod-file" type="file" accept=".zip,application/zip" required></div>
+        <div class="upload-fields"><label for="upload-title-id">Game Title ID<input id="upload-title-id" class="mono" required pattern="0[14][a-fA-F0-9]{14}" minlength="16" maxlength="16" placeholder="16 hexadecimal characters" spellcheck="false"></label><label for="mod-name">Mod name<input id="mod-name" required maxlength="100" placeholder="Name for your library"></label></div>
+        <div id="upload-progress" class="upload-progress" hidden><progress id="progress-bar" aria-label="Upload progress" max="100" value="0"></progress><span id="progress-text">Preparing upload…</span></div>
+        <div class="upload-actions"><p>New mods are imported disabled. Existing mods are preserved.</p><button id="upload-submit" class="primary" type="submit">Upload to Switch</button><button id="upload-cancel" type="button" hidden>Cancel</button></div>
+        <p id="upload-error" class="error-text" role="alert"></p>
+      </form>
+    </section>
+
+    <div class="mod-toolbar"><label class="search-box"><svg><use href="#i-search"/></svg><input id="search" type="search" placeholder="Search mods" aria-label="Search this game's mods"></label><button id="refresh" class="quiet"><svg><use href="#i-refresh"/></svg>Refresh</button></div>
+    <div class="list-heading"><span>Mod</span><span>Apply state</span><span>Requested</span></div>
+    <ul id="mods" class="mod-list"></ul>
+    <div id="empty-state" class="empty-state"><svg><use href="#i-stack"/></svg><h2>No mods in this library yet</h2><p>Upload a mod ZIP to begin. You can enable it after reviewing its contents and apply requirements.</p><button id="empty-upload" class="secondary"><svg><use href="#i-upload"/></svg>Upload your first mod</button></div>
+    <div id="no-results" class="empty-search" hidden><h2>No matching mods</h2><p>Try another name or clear the search.</p><button id="clear-search">Clear search</button></div>
+
+    <section id="inspector" class="inspector" aria-labelledby="inspector-title" hidden>
+      <div class="section-heading"><h2 id="inspector-title"></h2><span id="inspector-state" class="state-label"></span></div>
+      <p id="inspector-detail"></p><dl class="mod-facts"><div><dt>Contents</dt><dd id="mod-kind"></dd></div><div><dt>Files</dt><dd id="mod-files"></dd></div><div><dt>Size</dt><dd id="mod-size"></dd></div><div><dt>Mod ID</dt><dd><code id="mod-id"></code></dd></div></dl>
+      <div class="inspector-actions"><button id="toggle-selected" class="secondary"></button><button id="remove-selected" class="danger-quiet"><svg><use href="#i-trash"/></svg>Remove from library</button></div>
+      <div id="remove-confirm" class="remove-confirm" hidden><p id="remove-description"></p><button id="confirm-remove" class="danger">Remove mod</button><button id="cancel-remove">Keep mod</button></div>
+    </section>
+    <p id="action-message" class="action-message" role="status" aria-live="polite"></p>
+    <div class="library-footer"><span id="library-summary">Library ready</span></div>
+    </div>
+    <section id="settings-pane" class="settings-pane" aria-labelledby="settings-title" hidden>
+      <div class="settings-heading"><div><h1 id="settings-title" tabindex="-1">Settings</h1><p>Saved on your Switch and shared with Moader.</p></div><button id="close-settings" class="icon-button" aria-label="Back to library" title="Back to library"><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
+      <div class="settings-tabs" role="tablist" aria-label="Settings sections">
+        <button id="tab-general" role="tab" aria-controls="settings-general" aria-selected="true" tabindex="0" type="button">General</button>
+        <button id="tab-advanced" role="tab" aria-controls="settings-advanced" aria-selected="false" tabindex="-1" type="button">Advanced</button>
+        <button id="tab-credits" role="tab" aria-controls="settings-credits" aria-selected="false" tabindex="-1" type="button">Credits</button>
+      </div>
+      <form id="settings-form">
+        <section id="settings-general" class="settings-section" role="tabpanel" aria-labelledby="tab-general">
+          <label class="setting-row" for="pref-game-names"><span><strong>Show game names</strong><span>Use installed game names when available. Title IDs stay visible.</span></span><input id="pref-game-names" type="checkbox" name="gameNames" role="switch"></label>
+          <label class="setting-row" for="pref-reduced-motion"><span><strong>Reduce motion</strong><span>Turn off interface animation. Your system’s reduced-motion setting is always respected.</span></span><input id="pref-reduced-motion" type="checkbox" name="reducedMotion" role="switch"></label>
+          <label class="setting-row" for="pref-follow-log"><span><strong>Follow debug log</strong><span>Follow new events while you’re at the end of the log. Scroll up to read earlier events.</span></span><input id="pref-follow-log" type="checkbox" name="followLog" role="switch"></label>
+        </section>
+        <section id="settings-advanced" class="settings-section" role="tabpanel" aria-labelledby="tab-advanced" hidden>
+          <label class="setting-row" for="pref-web-on-start"><span><strong>Start web GUI with Moader</strong><span>Make the web GUI available when the console app starts.</span></span><input id="pref-web-on-start" type="checkbox" name="webOnStart" role="switch"></label>
+          <div class="setting-port"><label for="pref-web-port">Web port</label><input id="pref-web-port" name="webPort" type="number" min="1024" max="65535" step="1" required inputmode="numeric" aria-describedby="port-help"><p id="port-help">1024–65535, except 7713. Changes apply the next time you restart the web GUI with Y on the console.</p></div>
+          <div class="settings-runtime"><h2>Current session</h2><dl class="diagnostic-facts"><div><dt>Listener</dt><dd><code id="settings-listener"></code></dd></div><div><dt>Runtime backend</dt><dd id="settings-backend"></dd></div><div><dt>Runtime connection</dt><dd id="settings-runtime-connection"></dd></div><div><dt>Runtime result</dt><dd><code id="settings-result"></code></dd></div><div><dt>Library generation</dt><dd id="settings-generation"></dd></div><div><dt>Applied generation</dt><dd id="settings-applied-generation"></dd></div></dl><p class="small-copy">A connected runtime reports communication. Each mod’s apply state describes its routing requirements.</p><button id="download-log" type="button">Download debug log</button></div>
+        </section>
+        <section id="settings-credits" class="settings-section" role="tabpanel" aria-labelledby="tab-credits" hidden>
+          <div class="about-moader"><h2>Moader <span>0.1.0-dev</span></h2><p>Licensed under GNU GPL version 2.</p></div>
+          <ul class="credit-list">
+            <li><a href="https://github.com/ouncebrew/kaihen" target="_blank" rel="noopener noreferrer">kaiHEN</a><span>Homebrew environment and services</span></li>
+            <li><a href="https://github.com/SebaaMG/ns2jb-modloader" target="_blank" rel="noopener noreferrer">ns2jb-modloader</a><span>Filesystem mod-loader foundation</span></li>
+            <li><a href="https://github.com/ouncebrew/libounce" target="_blank" rel="noopener noreferrer">libounce</a><span>Console platform library</span></li>
+            <li><a href="https://devkitpro.org/" target="_blank" rel="noopener noreferrer">devkitPro</a><span>Compiler, tools and platform libraries</span></li>
+            <li><a href="https://github.com/notofonts/latin-greek-cyrillic" target="_blank" rel="noopener noreferrer">Noto Sans</a><span>Console interface font · SIL Open Font License 1.1</span></li>
+            <li><a href="https://github.com/nothings/stb/blob/master/stb_truetype.h" target="_blank" rel="noopener noreferrer">stb_truetype</a><span>Console font rasterizer · MIT / public domain</span></li>
+          </ul><p class="small-copy">These links open the upstream projects. The web GUI uses local system fonts and loads no external assets.</p>
+        </section>
+        <div id="settings-save-bar" class="settings-save-bar"><p id="settings-status" role="status" aria-live="polite">Loading settings…</p><div><button id="settings-reset" type="button" class="quiet" disabled>Discard edits</button><button id="settings-save" type="submit" class="primary" disabled>Save settings</button></div></div>
+        <p id="settings-error" class="error-text" role="alert"></p>
+      </form>
+    </section>
+  </section>
+
+  <aside class="debug-pane" aria-labelledby="debug-title">
+    <div class="debug-heading"><h2 id="debug-title"><svg><use href="#i-log"/></svg>Debug log</h2><button id="copy-log" class="icon-button" aria-label="Copy debug log" title="Copy debug log"><svg><use href="#i-copy"/></svg></button></div>
+    <div class="debug-status"><span class="status-dot"></span><span id="log-status">Waiting for events</span></div>
+    <ol id="events" class="event-list" aria-label="Service events" aria-live="polite" aria-relevant="additions"></ol>
+    <p id="events-empty" class="events-empty">Uploads and library changes will appear here. Runtime errors appear when a backend is attached.</p>
+    <div class="debug-footer"><span id="generation">Generation 0</span><span id="last-sync" title="Last successful sync">Not synced</span></div>
+  </aside>
+</main>
+</body>
+</html>

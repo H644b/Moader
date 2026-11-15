@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "illustrations": [
+    {
+      "file": "native-settings.png",
+      "sha256": "1426098fc9ff124b3cab54b6b2182787610ab1cc94dadaca0f40d4e576d15f6f",
+      "scope": "Synthetic sample library rendered by the actual interface; not a gameplay or device capture."
+    },
+    {
+      "file": "native-workbench.png",
+      "sha256": "5186b7002547a4f2260ed163f0e1a8e4d5a7185f678d9fc72e54467ab61a8043",
+      "scope": "Synthetic sample library rendered by the actual interface; not a gameplay or device capture."
+    },
+    {
+      "file": "web-workbench.png",
+      "sha256": "0f25877b9ed7dca906840f9fc2541c9432995cbadaf385b544b4fb59260b2546",
+      "scope": "Synthetic sample library rendered by the actual interface; not a gameplay or device capture."
+    }
+  ]
+}

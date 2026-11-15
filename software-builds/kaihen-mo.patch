@@ -1,0 +1,50 @@
+--- research/sources/kaihen/hen/source/game_arm.cpp	2026-11-13 21:18:44
++++ runtime/kaihen/hen/source/game_arm.cpp	2026-11-13 22:06:55
+@@ -538,7 +538,10 @@
+             return rc;
+         }
+         if (!allow_bridge_process_ && !isApplicationProgram(title)) {
+-            return UnexpectedState;
++            // An R press may precede HOME closing SmileBASIC, or may launch a
++            // Switch 1 title. Neither is a native homebrew target. Keep the
++            // pending native launch armed instead of permanently faulting HEN.
++            return 0;
+         }
+         active_title_ = title;
+     }
+--- research/sources/kaihen/hen/source/game_arm.hpp	2026-11-13 21:18:44
++++ runtime/kaihen/hen/source/game_arm.hpp	2026-11-13 22:06:55
+@@ -27,6 +27,7 @@
+     Result start(Handle filesystem_root, Handle bootstrap_process);
+     void step();
+     HenGameStatus status() const;
++    GameTraceSnapshot trace() const { return trace_.snapshot(); }
+ 
+   private:
+     enum class InputChoice {
+--- research/sources/kaihen/hen/source/server.cpp	2026-11-13 21:18:44
++++ runtime/kaihen/hen/source/server.cpp	2026-11-13 22:06:55
+@@ -248,6 +248,12 @@
+         if (!request.num_copy_handles) {
+             reply.result = 0;
+             reply.setData(game_.status());
++        }
++        return reply;
++    case HenControlCommand_MoaderGameTrace:
++        if (!request.num_copy_handles) {
++            reply.result = 0;
++            reply.setData(game_.trace());
+         }
+         return reply;
+     default:
+--- research/sources/kaihen/common/control.h	2026-11-13 21:18:44
++++ runtime/kaihen/common/control.h	2026-11-13 22:06:55
+@@ -20,6 +20,8 @@
+     HenControlCommand_ReleaseControlPort = 13,
+     HenControlCommand_CreateServiceManagerSession = 14,
+     HenControlCommand_CloneFilesystemRoot = 15,
++    // Moader diagnostic extension. Read-only on control and homebrew sessions.
++    HenControlCommand_MoaderGameTrace = 0x4d4f0001,
+ };
+ 
+ 

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Start with the documentation
+    url: https://github.com/H644b/Moader/blob/main/README.md
+    about: Setup, supported behavior and known apply requirements.
+  - name: Ask a question or discuss an idea
+    url: https://github.com/H644b/Moader/discussions
+    about: Get help or discuss a proposal before filing a bug.
+  - name: Report a security vulnerability privately
+    url: https://github.com/H644b/Moader/security/advisories/new
+    about: Do not post exploit details or credentials in a public issue.

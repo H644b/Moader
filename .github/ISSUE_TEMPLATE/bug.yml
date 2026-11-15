@@ -1,0 +1,74 @@
+name: Bug report
+description: Report a reproducible problem with Moader.
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        For security problems, use the private reporting link in the issue chooser.
+        Do not attach pairing codes, private addresses, account/session data, memory dumps or game assets.
+  - type: checkboxes
+    id: preparation
+    attributes:
+      label: Before filing
+      options:
+        - label: I checked the README and existing issues for this problem.
+          required: true
+        - label: My report contains no credentials or unredacted private data.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Moader version
+      description: Release tag or source commit; the current prerelease is v0.1.0-dev.
+      placeholder: v0.1.0-dev
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Console/firmware, kaiHEN version, native app or browser, and browser version if relevant. Leave unknown values unknown; omit addresses and account details.
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Runtime setup
+      options:
+        - Unknown
+        - Manager/browser only
+        - Privileged runtime installed in the current boot
+        - Console rebooted since runtime installation
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Number the actions. State content/menu reloads, game close/reopen and console reboots.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Separate the button/request result, native routing result and actual visible game behavior.
+    validations:
+      required: true
+  - type: dropdown
+    id: lifecycle
+    attributes:
+      label: Did the game or manager close?
+      options:
+        - Neither closed
+        - Closed normally by the user
+        - Crashed or was force-closed
+        - Not applicable or unknown
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Sanitized diagnostics
+      description: Optional short native result/generation excerpt or cropped screenshot. Remove pairing, network, account, path and session details. Do not upload a raw debug bundle.
+      render: text

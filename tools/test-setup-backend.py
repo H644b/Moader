@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""Isolated setup and command-wrapper checks; no network, console or real compiler."""
+import hashlib, importlib.util, io, json, os, pathlib, stat, subprocess, sys, tarfile, tempfile, unittest, zipfile
+from unittest.mock import patch
+sys.dont_write_bytecode = True
+
+
+def load(name, file):
+    spec = importlib.util.spec_from_file_location(name, pathlib.Path(__file__).with_name(file))
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module); return module
+
+
+backend = load('setup_backend', 'setup-backend.py')
+wrapper = load('install_from_rpc', 'install-from-rpc.py')
+
+
+def zip_bytes(files):
+    result = io.BytesIO()
+    with zipfile.ZipFile(result, 'w') as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+    return result.getvalue()
+
+
+class SetupTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(); self.addCleanup(self.temp.cleanup)
+        self.base = pathlib.Path(self.temp.name); self.root = self.base / 'kit'; self.root.mkdir()
+        self.network = patch.object(backend.urllib.request, 'urlopen', side_effect=AssertionError('No network in tests')).start(); self.addCleanup(patch.stopall)
+        self.hen = b'NSO0-tested-hen'
+        self.engine = {'host/index.cjs': b'module.exports={};', 'switch2/ro/payload/main': b'payload'}
+        self.official = {name: ('official-' + name).encode() for name in ('ro/main', 'hen/main', 'game/main', 'bootstrap.bin', 'hbmenu.nro', 'programs/ounceshell.nro', 'licenses/COPYING')}
+        self.kaihen = self.base / 'kaihen.zip'; self.kaihen.write_bytes(zip_bytes(self.official))
+        self.engine_zip = self.base / 'engine.zip'
+        files = {'ns2jb-' + backend.NS2JB_REV + '/engine/' + name: data for name, data in self.engine.items()}
+        files.update({'ns2jb-' + backend.NS2JB_REV + '/runs/private': b'never copy', 'ns2jb-' + backend.NS2JB_REV + '/.git/config': b'never copy'})
+        self.engine_zip.write_bytes(zip_bytes(files))
+        self.programs = self.base / 'app.zip'; self.programs.write_bytes(zip_bytes({'switch/Moader.nro': b'\0' * 16 + b'NRO0' + b'app', 'kaihen/plugins/moader.nso': b'NSO0service'}))
+        self.hen_file = self.base / 'hen'; self.hen_file.write_bytes(self.hen)
+        patch.object(backend, 'HEN_SHA', backend.digest(self.hen)).start()
+        patch.object(backend, 'ENGINE_TREE_SHA', backend.tree_sha(self.engine)).start()
+        patch.object(backend, 'KAIHEN_SHA', backend.digest(self.kaihen.read_bytes())).start()
+        self.put('software-builds/kaihen-mo.json', json.dumps({'hen_sha256': backend.HEN_SHA}).encode())
+        self.put('software-builds/kaihen-mo.patch', b'patch')
+        self.node = patch.object(backend, 'node_check', return_value='v24.14.0').start()
+
+    def put(self, name, data):
+        path = self.root / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(data); return path
+
+    def args(self, *extra):
+        return backend.parser().parse_args(['--root', str(self.root), '--offline', '--kaihen-archive', str(self.kaihen), '--engine-archive', str(self.engine_zip), '--programs-archive', str(self.programs), '--programs-sha256', backend.digest(self.programs.read_bytes()), '--hen-binary', str(self.hen_file), *extra])
+
+    def snapshot(self):
+        return {p.relative_to(self.root).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob('*') if p.is_file()}
+
+    def test_offline_provision_preserves_private_state_and_is_idempotent(self):
+        self.put('state/private-session', b'keep'); self.put('build/install/prepared-old/manifest.json', b'keep')
+        result = backend.setup(self.args()); self.assertTrue(result['readyForInstallerCheck']); self.assertFalse(result['consoleConnected'])
+        self.assertEqual((self.root / 'vendor/kaihen-mo/hen/main').read_bytes(), self.hen)
+        self.assertEqual(backend.tree_files(self.root / 'research/sources/ns2jb/engine'), self.engine)
+        self.assertEqual(backend.tree_files(self.root / 'vendor/kaihen-mo/programs'), {})
+        self.assertEqual(result['bundledPrograms'], [])
+        self.assertFalse((self.root / 'vendor/kaihen-mo/licenses').exists())
+        self.assertFalse((self.root / 'research/sources/ns2jb/runs').exists())
+        before = self.snapshot(); self.assertEqual(backend.setup(self.args())['newFiles'], 0); self.assertEqual(self.snapshot(), before)
+
+    def test_minimal_kit_downloads_only_two_pinned_inputs_and_keeps_hen(self):
+        self.put('vendor/kaihen-mo/hen/main', self.hen)
+        for name, data in backend.programs(backend.zip_files(self.programs)).items():
+            self.put(name, data)
+        tested = self.snapshot(); calls = []
+        def fetch(url, target, expected=None, offline=False):
+            calls.append((url, expected)); self.assertFalse(offline)
+            data = self.kaihen.read_bytes() if url == backend.KAIHEN_URL else self.engine_zip.read_bytes()
+            target.write_bytes(data); return target
+        args = backend.parser().parse_args(['--root', str(self.root)])
+        with patch.object(backend, 'download', side_effect=fetch), patch.object(backend, 'build_inputs', side_effect=AssertionError()):
+            result = backend.setup(args)
+        self.assertEqual(calls, [(backend.KAIHEN_URL, backend.KAIHEN_SHA), (backend.ENGINE_URL, None)])
+        self.assertEqual(result['bundledPrograms'], [])
+        self.assertTrue(all(self.snapshot()[name] == value for name, value in tested.items()))
+        self.assertEqual(backend.tree_files(self.root / 'vendor/kaihen-mo/programs'), {})
+
+    def test_optional_existing_programs_preserved_and_reported(self):
+        backend.setup(self.args()); self.put('vendor/kaihen-mo/programs/ounceshell.nro', self.official['programs/ounceshell.nro'])
+        self.assertEqual(backend.check_root(self.root)['bundledPrograms'], ['ounceshell.nro'])
+        self.put('vendor/kaihen-mo/programs/moader-diagnostics.nro', b'\0' * 16 + b'NRO0diagnostics')
+        self.assertEqual(backend.check_root(self.root)['bundledPrograms'], ['moader-diagnostics.nro', 'ounceshell.nro'])
+        self.put('vendor/kaihen-mo/programs/empty.nro', b'')
+        with self.assertRaisesRegex(ValueError, 'size bounds'):
+            backend.check_root(self.root)
+
+    def test_check_is_readonly_and_never_downloads_or_builds(self):
+        backend.setup(self.args()); before = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'build_inputs', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
+            backend.setup(self.args('--check'))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_imports_do_not_execute_or_create_outputs(self):
+        with patch.object(subprocess, 'run', side_effect=AssertionError()), patch.object(pathlib.Path, 'mkdir', side_effect=AssertionError()), patch.object(pathlib.Path, 'write_bytes', side_effect=AssertionError()):
+            load('backend_import_only', 'setup-backend.py')
+            load('wrapper_import_only', 'install-from-rpc.py')
+
+    def test_missing_inputs_check_stops_without_writes(self):
+        before = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaises(ValueError):
+            backend.setup(self.args('--check'))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_tampered_vendor_stops_without_writes(self):
+        backend.setup(self.args()); self.put('vendor/kaihen-mo/ro/main', b'changed'); before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'Refusing to replace'):
+            backend.setup(self.args())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_existing_source_tree_is_never_replaced(self):
+        self.put('research/sources/ns2jb/engine/local.cjs', b'changed'); before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'Existing engine differs'):
+            backend.setup(self.args())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_wrong_hen_stops_before_publish(self):
+        self.hen_file.write_bytes(b'wrong'); before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'tested bytes'):
+            backend.setup(self.args())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_wrong_official_archive_checksum_stops(self):
+        self.kaihen.write_bytes(b'changed')
+        with self.assertRaisesRegex(ValueError, 'Archive checksum'):
+            backend.setup(self.args())
+
+    def test_program_framing_rejected_before_publish(self):
+        self.programs.write_bytes(zip_bytes({'switch/Moader.nro': b'not NRO', 'kaihen/plugins/moader.nso': b'NSO0'})); before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'Invalid Moader NRO'):
+            backend.setup(self.args())
+        self.assertEqual(self.snapshot(), before)
+
+    def test_proof_cannot_select_arbitrary_hen(self):
+        self.put('software-builds/kaihen-mo.json', b'{"hen_sha256":"wrong"}')
+        with self.assertRaisesRegex(ValueError, 'proof/hash'):
+            backend.setup(self.args())
+
+    def test_publish_preflights_all_existing_files(self):
+        self.put('vendor/tested', b'original')
+        with self.assertRaisesRegex(ValueError, 'Refusing to replace'):
+            backend.publish_new(self.root, {'new': b'new', 'vendor/tested': b'changed'})
+        self.assertFalse((self.root / 'new').exists())
+
+    def test_symlink_destination_rejected(self):
+        (self.root / 'vendor').symlink_to(self.base, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            backend.publish_new(self.root, {'vendor/file': b'data'})
+        self.assertFalse((self.base / 'file').exists())
+
+    def test_unsafe_zip_paths_links_and_duplicates(self):
+        for name in ('../escape', '/absolute', 'a/../escape', 'a\\escape'):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                backend.zip_files(io.BytesIO(zip_bytes({name: b'data'})))
+        data = io.BytesIO()
+        with zipfile.ZipFile(data, 'w') as archive:
+            row = zipfile.ZipInfo('link'); row.external_attr = (stat.S_IFLNK | 0o777) << 16; archive.writestr(row, 'target')
+        with self.assertRaisesRegex(ValueError, 'links/special'):
+            backend.zip_files(io.BytesIO(data.getvalue()))
+        data = zip_bytes({'a/b': b'one', 'a//b': b'two'})
+        with self.assertRaisesRegex(ValueError, 'Duplicate'):
+            backend.zip_files(io.BytesIO(data))
+
+    def test_zip_size_bound(self):
+        with patch.object(backend, 'MAX_FILE', 3), self.assertRaisesRegex(ValueError, 'bound'):
+            backend.zip_files(io.BytesIO(zip_bytes({'large': b'1234'})))
+
+    def test_source_tar_selection_and_link_refusal(self):
+        target = self.base / 'engine.tar.gz'
+        def make_tar(link=False):
+            with tarfile.open(target, 'w:gz') as archive:
+                for name, data in self.engine.items():
+                    row = tarfile.TarInfo('ns2jb-' + backend.NS2JB_REV + '/engine/' + name); row.size = len(data); archive.addfile(row, io.BytesIO(data))
+                if link:
+                    row = tarfile.TarInfo('link'); row.type = tarfile.SYMTYPE; row.linkname = '/tmp'; archive.addfile(row)
+        make_tar(); self.assertEqual(backend.engine_files(target), self.engine)
+        make_tar(True)
+        with self.assertRaisesRegex(ValueError, 'links/special'):
+            backend.engine_files(target)
+
+    def test_engine_pin_has_no_revision_fallback(self):
+        self.engine_zip.write_bytes(zip_bytes({'engine/changed.cjs': b'changed'}))
+        with self.assertRaisesRegex(ValueError, 'no fallback'):
+            backend.engine_files(self.engine_zip)
+
+    def test_offline_and_unapproved_url_refusal(self):
+        with self.assertRaisesRegex(ValueError, 'Offline'):
+            backend.download(backend.ENGINE_URL, self.base / 'out', offline=True)
+        for url in ('http://github.com/x', 'https://example.com/x'):
+            with self.assertRaisesRegex(ValueError, 'HTTPS'):
+                backend.download(url, self.base / 'out')
+
+    def test_unsupported_build_rejected_before_fetch_or_write(self):
+        before = self.snapshot()
+        with patch.object(backend.platform, 'system', return_value='Linux'), patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'Apple Silicon'):
+            backend.setup(self.args('--build'))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_build_runs_only_in_private_copy(self):
+        for name in ('include', 'source', 'native', 'branding', 'web', 'tests', 'runtime/kaihen'):
+            self.put(name + '/source.txt', b'source')
+        self.put('Makefile', b'make'); self.put('tools/embed-web.py', b'embed')
+        self.put('runtime/kaihen/hen/build/do-not-copy', b'tested'); self.put('state/private', b'private')
+        before = self.snapshot(); work = self.base / 'work'; work.mkdir(); calls = []
+        def make(command, **kwargs):
+            calls.append(command); self.assertTrue(kwargs['check']); self.assertNotIn('shell', kwargs)
+            directory = pathlib.Path(command[2]); self.assertTrue(directory.is_relative_to(work))
+            if directory.name == 'hen':
+                (directory / 'build').mkdir(); (directory / 'build/main').write_bytes(self.hen)
+                self.assertFalse((directory / 'build/do-not-copy').exists())
+            else:
+                (directory / 'dist').mkdir()
+                for name, data in backend.programs(backend.zip_files(self.programs)).items():
+                    (directory / name).write_bytes(data)
+                self.assertFalse((directory / 'state').exists()); self.assertTrue((directory / 'tests/source.txt').exists())
+        with patch.object(backend, 'sdk', return_value=self.base / 'sdk'), patch.object(backend.subprocess, 'run', side_effect=make):
+            hen, app = backend.build_inputs(self.root, work)
+        self.assertEqual(hen, self.hen); self.assertEqual(len(calls), 2); self.assertEqual(self.snapshot(), before)
+
+
+class SourcesOnlyTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='Moader source mode '); self.addCleanup(self.temp.cleanup)
+        self.base = pathlib.Path(self.temp.name); self.root = self.base / 'clean checkout'; self.root.mkdir()
+        self.engine = {'shared/rpc.cjs': b'module.exports={};', 'switch2/ro/payload/main': b'payload'}
+        self.archive = self.base / 'upstream.zip'
+        self.archive.write_bytes(zip_bytes({'engine/' + name: data for name, data in self.engine.items()} | {'runs/private': b'never copy', '.git/config': b'never copy'}))
+        patch.object(backend, 'ENGINE_TREE_SHA', backend.tree_sha(self.engine)).start(); self.addCleanup(patch.stopall)
+        for name in ('proof', 'sdk', 'build_inputs', 'check_root', 'node_check'):
+            patch.object(backend, name, side_effect=AssertionError('Source mode must not use ' + name)).start()
+        patch.object(backend.urllib.request, 'urlopen', side_effect=AssertionError('No network in fixture tests')).start()
+        patch.object(backend.subprocess, 'run', side_effect=AssertionError('No subprocess in source mode')).start()
+
+    def args(self, *extra):
+        return backend.parser().parse_args(['--root', str(self.root), '--sources-only', *extra])
+
+    def snapshot(self):
+        return {p.relative_to(self.root).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns) for p in self.root.rglob('*') if p.is_file()}
+
+    def test_offline_source_only_from_empty_checkout_and_idempotent_validation(self):
+        result = backend.setup(self.args('--offline', '--engine-archive', str(self.archive)))
+        self.assertEqual(result['mode'], 'sources-only'); self.assertFalse(result['consoleConnected'])
+        self.assertEqual(result['newFiles'], len(self.engine)); self.assertEqual(result['engineFiles'], len(self.engine))
+        self.assertNotIn('readyForInstallerCheck', result)
+        self.assertEqual(set(self.snapshot()), {'research/sources/ns2jb/engine/' + name for name in self.engine})
+        self.assertEqual(backend.tree_files(self.root / 'research/sources/ns2jb/engine'), self.engine)
+        before = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
+            self.assertEqual(backend.setup(self.args('--offline'))['newFiles'], 0)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_source_download_uses_only_fixed_upstream_url(self):
+        calls = []
+        def fetch(url, target, expected=None, offline=False):
+            calls.append((url, expected, offline)); target.write_bytes(self.archive.read_bytes()); return target
+        with patch.object(backend, 'download', side_effect=fetch):
+            backend.setup(self.args())
+        self.assertEqual(calls, [(backend.ENGINE_URL, None, False)])
+        self.assertFalse((self.root / 'research/artifacts').exists()); self.assertFalse((self.root / 'vendor').exists())
+        self.assertFalse((self.root / 'dist').exists()); self.assertFalse((self.root / 'build').exists())
+
+    def test_conflicting_modes_and_non_source_inputs_fail_before_work(self):
+        options = [('--check',), ('--build',), ('--node', 'node'), ('--node', ''), ('--release-manifest', str(self.archive)), ('--kaihen-archive', str(self.archive)), ('--programs-archive', str(self.archive)), ('--programs-sha256', 'a' * 64), ('--programs-sha256', ''), ('--hen-binary', str(self.archive))]
+        for option in options:
+            with self.subTest(option=option), patch.object(backend, 'setup_sources', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'conflicting options'):
+                backend.setup(self.args(*option))
+        self.assertEqual(self.snapshot(), {})
+
+    def test_offline_missing_archive_stops_without_outputs(self):
+        with self.assertRaisesRegex(ValueError, 'Offline'):
+            backend.setup(self.args('--offline'))
+        self.assertEqual(list(self.root.iterdir()), [])
+
+    def test_changed_existing_tree_stops_without_download_or_overwrite(self):
+        target = self.root / 'research/sources/ns2jb/engine'; target.mkdir(parents=True); (target / 'private.cjs').write_bytes(b'keep')
+        before = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'Existing engine differs'):
+            backend.setup(self.args('--offline', '--engine-archive', str(self.archive)))
+        self.assertEqual(self.snapshot(), before)
+
+    def test_symlink_parent_and_non_directory_parent_fail_before_download(self):
+        outside = self.base / 'outside'; outside.mkdir(); (self.root / 'research').symlink_to(outside, target_is_directory=True)
+        with patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'symlink'):
+            backend.setup(self.args())
+        self.assertEqual(list(outside.iterdir()), [])
+        (self.root / 'research').unlink(); (self.root / 'research').write_bytes(b'keep')
+        with patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'parent directory'):
+            backend.setup(self.args())
+        self.assertEqual((self.root / 'research').read_bytes(), b'keep')
+
+    def test_bad_pin_and_traversal_archive_never_publish(self):
+        for files in ({'engine/changed.cjs': b'changed'}, {'engine/../escape': b'escape'}):
+            with self.subTest(files=files):
+                self.archive.write_bytes(zip_bytes(files))
+                with patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaises(ValueError):
+                    backend.setup(self.args('--offline', '--engine-archive', str(self.archive)))
+                self.assertEqual(list(self.root.iterdir()), [])
+
+
+class WrapperTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='Moader spaces '); self.addCleanup(self.temp.cleanup)
+        self.root = pathlib.Path(self.temp.name)
+        self.node = self.root / 'mac2jb Node 24/node'; self.node.parent.mkdir(); self.node.write_bytes(b'fake node'); self.node.chmod(0o700)
+        self.run = self.root / 'runs/switch2-AbC123'; self.run.mkdir(parents=True)
+        self.rpc = self.root / 'untrusted rpc/rpc.cjs'
+        import shlex
+        self.status = shlex.join([str(self.node), str(self.rpc), str(self.run), 'status'])
+
+    def test_parse_exact_status_preserves_spaces_and_executable(self):
+        self.assertEqual(wrapper.parse_status(self.status), (str(self.node), self.run))
+
+    def test_malformed_or_shell_status_rejected(self):
+        for command in (self.status + '; touch /tmp/no', self.status.replace('status', '"{}"'), 'node rpc.cjs run status', self.status + ' extra', self.status.replace('switch2-AbC123', 'wrong')):
+            with self.subTest(command=command), self.assertRaises(ValueError):
+                wrapper.parse_status(command)
+
+    def test_parse_only_does_not_execute(self):
+        with patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), patch('sys.stdout', new=io.StringIO()):
+            self.assertIsNone(wrapper.main(['--status-command', self.status]))
+
+    def test_prepare_uses_local_scripts_exact_node_and_unique_manifest(self):
+        manifest = self.root / 'build/install/prepared-abc/manifest.json'; manifest.parent.mkdir(parents=True); manifest.write_text('{}')
+        calls = []
+        def execute(command, **kwargs):
+            calls.append(command); self.assertNotIn('shell', kwargs)
+            if command[1] == '--version':
+                return subprocess.CompletedProcess(command, 0, 'v24.14.0\n', '')
+            if command[-1] == '--check':
+                return subprocess.CompletedProcess(command, 0, wrapper.PREFIX + str(manifest) + wrapper.SUFFIX + '\n', '')
+            return subprocess.CompletedProcess(command, 0)
+        with patch.object(wrapper.subprocess, 'run', side_effect=execute):
+            command = wrapper.prepare(self.root, str(self.node), self.run)
+        self.assertEqual(command, [str(self.node), str(self.root / 'tools/install-moader.cjs'), '--prepared', str(manifest), str(self.run)])
+        self.assertEqual(len(calls), 3); self.assertIn(str(self.node), calls[1]); self.assertEqual(calls[2][0], str(self.node))
+        self.assertTrue(all(str(self.rpc) not in command for command in calls))
+        self.assertTrue(all(str(self.run) not in command for command in calls))
+
+    def test_node26_is_refused_before_setup(self):
+        with patch.object(wrapper.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, 'v26.11.1\n', '')) as execute, self.assertRaisesRegex(ValueError, 'Node 24'):
+            wrapper.prepare(self.root, str(self.node), self.run)
+        self.assertEqual(execute.call_count, 1)
+
+    def test_mutable_pointer_or_ambiguous_output_is_refused(self):
+        for path in (self.root / 'build/install/manifest.json', self.root / 'outside/prepared-abc/manifest.json'):
+            with self.assertRaisesRegex(ValueError, 'unique'):
+                wrapper.prepared_manifest(wrapper.PREFIX + str(path) + wrapper.SUFFIX, self.root)
+        with self.assertRaisesRegex(ValueError, 'exactly one'):
+            wrapper.prepared_manifest('', self.root)
+
+    def test_symlink_manifest_ancestor_is_refused(self):
+        outside = self.root / 'outside'; (outside / 'install/prepared-abc').mkdir(parents=True)
+        (outside / 'install/prepared-abc/manifest.json').write_text('{}')
+        (self.root / 'build').symlink_to(outside, target_is_directory=True)
+        manifest = self.root / 'build/install/prepared-abc/manifest.json'
+        with self.assertRaisesRegex(ValueError, 'symlink'):
+            wrapper.prepared_manifest(wrapper.PREFIX + str(manifest) + wrapper.SUFFIX, self.root)
+
+
+if __name__ == '__main__':
+    unittest.main(verbosity=2)

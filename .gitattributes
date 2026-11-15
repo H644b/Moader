@@ -1,0 +1,9 @@
+* text=auto eol=lf
+# Preserve byte-qualified upstream/native inputs on every checkout platform.
+runtime/** -text
+include/moader/runtime*.h -text
+*.png binary
+*.jpg binary
+*.ttf binary
+*.wasm binary
+*.zip binary

@@ -1,0 +1,11 @@
+{
+  "base_commit": "e897f991524590833b82fbe8d63a3c6775fb8101",
+  "release_base": "20261114c",
+  "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
+  "patch": "software-builds/kaihen-mo.patch",
+  "hen_sha256": "e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c",
+  "native_build_passed": true,
+  "console_retest_passed": true,
+  "reason": "Keep unsupported active applications from permanently faulting first-launch policy capture; add read-only GameTrace query.",
+  "validation_scope": "The patched HEN and Moader resident/FS integration passed device checks, including native diagnostics and a bounded MK8 live texture enable/disable/removal test. See docs/VALIDATION.md for scope."
+}

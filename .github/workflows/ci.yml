@@ -1,0 +1,124 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+  UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+
+jobs:
+  public-tree:
+    name: Public tree
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Test publication guard
+        run: |
+          python3 .github/tests/test_public_tree.py
+          python3 .github/tests/test_host_deps.py
+      - name: Scan clean public checkout
+        run: python3 tools/check-public-tree.py .
+
+  host-core:
+    name: Host core and HTTP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install host compiler and zlib
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y clang zlib1g-dev
+      - name: Core, pairing and real loopback HTTP
+        run: |
+          python3 tools/test-core.py
+          python3 tools/test-web.py
+      - name: Actual C producer and C++ runtime reader
+        run: python3 tools/test-runtime-logs.py
+
+  host-sdk:
+    name: Host SDK and resident
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - name: Install host compiler and zlib
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y clang zlib1g-dev
+      - name: Prepare checksum-pinned SDK declarations
+        run: python3 .github/scripts/prepare-host-deps.py --sdk
+      - name: Generate public web header for resident harness
+        run: python3 tools/embed-web.py
+      - name: Production parsers, resolver, worker and resident with fake SDK calls
+        run: |
+          python3 tools/test-metadata-names.py
+          python3 tools/test-game-names.py
+          python3 tools/test-web-worker.py
+          python3 tools/test-resident.py
+
+  installer-runtime:
+    name: Installer and runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Verify checked-in prebuilt sources and component hashes
+        run: node -e "require('./runtime/modloader/lib/native/artifacts.cjs').artifacts(); console.log('Prebuilt source/component hashes verified.')"
+      - name: Prepare checksum-pinned upstream installer inputs
+        run: python3 .github/scripts/prepare-host-deps.py --installer
+      - name: Fetch pinned local engine source for mocked protocol tests
+        run: python3 tools/setup-backend.py --sources-only
+      - name: Installer and control safety with mocked transports
+        run: |
+          python3 tools/test-setup-backend.py
+          node tools/test-installers.cjs
+          node tools/test-control-resident.cjs
+          node tools/test-inspect-hen.cjs
+      - name: Portable runtime preparation regressions
+        run: |
+          node runtime/modloader/tests/pchtxt.cjs
+          node runtime/modloader/tests/patch-layout.cjs
+          for test in runtime/modloader/tests/diagnostics/*.cjs; do
+            node "$test"
+          done

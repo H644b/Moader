@@ -1,0 +1,70 @@
+name: Mod compatibility report
+description: Record what a specific mod actually does, including content reload requirements.
+title: "[Compatibility]: "
+labels: [compatibility, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Report observations without attaching game/mod binaries or original content.
+        No original-file hash experiment is required. A routing receipt alone is not a visible game result.
+  - type: input
+    id: version
+    attributes:
+      label: Moader version
+      placeholder: v0.1.0-dev
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game, edition, version and Title ID
+      description: Include what you know. Leave unknown fields unknown.
+    validations:
+      required: true
+  - type: input
+    id: mod
+    attributes:
+      label: Mod name/version and public source link
+      description: Use a public project page if available; do not link private downloads or attach copyrighted assets.
+    validations:
+      required: true
+  - type: dropdown
+    id: layout
+    attributes:
+      label: Payload layout
+      options:
+        - Unknown
+        - Loose RomFS files
+        - RomFS image
+        - ExeFS modules or executable patches
+        - Mixed payload
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Setup and actions
+      description: Console/firmware and kaiHEN versions if known; current-boot runtime status; import/enable/disable/removal actions. Omit private identifiers and addresses.
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed game behavior
+      description: What changed when enabled, disabled or removed? Which scene/content reload, game relaunch or console reboot was used? Include a negative result honestly.
+    validations:
+      required: true
+  - type: textarea
+    id: native
+    attributes:
+      label: Native status and sanitized messages
+      description: Requested/applied generation and result, if available. Describe a visible effect separately. Never paste a pairing code, raw private bundle, game bytes or session data.
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Sharing check
+      options:
+        - label: I included no credentials, private data, game assets or original-content dumps.
+          required: true

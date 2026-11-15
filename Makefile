@@ -1,0 +1,149 @@
+DEVKITPRO ?= $(CURDIR)/vendor/devkitpro
+export DEVKITPRO
+include $(DEVKITPRO)/libounce/switch2_cpu.mk
+PREFIX := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
+ARCH := $(SWITCH2_CPU) -mtp=soft -fPIE
+CPPFLAGS := -D__SWITCH__ -D__SWITCH2__ -Iinclude -I$(DEVKITPRO)/libounce/include -I$(DEVKITPRO)/portlibs/switch/include -I$(DEVKITPRO)/portlibs/switch2/include
+CXXFLAGS := $(ARCH) -std=gnu++20 -O2 -g -Wall -Wextra -Werror -Wno-missing-field-initializers -ffunction-sections -fdata-sections -MMD -MP
+CORE := build/native/model.o build/native/library.o build/native/zip.o build/native/web.o build/native/runtime_backend.o
+
+all: build/native/libmoader.a build/native/core-linkcheck.elf dist/Moader.nro dist/moader.nso dist/moader-diagnostics.nro
+
+build/native dist:
+	mkdir -p $@
+
+build/native/%.o: source/%.cpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/native/libmoader.a: $(CORE)
+	$(PREFIX)ar rcs $@ $^
+
+build/native/switch.specs: $(DEVKITPRO)/libounce/switch.specs | build/native
+	sed 's|%:getenv(DEVKITPRO /libnx/switch.ld)|$(DEVKITPRO)/libounce/switch.ld|' $< > $@
+
+build/native/diagnostics.o: native/diagnostics.cpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/generated/web_assets.hpp: web/index.html web/style.css web/app.js web/icon.svg tools/embed-web.py
+	python3 tools/embed-web.py
+
+build/generated/native_font.hpp: native/assets/NotoSans-Regular.ttf native/embed-font.py
+	python3 native/embed-font.py
+
+build/native/ui.o: native/ui.cpp native/ui.hpp native/third_party/stb_truetype.h branding/mark-alpha.hpp build/generated/native_font.hpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -Wno-unused-function -c $< -o $@
+
+build/native/app.o: native/app.cpp build/generated/web_assets.hpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
+
+build/native/service.o: native/service.cpp build/generated/web_assets.hpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
+
+build/native/Moader.elf: build/native/app.o build/native/ui.o build/native/libmoader.a build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections build/native/app.o build/native/ui.o build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
+
+build/native/moader-service.elf: build/native/service.o build/native/libmoader.a build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< build/native/libmoader.a -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
+
+build/native/Moader.nacp: | build/native
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader' 'Moader' '0.1.0-dev' $@
+
+dist/Moader.nro: build/native/Moader.elf build/native/Moader.nacp branding/hbmenu.jpg | dist
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/Moader.nacp --icon=branding/hbmenu.jpg
+
+dist/moader.nso: build/native/moader-service.elf | dist
+	$(DEVKITPRO)/tools/bin/elf2nso $< $@
+
+build/native/diagnostics.elf: build/native/diagnostics.o build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -lounce_core -o $@
+
+build/native/diagnostics.nacp: | build/native
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader Diagnostics' 'Moader' '0.1.0-dev' $@
+
+build/native/core-linkcheck.o: tests/native_link.cpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/native/core-linkcheck.elf: build/native/core-linkcheck.o build/native/libmoader.a build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
+
+dist/moader-diagnostics.nro: build/native/diagnostics.elf build/native/diagnostics.nacp | dist
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/diagnostics.nacp
+
+check: build/generated/web_assets.hpp
+	python3 tools/test-core.py
+	python3 tools/test-web.py
+	python3 tools/test-web-worker.py
+	python3 tools/test-runtime.py
+	python3 tools/test-runtime-logs.py
+	python3 tools/test-metadata-names.py
+	python3 tools/test-game-names.py
+	python3 tools/test-resident.py
+
+-include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/ui.d build/native/service.d
+.PHONY: all check
+
+# Uses the identical renderer and embedded font; fixtures are explicitly synthetic.
+build/host/native-capture: native/ui_capture.cpp native/ui.cpp native/ui.hpp native/ui_bitmap.hpp branding/mark-alpha.hpp build/generated/native_font.hpp
+	mkdir -p build/host
+	c++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unused-function -Iinclude -Ibuild/generated native/ui_capture.cpp native/ui.cpp -o $@
+
+native-captures: build/host/native-capture
+	build/host/native-capture native/review
+	python3 native/ui_capture_convert.py
+
+.PHONY: native-captures
+
+build/host/native-control-test: native/ui_control_test.cpp native/control.hpp native/ui_tests/switch.h include/moader/ipc.hpp source/model.cpp source/library.cpp source/zip.cpp source/web.cpp
+	mkdir -p build/host
+	c++ -std=c++20 -O1 -g -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -Inative/ui_tests -Inative -Iinclude native/ui_control_test.cpp source/model.cpp source/library.cpp source/zip.cpp source/web.cpp -lz -pthread -o $@
+
+native-check: build/host/native-control-test build/host/native-capture
+	build/host/native-control-test
+	build/host/native-capture native/review
+
+.PHONY: native-check
+
+# Isolated, normal NRO: bounded NS metadata reads only, started by A.
+build/native/metadata.o: native/metadata.cpp native/metadata_names.hpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/native/metadata.elf: build/native/metadata.o build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
+
+build/native/metadata.nacp: | build/native
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader Metadata' 'Moader' '0.1.0-dev' $@
+
+dist/moader-metadata.nro: build/native/metadata.elf build/native/metadata.nacp | dist
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/metadata.nacp
+
+-include build/native/metadata.d
+
+# Ordinary read-only consumer for same-storage MK8 verification; not part of all.
+build/native/read-probe.o: native/read_probe.cpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/native/read-probe.elf: build/native/read-probe.o build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -lounce_core -o $@
+
+build/native/read-probe.nacp: | build/native
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader MK8 Read Probe' 'Moader' '0.1.0-dev' $@
+
+dist/moader-read-probe.nro: build/native/read-probe.elf build/native/read-probe.nacp branding/hbmenu.jpg | dist
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/read-probe.nacp --icon=branding/hbmenu.jpg
+
+-include build/native/read-probe.d
+
+# Ordinary fixed-path log access diagnostic; separate from the release build.
+build/native/log-probe.o: native/log_probe.cpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/native/log-probe.elf: build/native/log-probe.o build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -lounce_core -o $@
+
+build/native/log-probe.nacp: | build/native
+	$(DEVKITPRO)/tools/bin/nacptool --create 'MoaderLogProbe' 'Moader' '0.1.0-diag' $@
+
+dist/moader-log-probe.nro: build/native/log-probe.elf build/native/log-probe.nacp branding/hbmenu.jpg | dist
+	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/log-probe.nacp --icon=branding/hbmenu.jpg
+
+-include build/native/log-probe.d

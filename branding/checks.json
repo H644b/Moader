@@ -1,0 +1,37 @@
+{
+  "canonical_viewbox": [
+    0,
+    0,
+    64,
+    64
+  ],
+  "canonical_ink_bounds": [
+    8,
+    12,
+    56,
+    52
+  ],
+  "canonical_path_sha256": "fa0a6969ccb73883ab345a49f869b6532a5851d04fd8ffe553ffb0c0a57ad299",
+  "native_mask_dimensions": [
+    96,
+    96
+  ],
+  "native_mask_bytes": 9216,
+  "native_mask_sha256": "7e0ad290bc6f7ac6ac9d337c30e9c49109c0d1d1f2b4eaf8d9f0a7b3c3e2f13d",
+  "native_alpha_range": [
+    0,
+    255
+  ],
+  "native_alpha_nonzero_bounds_including_lanczos_fringe": [
+    9,
+    15,
+    87,
+    81
+  ],
+  "hbmenu_size": [
+    256,
+    256
+  ],
+  "hbmenu_mode": "RGB",
+  "export_geometry_matches": true
+}
