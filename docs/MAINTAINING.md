@@ -6,13 +6,13 @@ The public source includes Moader source, tests, scripts, documentation, licensi
 
 ## Release layout
 
-Use the explicit prerelease tag `v0.1.0-dev`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev/…` or the tag page.
+Use the explicit prerelease tag `v0.1.0-dev.1`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.1/…` or the tag page.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.0-dev.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.0-dev.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev` folder includes `START_HERE.txt` |
+| `Moader-v0.1.0-dev.1.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.1.0-dev.1.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev.1` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the tested app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -26,7 +26,7 @@ The minimal host kit has no `research/` content and does not bundle the full off
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-v0.1.0-dev.1.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
@@ -47,7 +47,7 @@ Finish the intended build and checks, audit the public source, and commit all re
 python3 tools/package-release.py
 ```
 
-The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.zip`, `Moader-backend-v0.1.0-dev.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
+The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.1.zip`, `Moader-backend-v0.1.0-dev.1.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
 
 ## Native changes
 
@@ -68,9 +68,33 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 
 1. Run `python3 tools/test-setup-backend.py` and the relevant host tests. Native tests that use SDK headers need the pinned SDK; `make check` itself is not SDK-free.
 2. Inspect the public export and both ZIP inventories for forbidden private paths and missing license/source files. Scan text for personal paths, accounts, credentials and captured session identifiers. Keep release checksums for the final bytes.
-3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries except the patched HEN, run `python3 tools/setup-backend.py --node /absolute/path/to/mac2jb/node`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the patched HEN is unchanged, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
-4. Run `python3 tools/setup-backend.py --check --node /absolute/path/to/mac2jb/node` twice. It must not download, compile or change files. Run the local installer `--check` with that same Node executable and confirm it prints a unique `build/install/prepared-*/manifest.json`, validates both programs and performs no console connection.
-5. Exercise the wrapper with a legitimate four-token mac2jb status command. It must preserve the exact Node 24 path, execute local Moader scripts only, create a unique local snapshot and print a matching `--prepared` install command. The wrapper never performs installation itself.
+3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries except the patched HEN, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the patched HEN is unchanged, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
+4. Run `python3 tools/setup-backend.py --check --node /absolute/path/to/node24` twice. It must not download, compile or change files. Run the local installer `--check` with that same Node executable and confirm it prints a unique `build/install/prepared-*/manifest.json`, validates both programs and performs no console connection.
+5. Exercise the direct ns2jb wrapper with `--run-dir PATH --node node` and separately the existing mac2jb status-command route. Both must preserve the selected Node 24, execute local Moader scripts only, create a unique local snapshot and print a matching `--prepared` install command. The wrapper never performs installation itself. `python3 tools/test-ns2jb-host.py --online --node node` checks real precompiled-kit preparation with public inputs and transport calls blocked; it does not acquire FS or install on a console.
 6. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
 
 Use [INSTALLATION.md](INSTALLATION.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
+
+
+## Update the official GitHub Wiki
+
+The [GitHub Wiki](https://github.com/H644b/Moader/wiki) uses the same guides as this repository. Edit the canonical Markdown under `docs/` first, then regenerate the linked wiki pages:
+
+```sh
+python3 tools/build-wiki.py
+```
+
+This writes 14 Markdown pages under `build/wiki/`, including Home, navigation and FAQ. It rewrites repository-relative links for the wiki and keeps interface images in the main public repository. It never publishes by itself. CI checks generation alongside the public source guard.
+
+For a repository maintainer, clone the official wiki, copy the generated pages, review the diff, then commit and push:
+
+```sh
+git clone https://github.com/H644b/Moader.wiki.git build/wiki-repo
+cp build/wiki/*.md build/wiki-repo/
+git -C build/wiki-repo diff
+git -C build/wiki-repo add '*.md'
+git -C build/wiki-repo commit -m "Update Moader usage guides"
+git -C build/wiki-repo push
+```
+
+GitHub initializes a new wiki's Git repository only after its first page is created in the website editor. For a new wiki, enable it and create Home on GitHub before cloning it. Wiki edits are maintained separately from application tags; keep the current setup guide and release links aligned.

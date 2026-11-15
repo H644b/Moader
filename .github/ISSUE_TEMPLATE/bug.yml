@@ -21,8 +21,8 @@ body:
     id: version
     attributes:
       label: Moader version
-      description: Release tag or source commit; the current prerelease is v0.1.0-dev.
-      placeholder: v0.1.0-dev
+      description: Release tag or source commit; the current prerelease is v0.1.0-dev.1. The unchanged app binary displays 0.1.0-dev.
+      placeholder: v0.1.0-dev.1
     validations:
       required: true
   - type: textarea

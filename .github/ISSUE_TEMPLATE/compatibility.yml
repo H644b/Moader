@@ -12,7 +12,8 @@ body:
     id: version
     attributes:
       label: Moader version
-      placeholder: v0.1.0-dev
+      description: Release tag or source commit; v0.1.0-dev.1 retains the app's 0.1.0-dev label.
+      placeholder: v0.1.0-dev.1
     validations:
       required: true
   - type: input

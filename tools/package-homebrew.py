@@ -6,6 +6,7 @@ import json
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
+release = json.loads((root / 'config/release.json').read_text())
 files = {
     'switch/Moader.nro': root / 'dist/Moader.nro',
     'kaihen/plugins/moader.nso': root / 'dist/moader.nso',
@@ -38,8 +39,9 @@ The moader.nso file is staged for a later kaiHEN bootstrap; copying it does
 not start it in an already-running HEN. Resident browser access during games
 also requires the separate privileged filesystem-runtime installation.
 This archive does not perform that installation. Beginner setup and usage:
-https://github.com/H644b/Moader/blob/v0.1.0-dev/docs/INSTALLATION.md
-https://github.com/H644b/Moader/blob/v0.1.0-dev/docs/USAGE.md
+https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/INSTALLATION.md
+https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/USAGE.md
+https://github.com/H644b/Moader/wiki
 
 Native debug output in this build requires the matching updated filesystem
 runtime, which publishes closed log snapshots. Resident browser management,
@@ -56,9 +58,9 @@ or the game to relaunch. Do not infer game success from a library write.
 
 No device pairing code, saves, firmware, game files or private state are
 included in this package. Corresponding source, credits and build instructions:
-https://github.com/H644b/Moader/tree/v0.1.0-dev
+https://github.com/H644b/Moader/tree/RELEASE_TAG
 This is a development prerelease.
-'''
+'''.replace('RELEASE_TAG', release['tag'])
 manifest = {name: {'bytes': path.stat().st_size,
                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
             for name, path in files.items()}

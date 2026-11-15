@@ -2,7 +2,7 @@
 
 Start with the [README](README.md) and open a [bug, compatibility report or feature request](https://github.com/H644b/Moader/issues/new/choose). For questions and early ideas, use [Discussions](https://github.com/H644b/Moader/discussions). Small fixes can go straight to a pull request; discuss larger runtime or installation changes first.
 
-Moader is a prerelease Switch 2 mod manager. The current version is **v0.1.0-dev** (the application displays `0.1.0-dev`). The native app, browser and privileged filesystem runtime have different lifetimes and responsibilities. Keep requested settings, accepted native routing and visible game behavior distinct in reports and changes.
+Moader is a prerelease Switch 2 mod manager. The current release is **v0.1.0-dev.1** (the application displays `0.1.0-dev`). The native app, browser and privileged filesystem runtime have different lifetimes and responsibilities. Keep requested settings, accepted native routing and visible game behavior distinct in reports and changes.
 
 ## Make a change
 

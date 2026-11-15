@@ -14,18 +14,27 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev — first prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev)**.
+Start with **[v0.1.0-dev.1 — host setup update](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.1)**. This updates the host kit/docs; the app, resident service and HEN bytes are unchanged, and the app still displays `0.1.0-dev`. The [original prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) remains available.
 
 | Download | Use it for |
 | --- | --- |
 | [Moader-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-backend-v0.1.0-dev.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
+| [Moader-backend-v0.1.0-dev.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.1/Moader-backend-v0.1.0-dev.1.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 
 ## Supported setup
 
-The guided and verified backend route is **macOS + mac2jb, using SmileBASIC/ns2jb to obtain a verified FS session**. Follow the [official mac2jb requirements and instructions](https://github.com/cpypwn/mac2jb#readme) for current console, application and firmware prerequisites. A stock-console installer is not included; alternate entrypoints such as CivSwitch have not been qualified for this release.
+Choose either route to obtain the fresh, held SmileBASIC/FS session that Moader needs:
+
+| Host route | Entry tool | Guide |
+| --- | --- | --- |
+| Linux or WSL2; also optional on macOS | [kurumuz's pinned ns2jb fork](https://gitlab.com/kurumuz/ns2jb) with native Node 24 | [Direct ns2jb setup](docs/INSTALLATION.md#route-a-linuxwsl-or-macos-with-ns2jb) |
+| macOS | [mac2jb](https://github.com/cpypwn/mac2jb#readme) and its bundled Node 24 | [mac2jb setup](docs/INSTALLATION.md#route-b-macos-with-mac2jb) |
+
+The precompiled kit needs Python 3.10+ and the route's Node 24; Git is only needed to obtain the direct ns2jb checkout. WSL uses Linux Node and both terminals in the same distro; [configure its LAN access before acquisition](docs/INSTALLATION.md#wsl2-networking-before-acquisition).
+
+Use the chosen upstream tool's current console/application requirements. A stock-console installer is not included; alternate entrypoints such as CivSwitch have not been qualified. The direct Linux/WSL instructions follow pinned source and helper contracts; they do not add a new Linux/WSL console-verification claim to the existing macOS/mac2jb hardware results.
 
 **kaiHEN** is the homebrew environment; **hbmenu** is the launcher for homebrew apps; **FS** means the filesystem service, whose verified access is needed to install Moader's backend. Everyday mod management uses the running backend rather than repeating that setup.
 
@@ -33,7 +42,7 @@ The guided and verified backend route is **macOS + mac2jb, using SmileBASIC/ns2j
 
 **Already running a compatible Moader resident backend this boot?** Copy `Moader.nro` into the SD card's `switch/` folder and open it from hbmenu. It connects to the resident service. See [app installation](docs/INSTALLATION.md#copy-or-update-the-console-app).
 
-**Setting up the backend for this boot?** Use the backend kit with a **fresh, verified mac2jb FS session**. Backend setup starts the resident service and installs filesystem routing once for that boot. Follow [backend setup](docs/INSTALLATION.md#start-the-backend-for-this-boot).
+**Setting up the backend for this boot?** Use the backend kit with a **fresh, verified held FS session** from either route above. Backend setup starts the resident service and installs filesystem routing once for that boot. Follow [backend setup](docs/INSTALLATION.md#start-the-backend-for-this-boot).
 
 Copying the NRO alone installs the interface. It does not activate the resident service or filesystem runtime. Likewise, copying `moader.nso` to SD stages a plugin; it does not replace a running plugin.
 
@@ -59,7 +68,8 @@ This is a bounded test of one loose RomFS replacement. Game caches, new/resized 
 
 ## Learn more
 
-- [Installation](docs/INSTALLATION.md) — app copy, backend setup and updates
+- [Wiki](https://github.com/H644b/Moader/wiki) — browse all user guides
+- [Installation](docs/INSTALLATION.md) — app copy, both backend setup routes and updates
 - [Usage](docs/USAGE.md) — controller controls, pairing, ZIP layout and settings
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — connection, apply-state and recovery help
 - [How it works](docs/RUNTIME.md) — the three components and their limits

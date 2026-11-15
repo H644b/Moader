@@ -1,7 +1,7 @@
 {
   "name": "Moader",
   "version": "0.1.0-dev",
-  "tag": "v0.1.0-dev",
+  "tag": "v0.1.0-dev.1",
   "prerelease": true,
   "repository": "H644b/Moader",
   "binaries": {
