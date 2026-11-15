@@ -2,6 +2,8 @@
 
 Download the matched **[v0.1.0-dev prerelease](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev)**. Choose the app ZIP for an ordinary app copy, or the backend kit when you need to start Moader's resident service and filesystem runtime for this boot.
 
+The guided/verified backend path for this release is **macOS/mac2jb with a SmileBASIC/ns2jb verified FS session**. Start with the [official mac2jb requirements and entry instructions](https://github.com/cpypwn/mac2jb#readme); upstream maintains the changing console/application/firmware requirements. Moader supplies no stock-console entry installer, and alternate entrypoints such as CivSwitch are not qualified here. [Short glossary: kaiHEN, hbmenu and FS](../README.md#supported-setup).
+
 | Situation | What to do |
 | --- | --- |
 | Compatible Moader backend is already running | Copy/update the console app below |
@@ -36,7 +38,7 @@ Download and unzip [Moader-backend-v0.1.0-dev.zip](https://github.com/H644b/Moad
 You need:
 
 - macOS Terminal with its default **zsh** shell.
-- **Python 3.10+** and **Git** installed. Check with `python3 --version` and `git --version`.
+- **Python 3.10+** installed. Check with `python3 --version`.
 - The exact **Node 24** executable supplied by mac2jb. The helper takes it from your status command; it does not substitute another installed Node.
 - Internet access for the first-use pinned dependency downloads, plus a fresh verified mac2jb FS session for this boot.
 
@@ -50,7 +52,7 @@ cd "YOUR_EXTRACTED_KIT_FOLDER"
 
 ### 2. Obtain the fresh session
 
-Use mac2jb's supported procedure to obtain a **new verified FS session for the current boot**. Close any foreground Moader instance. **Keep SmileBASIC and the mac2jb host open until installation reports completion.** Moader's preparation helper does not acquire FS for you.
+Follow the [official mac2jb entry instructions](https://github.com/cpypwn/mac2jb#readme) to obtain a **new verified FS session for the current boot** through the supported SmileBASIC/ns2jb route. Close any foreground Moader instance. **Keep SmileBASIC and the mac2jb host open until installation reports completion.** Moader's preparation helper does not acquire FS for you.
 
 Copy the complete newly generated mac2jb **four-argument status command**, including its quoted paths and final `status` argument. Use the current verified session, never an old boot's command or a completed installation context.
 

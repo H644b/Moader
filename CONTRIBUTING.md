@@ -21,6 +21,7 @@ From a clean public checkout, install Clang and zlib development headers using y
 
 ```sh
 python3 .github/scripts/prepare-host-deps.py --sdk --installer
+python3 tools/setup-backend.py --sources-only
 python3 tools/embed-web.py
 node -e "require('./runtime/modloader/lib/native/artifacts.cjs').artifacts()"
 python3 tools/test-core.py
@@ -30,8 +31,10 @@ python3 tools/test-metadata-names.py
 python3 tools/test-game-names.py
 python3 tools/test-web-worker.py
 python3 tools/test-resident.py
+python3 tools/test-setup-backend.py
 node tools/test-installers.cjs
 node tools/test-control-resident.cjs
+node tools/test-inspect-hen.cjs
 ```
 
 The dependency helper downloads checksum-pinned public SDK/release inputs for host declarations and installer qualification. It does not install hooks, contact a console or execute the downloaded release binaries. Its generated `vendor/` and `research/artifacts/` inputs are local dependencies, not files to commit. The control-protocol tests also need the pinned local engine source; use `python3 tools/setup-backend.py --sources-only` to fetch it into the ignored local source tree. Host HTTP tests use loopback; `test-web.py` also runs the pairing/FTP publication regressions with mocked FTP, and installer tests mock device transports.

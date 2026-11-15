@@ -21,7 +21,13 @@ Start with **[v0.1.0-dev — first prerelease](https://github.com/H644b/Moader/r
 | [Moader-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-v0.1.0-dev.zip) | The console app and matching resident plugin |
 | [Moader-backend-v0.1.0-dev.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev/Moader-backend-v0.1.0-dev.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
 
-This is a development prerelease for a compatible Switch 2 kaiHEN/FS environment. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
+This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
+
+## Supported setup
+
+The guided and verified backend route is **macOS + mac2jb, using SmileBASIC/ns2jb to obtain a verified FS session**. Follow the [official mac2jb requirements and instructions](https://github.com/cpypwn/mac2jb#readme) for current console, application and firmware prerequisites. A stock-console installer is not included; alternate entrypoints such as CivSwitch have not been qualified for this release.
+
+**kaiHEN** is the homebrew environment; **hbmenu** is the launcher for homebrew apps; **FS** means the filesystem service, whose verified access is needed to install Moader's backend. Everyday mod management uses the running backend rather than repeating that setup.
 
 ## Choose your starting point
 

@@ -133,7 +133,7 @@ def main():
         'For ordinary SD installation, use the separate Moader app ZIP.\n\n'
         'The kit includes the tested Moader app/service and patched HEN.\n'
         'Preparation fetches pinned official HEN components and upstream host source.\n'
-        'It needs Node 24, Python 3, Git and internet access, not a compiler/SDK.\n'
+        'It needs Node 24, Python 3.10+ and internet access, not a compiler/SDK.\n'
         'It never acquires FS. Follow the guide with a fresh verified mac2jb session.\n\n'
         'Corresponding source: https://github.com/' + spec['repository'] + '/tree/' + tag + '\n'
     ).encode(), 0o100644)
