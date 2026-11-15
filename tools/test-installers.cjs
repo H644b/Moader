@@ -5,8 +5,16 @@ const assert=require('node:assert/strict'),fs=require('node:fs/promises'),sync=r
 const net=require('node:net'),http=require('node:http');
 let connections=0;
 net.createConnection=http.request=()=>{connections++;throw Error('Host installer tests cannot connect to an endpoint');};
-const inputs=require('./install-inputs.cjs'),{ready,guardTransports}=require('./ready-kaihen.cjs'),{prepareKaihen,qualifyRelease,verifyRoPackage,main:kaihenMain}=require('./install-kaihen.cjs');
+const inputs=require('./install-inputs.cjs'),{ready,guardTransports}=require('./ready-kaihen.cjs'),{verifyRoPackage,main:kaihenMain}=require('./install-kaihen.cjs');
 const root=path.resolve(__dirname,'..'),tests=[];
+const originalReadFile=fs.readFile.bind(fs);
+let candidateReads=0;
+fs.readFile=async(file,...args)=>{
+ if(typeof file==='string'&&['vendor','dist'].some(name=>path.resolve(file).startsWith(path.join(root,name)+path.sep))){
+  ++candidateReads;throw Error('Installer tests must not read current candidate build outputs');
+ }
+ return originalReadFile(file,...args);
+};
 function test(name,action){tests.push({name,action});}
 async function writableTree(folder){
  await fs.chmod(folder,0o700);
@@ -143,26 +151,28 @@ test('invalid extra manifests fail before the actual kaiHEN main can load connec
  assert.equal(connections,0);
 }));
 test('standalone kaiHEN preflight freezes and validates every extra before connection',()=>fixture(async directory=>{
- const original=await shipping(directory),extraFile=path.join(directory,'extras.json');
- for(const name of ['ro/main','hen/main','bootstrap.bin','game/main','hbmenu.nro'])
-  await fs.copyFile(path.join(root,'vendor/kaihen-mo',name),path.join(original.ship,name));
+ const original=await pairedRepo(directory),extraFile=path.join(directory,'extras.json');
  await fs.writeFile(extraFile,JSON.stringify(await Promise.all(original.programs.map(async item=>({...item,bytes:(await fs.stat(item.source)).size,sha256:inputs.digest(await fs.readFile(item.source))})))));
- const prepared=await prepareKaihen({ship:original.ship,extraFile,output:path.join(directory,'out')});
+ const prepared=await original.qualified.prepareKaihen({ship:original.ship,extraFile,output:path.join(directory,'out')});
  await fs.writeFile(original.programs[1].source,'rebuilt-plugin-v2');
- assert.equal((await inputs.validatePrepared(prepared)).programs[1].data.toString(),'fixture-plugin-v1');assert.equal(connections,0);
+ assert.equal((await inputs.validatePrepared(prepared)).programs[1].data.toString(),'fixture-plugin-v1');
+ await original.qualified.qualifyRelease(prepared);
+ assert.equal((await fs.stat(prepared.manifestFile)).mode&0o222,0);
+ assert.equal(connections,0);
 }));
-test('combined release qualification rejects a self-consistent snapshot of changed RO/bootstrap inputs',async()=>{
- const build=await inputs.qualifyKaihenBuild(root);
- const prepared={kaihen:path.join(root,'vendor/kaihen-mo'),kaihenBuild:build,kaihenFiles:await Promise.all(['ro/main','hen/main','bootstrap.bin','game/main','hbmenu.nro'].map(async name=>{
-  const source=path.join(root,'vendor/kaihen-mo',name),data=await fs.readFile(source);return{source,bytes:data.length,sha256:inputs.digest(data)};
- }))};
- await qualifyRelease(prepared);
- for(const item of prepared.kaihenFiles){
-  const original=item.sha256;item.sha256='0'.repeat(64);
-  await assert.rejects(()=>qualifyRelease(prepared),/differs from the qualified kaiHEN release/);item.sha256=original;
+test('combined release qualification rejects a self-consistent snapshot of changed RO/bootstrap inputs',()=>fixture(async directory=>{
+ const original=await pairedRepo(directory),build=await inputs.qualifyKaihenBuild(directory);
+ const snapshot=()=>inputs.snapshot({output:path.join(directory,'out'),kaihen:original.ship,kaihenBuild:build});
+ const prepared=await snapshot();await original.qualified.qualifyRelease(prepared);
+ for(const name of ['ro/main','hen/main','bootstrap.bin','game/main','hbmenu.nro']){
+  const file=path.join(original.ship,name),bytes=await fs.readFile(file);
+  await fs.writeFile(file,Buffer.concat([bytes,Buffer.from('fixture mutation')]));
+  const changed=await snapshot();await inputs.validatePrepared(changed);
+  await assert.rejects(()=>original.qualified.qualifyRelease(changed),/differs from the qualified kaiHEN release/);
+  await fs.writeFile(file,bytes);
  }
  assert.equal(connections,0);
-});
+}));
 async function pairedProof(directory){
  for(const [name,data] of Object.entries({
   'runtime/kaihen/libkaihen/include/kaihen/protocol.h':'#define HEN_PROTOCOL_VERSION 7\n',
@@ -179,6 +189,28 @@ async function pairedProof(directory){
   hen_sha256:inputs.digest(hen),components:{'hen/main':{bytes:hen.length,sha256:inputs.digest(hen)},'bootstrap.bin':{bytes:bootstrap.length,sha256:inputs.digest(bootstrap)}}};
  const file=path.join(directory,'software-builds/kaihen-mo.json');await fs.writeFile(file,JSON.stringify(proof));
  return{proof,file,hen,bootstrap};
+}
+async function pairedRepo(directory){
+ const original=await shipping(directory),proofFixture=await pairedProof(directory);
+ const archive=await fs.readFile(path.join(root,'research/artifacts/kaiHEN-20261114c.zip'));
+ assert.equal(inputs.digest(archive),'63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967');
+ const localArchive=path.join(directory,'research/artifacts/kaiHEN-20261114c.zip');
+ await fs.mkdir(path.dirname(localArchive),{recursive:true});await fs.writeFile(localArchive,archive);
+ // These three immutable official components remain production-pinned.
+ // Python only reads fixed bounded members from the already hash-qualified
+ // local ZIP; no archive path is extracted or target program executed.
+ const official=JSON.parse(require('node:child_process').execFileSync('python3',['-c',
+  'import base64,json,sys,zipfile\nwith zipfile.ZipFile(sys.argv[1]) as z:\n names=("ro/main","game/main","hbmenu.nro")\n assert all(z.getinfo(n).file_size <= 32*1024*1024 for n in names)\n print(json.dumps({n:base64.b64encode(z.read(n)).decode() for n in names}))',
+  localArchive],{encoding:'utf8',maxBuffer:64*1024*1024}));
+ for(const [name,data] of Object.entries(official))await fs.writeFile(path.join(original.ship,name),Buffer.from(data,'base64'));
+ await fs.writeFile(path.join(original.ship,'hen/main'),proofFixture.hen);
+ await fs.writeFile(path.join(original.ship,'bootstrap.bin'),proofFixture.bootstrap);
+ await fs.mkdir(path.join(directory,'tools'));
+ for(const name of ['install-inputs.cjs','install-kaihen.cjs'])await fs.copyFile(path.join(root,'tools',name),path.join(directory,'tools',name));
+ // Unmodified production modules resolve their real __dirname/proof/archive
+ // against this isolated repository. Neither qualifier is stubbed.
+ const qualified=require(path.join(directory,'tools/install-kaihen.cjs'));
+ return{...original,proofFixture,qualified};
 }
 test('versioned pair proof binds the source, patch, protocol and bounded exact components',()=>fixture(async directory=>{
  const {proof}=await pairedProof(directory),observed={sourceSha256:proof.source_tree_sha256,patchSha256:proof.patch_sha256};
@@ -213,12 +245,10 @@ test('source proof ignores generated build outputs but rejects links and changed
  await assert.rejects(()=>inputs.qualifyKaihenBuild(directory),/protocol header differs/);
 }));
 test('prepared pair is immutable, rejects old/mixed bootstrap, and binds current proof identity',()=>fixture(async directory=>{
- const original=await shipping(directory),f=await pairedProof(directory);
- for(const name of ['ro/main','game/main','hbmenu.nro'])await fs.copyFile(path.join(root,'vendor/kaihen-mo',name),path.join(original.ship,name));
- await fs.writeFile(path.join(original.ship,'hen/main'),f.hen);await fs.writeFile(path.join(original.ship,'bootstrap.bin'),f.bootstrap);
+ const original=await pairedRepo(directory),f=original.proofFixture;
  const build=await inputs.qualifyKaihenBuild(directory);
  const prepared=await inputs.snapshot({output:path.join(directory,'out'),kaihen:original.ship,kaihenBuild:build});
- const qualified=stubModule('tools/install-kaihen.cjs',{'./install-inputs.cjs':{...inputs,qualifyKaihenBuild:()=>inputs.qualifyKaihenBuild(directory)}});
+ const qualified=original.qualified;
  await inputs.validatePrepared(prepared);await qualified.qualifyRelease(prepared);
  await fs.writeFile(path.join(original.ship,'bootstrap.bin'),'later rebuild');
  await inputs.validatePrepared(prepared);await qualified.qualifyRelease(prepared);
@@ -508,5 +538,6 @@ test('successful Moader report ownership survives controller closure',()=>fixtur
 }));
 (async()=>{
  for(const {name,action}of tests){await action();console.log('PASS: '+name);}
- assert.equal(connections,0);console.log('PASS: '+tests.length+' host installer checks; no endpoint/HTTP connections');
+ assert.equal(connections,0);assert.equal(candidateReads,0);
+ console.log('PASS: '+tests.length+' host installer checks; no endpoint/HTTP connections or candidate build reads');
 })().catch(error=>{console.error(error.stack);process.exitCode=1;});

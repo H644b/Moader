@@ -4,9 +4,9 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "456404102eee295bfb69c1fa97b0bc706afb6b94f9a3cf3f9c3ac6c829aadf89",
+  "patch_sha256": "ce649ef5f41e0c4bef4d11b56043f3e519df001e45682002578a640b7cd23af9",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "315b5731a5823b00216120fab3ed9b344ee6e7b9016007f03db35e9ccf05f7b6",
+  "source_tree_sha256": "ae4e492a1c24e529cb48816342b10b2aea2fb8fe9869e1400e826fd726ed1d67",
   "protocol_version": 7,
   "hen_sha256": "d21767698cfc80e8e15325f6c1846226be78bb6c564582c161a9680c65f3ff22",
   "components": {

@@ -143,6 +143,13 @@ void save_debug(){if(ui.connected)refresh_debug();
     if(reload.status.operation_id)file<<"\nReload result: 0x"<<reload.status.result<<"\nReload restoration result: 0x"<<reload.status.restoration_result;
     else file<<"\nReload primary and restoration results: unknown";
     file<<std::dec<<"\n\n";
+    file<<"HEN reload API available: "<<reload.supported
+        <<"\nHEN plugin identity verified: "<<reload.info_valid
+        <<"\nHEN instance: "<<reload.info.instance_id
+        <<"\nPlugin PID: "<<reload.info.process_id<<"\nPlugin generation: "<<reload.info.generation
+        <<"\nReload old PID: "<<reload.status.old_process_id<<"\nReload new PID: "<<reload.status.new_process_id
+        <<"\nReload flags: "<<reload.status.flags
+        <<"\nReload outcome unverified: "<<(reload.uncertain||reload.timed_out)<<"\n\n";
     for(const auto& line:ui.events)file<<line<<'\n';
     file.close();
     message(file?"Saved sdmc:/moader/app-diagnostics.txt":"Could not save the diagnostic report.",!file);
