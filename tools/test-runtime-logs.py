@@ -12,7 +12,8 @@ with tempfile.TemporaryDirectory(prefix='moader-log-snapshots-') as temporary:
     objects = []
     for source in [ROOT/'tests/runtime_log_native.c',*[NATIVE/(name+'.c') for name in native]]:
         obj = work/(source.stem+'.o')
-        subprocess.run(['clang','-std=c11','-O1','-g','-Wall','-Wextra','-Werror',
+        # glibc exposes pthread barriers in strict C11 only with POSIX enabled.
+        subprocess.run(['clang','-std=c11','-D_POSIX_C_SOURCE=200809L','-O1','-g','-Wall','-Wextra','-Werror',
                         '-fsanitize=address,undefined','-DMOADER_HOST_TEST','-pthread',
                         '-I'+str(ROOT/'include'),'-I'+str(NATIVE),'-c',str(source),'-o',str(obj)],check=True)
         objects.append(str(obj))
@@ -30,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='moader-log-snapshots-') as temporary:
     subprocess.run([*common,str(ROOT/'tests/backend_test.cpp'),*cpp,'-lz','-o',str(backend)],check=True)
     subprocess.run([str(backend),str(fixture),str(work/'library')],check=True)
     native_test = work/'native-test'
-    subprocess.run(['clang','-std=c11','-O1','-g','-Wall','-Wextra','-Werror',
+    subprocess.run(['clang','-std=c11','-D_POSIX_C_SOURCE=200809L','-O1','-g','-Wall','-Wextra','-Werror',
                     '-fsanitize=address,undefined','-DMOADER_HOST_TEST','-pthread',
                     '-I'+str(ROOT/'include'),'-I'+str(NATIVE),str(NATIVE/'verify-lazy.c'),
                     *objects[1:],'-o',str(native_test)],check=True)

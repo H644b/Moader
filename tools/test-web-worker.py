@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory(prefix='moader-web-worker-') as temporary:
     subprocess.run(['clang++', '-std=c++20', '-g', '-O1', '-Wall', '-Wextra', '-Werror',
                     '-Wno-invalid-constexpr', '-Wno-missing-field-initializers',
                     '-fsanitize=address,undefined', '-D__SWITCH__',
+                    '-I' + str(root / 'tests/host_sdk'),
                     '-I' + str(root / 'tests/web_worker_sdk'), '-I' + str(headers),
                     '-I' + str(root / 'include'), str(root / 'tests/web_worker.cpp'),
                     *[str(root / ('source/' + name + '.cpp'))

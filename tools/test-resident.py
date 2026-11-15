@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory(prefix='moader-resident-') as temporary:
     subprocess.run(['clang++', '-std=c++20', '-g', '-O1', '-Wall', '-Wextra', '-Werror',
                     '-Wno-invalid-constexpr', '-Wno-missing-field-initializers',
                     '-fsanitize=address,undefined', '-I' + str(root / 'include'),
+                    '-I' + str(root / 'tests/host_sdk'),
                     '-I' + str(headers),
                     '-I' + str(root / 'runtime/kaihen/libkaihen/include'),
                     '-I' + str(root / 'build/generated'),

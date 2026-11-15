@@ -9,7 +9,8 @@ BUILD.mkdir(parents=True, exist_ok=True)
 sources = ['verify-lazy', 'romfs', 'namespace', 'diagnostics', 'trace', 'lazy',
            'lazy-romfs', 'lazy-codefs', 'lazy-nso', 'moader']
 binary = BUILD / 'runtime-test'
-subprocess.run(['clang','-std=c11','-g','-O1','-Wall','-Wextra','-Werror',
+# glibc exposes pthread barriers in strict C11 only with POSIX enabled.
+subprocess.run(['clang','-std=c11','-D_POSIX_C_SOURCE=200809L','-g','-O1','-Wall','-Wextra','-Werror',
                 '-fsanitize=address,undefined','-DMOADER_HOST_TEST','-pthread','-I'+str(ROOT/'include'),
                 '-I'+str(NATIVE), *[str(NATIVE/(name+'.c')) for name in sources],
                 '-o', str(binary)], check=True)
