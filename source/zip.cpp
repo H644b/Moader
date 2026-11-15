@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cerrno>
 #include <cstdio>
 #include <fstream>
 #include <set>
@@ -160,25 +161,52 @@ void extract_mod_zip(const std::string& archive, const std::string& destination)
 }
 Mod Library::import_zip(const std::string& title, const std::string& id,
                         const std::string& archive, const std::string& display_name) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    require(scan().size() < 512, "The library supports at most 512 mods.");
+    std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
+    require(operation.owns_lock() && !importing_, "An import or another library operation is in progress. Try again when it finishes.");
+    auto mods = cached_inventory();
+    require(mods.size() < 512, "The library supports at most 512 mods.");
     const auto destination = mod_path(title, id);
     struct stat st{};
     require(lstat(destination.c_str(), &st) != 0, "A mod with this ID already exists. Use a new ID for this version.");
+    require(errno == ENOENT, "Cannot inspect the import destination. Check SD access and refresh the library.");
     require(!display_name.empty() && display_name.size() <= 120, "Choose a mod name of at most 120 bytes.");
     for (unsigned char c : display_name) require(c >= 32 && c != 127, "Mod name contains a control character.");
     static std::atomic<unsigned> counter{0};
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
     const auto stage = root_ + "/.incoming/" + std::to_string(now) + '-' + std::to_string(++counter);
-    // Failed extraction stays outside the active library for inspection.
-    extract_mod_zip(archive, stage);
-    atomic_write(stage + "/mod.meta", display_name);
-    make_directories(destination.substr(0, destination.find_last_of('/')));
-    require(rename(stage.c_str(), destination.c_str()) == 0, "Cannot publish the imported mod.");
-    publish(); event("Imported disabled: " + title + '/' + id);
-    std::string canonical_title = title;
-    for (char& c : canonical_title) if (c >= 'A' && c <= 'F') c += 'a' - 'A';
-    for (const auto& mod : scan()) if (mod.title_id == canonical_title && mod.id == id) return mod;
-    throw std::runtime_error("Imported mod could not be indexed.");
+    // Reserve this import without holding the publication lock during decode.
+    // Availability-only withdrawal can proceed; other user mutations stay busy.
+    importing_ = true;
+    operation.unlock();
+    try {
+        // Failed extraction stays outside the active library for inspection.
+        extract_mod_zip(archive, stage);
+        atomic_write(stage + "/mod.meta", display_name);
+        operation.lock();
+        // Availability may have advanced the cache/generation during extraction.
+        // Merge the new entry into that current inventory, never the old copy.
+        mods = cached_inventory();
+        require(lstat(destination.c_str(), &st) != 0, "A mod with this ID already exists. Use a new ID for this version.");
+        require(errno == ENOENT, "Cannot inspect the import destination. Check SD access and refresh the library.");
+        make_directories(destination.substr(0, destination.find_last_of('/')));
+        require(rename(stage.c_str(), destination.c_str()) == 0, "Cannot publish the imported mod.");
+        std::string canonical_title = title;
+        for (char& c : canonical_title) if (c >= 'A' && c <= 'F') c += 'a' - 'A';
+        size_t count = 0;
+        for (const auto& mod : mods) count += mod.files.size();
+        try { mods.push_back(scan_mod(canonical_title, id, count)); }
+        catch (const std::exception& e) { scan_failed(e.what()); throw; }
+        std::sort(mods.begin(), mods.end(), [](const Mod& a, const Mod& b) {
+            return a.title_id < b.title_id || (a.title_id == b.title_id && a.id < b.id);
+        });
+        commit(std::move(mods), true); event("Imported disabled: " + title + '/' + id);
+        importing_ = false;
+        for (const auto& mod : snapshot().mods) if (mod.title_id == canonical_title && mod.id == id) return mod;
+        throw std::runtime_error("Imported mod could not be indexed.");
+    } catch (...) {
+        if (!operation.owns_lock()) operation.lock();
+        importing_ = false;
+        throw;
+    }
 }
 }

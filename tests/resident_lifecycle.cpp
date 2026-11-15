@@ -124,6 +124,19 @@ extern "C" void svcSleepThread(s64 ns) {
 extern "C" Result nsInitialize(void) { assert(false); return Failure; }
 extern "C" void nsExit(void) { assert(false); }
 extern "C" Result nsListApplicationRecord(NsApplicationRecord*, s32, s32, s32*) { assert(false); return Failure; }
+extern "C" Result nsIsGameCardInserted(bool*) { assert(false); return Failure; }
+extern "C" Result nsListApplicationIdOnGameCard(u64*, s32, s32*) { assert(false); return Failure; }
+extern "C" Result nsCountApplicationContentMeta(u64, s32*) { assert(false); return Failure; }
+extern "C" Result nsListApplicationContentMetaStatus(u64, s32, NsApplicationContentMetaStatus*, s32, s32*) { assert(false); return Failure; }
+extern "C" Result ncmInitialize(void) { assert(false); return Failure; }
+extern "C" void ncmExit(void) { assert(false); }
+extern "C" Result ncmOpenContentMetaDatabase(NcmContentMetaDatabase*, NcmStorageId) { assert(false); return Failure; }
+extern "C" void ncmContentMetaDatabaseClose(NcmContentMetaDatabase*) { assert(false); }
+extern "C" Result ncmContentMetaDatabaseGetLatestContentMetaKey(NcmContentMetaDatabase*, NcmContentMetaKey*, u64) { assert(false); return Failure; }
+extern "C" Result ncmContentMetaDatabaseGetContentIdByTypeAndIdOffset(NcmContentMetaDatabase*, NcmContentId*, const NcmContentMetaKey*, NcmContentType, u8) { assert(false); return Failure; }
+extern "C" Result ncmOpenContentStorage(NcmContentStorage*, NcmStorageId) { assert(false); return Failure; }
+extern "C" void ncmContentStorageClose(NcmContentStorage*) { assert(false); }
+extern "C" Result ncmContentStorageHas(NcmContentStorage*, bool*, const NcmContentId*) { assert(false); return Failure; }
 extern "C" Result nsGetApplicationControlData2(NsApplicationControlSource, u64, NsApplicationControlData*, size_t, u8, u8, u64*, u32*) { assert(false); return Failure; }
 extern "C" Result setInitialize(void) { assert(false); return Failure; }
 extern "C" void setExit(void) { assert(false); }

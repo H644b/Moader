@@ -2,6 +2,7 @@
 #include "control.hpp"
 #include "instance.hpp"
 #include "game_names.hpp"
+#include "game_availability.hpp"
 #include "moader/runtime_backend.hpp"
 #include "web_assets.hpp"
 
@@ -30,7 +31,7 @@ struct Foreground {
     Foreground() : backend("sdmc:/moader",session_epoch(),[] {
             FsStorage storage{};
             if (R_SUCCEEDED(fsOpenDataStorageByCurrentProcess(&storage))) fsStorageClose(&storage);
-        }), library("sdmc:/moader",backend,installed_game_name), token(pairing_token()),
+        }), library("sdmc:/moader",backend,installed_game_name,installed_game_availability), token(pairing_token()),
         web(library,"sdmc:/moader",token,moader_web_assets()), context{library,web,token} {
         context.foreground = true;
         network_ready = R_SUCCEEDED(nifmInitialize(NifmServiceType_User));
@@ -47,6 +48,10 @@ struct Foreground {
             if (network_ready) nifmExit();
             throw;
         }
+    }
+    void poll() {
+        try { backend.poll(); library.refresh_availability(); }
+        catch (const std::exception& e) { context.error = e.what(); context.last_result = BadInput; }
     }
     ~Foreground() { web.stop(); if (network_ready) nifmExit(); }
 };

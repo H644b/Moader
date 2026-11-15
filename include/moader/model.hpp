@@ -12,7 +12,7 @@ struct Preferences {
     bool follow_log = true;
 };
 std::string preferences_json(const Preferences& preferences);
-enum class ApplyState { Disabled, Pending, Active, ReopenContent, RelaunchGame, Error };
+enum class ApplyState { Disabled, Pending, Active, ReopenContent, RelaunchGame, Error, Unavailable };
 struct Mod {
     std::string title_id, id, name;
     bool requested = false;
@@ -22,6 +22,11 @@ struct Mod {
     std::vector<std::string> files;
     std::string detail;
     bool valid_source = true;
+    // Inventory metadata, not acknowledgement of changes inside a game.
+    bool was_activated = false, load_allowed = true;
+    std::string availability_detail;
+    uint64_t inventory_stamp = 0;
+    uint32_t game_source = 0; // User-selected GameSource; never ZIP metadata.
 };
 struct RuntimeStatus {
     bool connected = false;

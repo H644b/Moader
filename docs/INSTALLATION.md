@@ -1,6 +1,6 @@
 # Install Moader
 
-Use **[v0.1.0-dev.3](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.3)** for the compressed ZIP import fix. The app and resident service have been rebuilt; HEN and the native filesystem runtime are unchanged. The app version remains `0.1.0-dev`. Host tests pass; these rebuilt binaries have not been console-tested. The [original release](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev) and its app ZIP remain available.
+Use **[v0.1.0-dev.4](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)** for library recovery, responsive import polling and game-card checks. It includes the compressed ZIP fix from dev.3. The app and resident have been rebuilt; HEN and the native filesystem runtime are unchanged. The app version remains `0.1.0-dev`. These rebuilt binaries have host validation only. [Validation](VALIDATION.md).
 
 | Situation | What to do |
 | --- | --- |
@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download [Moader-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-v0.1.0-dev.3.zip).
+1. Download [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip).
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.
@@ -21,7 +21,7 @@ If the matching resident service is running, the app connects to it. Otherwise i
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.0-dev.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.3/Moader-backend-v0.1.0-dev.3.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+Download and extract [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
 
 Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
 
@@ -129,8 +129,10 @@ In WSL, `node -p 'process.platform'` must print `linux`. Keep acquisition and in
 
 ## Updating
 
-`v0.1.0-dev.3` fixes compressed ZIP imports in both the app and resident service. Keep the NRO and NSO matched. **Resident browser uploads need the updated service running:** copying only the NRO does not update the older service, and copying an NSO to SD does not hot-reload it. Use the updated backend kit for the next supported per-boot setup. A foreground app uses its own ZIP reader.
+Keep the NRO and NSO from **v0.1.0-dev.4** matched. Resident imports, library recovery and cartridge gating need the **updated resident service running**: copying only the NRO does not update an older service, and copying an NSO to SD does not hot-reload it. Use the updated backend kit for the next supported per-boot setup. A foreground app uses its own implementation.
 
-HEN and native FS runtime inputs are unchanged. This update does not establish a cause or fix for a separate game/system crash. The new app/service build has host validation only; see [Validation](VALIDATION.md#zip-import-fix-in-v010-dev3). The displayed app version remains `0.1.0-dev`; use the release archive or recorded hashes to identify this update.
+Select each game, then open **Settings → Game copy**. Choose Cartridge/game-key for a physical copy or My digital copy for a copy that runs without the card. Unspecified defaults to checking the inserted card. Existing enable requests are preserved; a missing card or verification failure withholds that game's replacements from newly published routing. Insert the card or correct the copy setting, then inspect the apply details. [Full behavior and limits](CARTRIDGES.md).
+
+HEN/native FS runtime inputs are unchanged. This update does not establish the cause or fix of a fatal game/system restart. The new app/service build has host validation only. The displayed version remains `0.1.0-dev`; identify the update by its release archive or recorded hashes.
 
 Preserve user mods and preferences. Recoverable removal retains payloads for older open game objects; do not manually purge them during the boot. See [Troubleshooting](TROUBLESHOOTING.md), [Building](BUILDING.md) and [Maintaining](MAINTAINING.md).

@@ -58,6 +58,7 @@ const char* apply_state_name(ApplyState value) {
     case ApplyState::ReopenContent: return "reopen-content";
     case ApplyState::RelaunchGame: return "relaunch-game";
     case ApplyState::Error: return "error";
+    case ApplyState::Unavailable: return "unavailable";
     }
     return "error";
 }

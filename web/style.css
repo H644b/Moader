@@ -103,9 +103,14 @@ code,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",mo
 .mod-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px;color:var(--muted);font-size:14px;font-variant-numeric:tabular-nums}
 .state-label{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:600;color:var(--muted);width:fit-content;white-space:nowrap}
 .state-label::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
-.state-label.pending,.state-label.reopen-content,.state-label.relaunch-game{color:var(--warn)}
+.state-label.pending,.state-label.reopen-content,.state-label.relaunch-game,.state-label.unavailable{color:var(--warn)}
 .state-label.active{color:var(--good)}
 .state-label.error{color:var(--bad)}
+.game-copy-setting{padding-bottom:22px;margin-bottom:6px;border-bottom:1px solid var(--line)}
+.game-copy-setting label{display:block;font-weight:600;margin-bottom:10px}
+.game-copy-setting label span{display:block;font-weight:400;color:var(--muted);overflow-wrap:anywhere;margin-top:4px}
+.game-copy-setting select{width:100%;max-width:360px;margin-bottom:10px}
+.game-copy-setting p{margin:0;max-width:65ch}
 .mod-switch{justify-self:end;width:44px;min-height:44px;height:44px;border:0;padding:0;background:transparent;position:relative}
 .mod-switch::before{content:"";position:absolute;width:34px;height:21px;left:5px;top:12px;border-radius:12px;background:#aebfc9;transition:background .18s var(--ease-out)}
 .mod-switch:hover{background:transparent}

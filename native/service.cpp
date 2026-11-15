@@ -8,6 +8,7 @@
 #include "control.hpp"
 #include "instance.hpp"
 #include "game_names.hpp"
+#include "game_availability.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
@@ -84,7 +85,7 @@ int main() {
                 FsStorage storage{};
                 if (R_SUCCEEDED(fsOpenDataStorageByCurrentProcess(&storage))) fsStorageClose(&storage);
             });
-            moader::Library library("sdmc:/moader", backend, installed_game_name);
+            moader::Library library("sdmc:/moader", backend, installed_game_name, installed_game_availability);
             const auto token = pairing_token();
             moader::WebServer web(library, "sdmc:/moader", token, moader_web_assets());
             Context context{library, web, token};
@@ -98,6 +99,7 @@ int main() {
                 context.error = web.last_error(); context.last_result = BadInput;
             }
             ContextBinding binding(endpoint, context);
+            unsigned inventory_ticks = 0;
             while (true) {
                 try { backend.poll(); }
                 catch (const std::exception& e) {
@@ -105,6 +107,23 @@ int main() {
                     // listener. Surface it, and retry on the next poll.
                     std::lock_guard<std::mutex> lock(endpoint.mutex);
                     context.error = e.what(); context.last_result = BadInput;
+                }
+                // Availability checks never walk payloads. A periodic SD scan
+                // runs on this owner thread; IPC continues serving the last
+                // complete cached inventory during the scan or an import.
+                try {
+                    library.refresh_availability();
+                } catch (const std::exception& e) {
+                    std::lock_guard<std::mutex> lock(endpoint.mutex);
+                    context.error = e.what(); context.last_result = BadInput;
+                }
+                if (++inventory_ticks >= 30) {
+                    inventory_ticks = 0;
+                    try { library.rescan(); }
+                    catch (const std::exception& e) {
+                        std::lock_guard<std::mutex> lock(endpoint.mutex);
+                        context.error = e.what(); context.last_result = BadInput;
+                    }
                 }
                 svcSleepThread(1000000000);
             }

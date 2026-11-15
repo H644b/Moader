@@ -216,7 +216,21 @@ public:
             return app_screenshot(root);
         }
         if (req.method == "GET" && req.path == "/api/state") return {200, "application/json", library.snapshot_json()};
+        if (req.method == "POST" && req.path == "/api/library/rescan") {
+            require(library.rescan(), "An import or another library operation is in progress. Try again when it finishes.");
+            return {200, "application/json", library.snapshot_json()};
+        }
         if (req.method == "GET" && req.path == "/api/events") return {200, "application/json", library.events_json()};
+        if (req.method == "POST" && req.path == "/api/game-source") {
+            require(req.query.count("titleId") && req.query.count("source") &&
+                    req.query.size() == 2 + req.query.count("generation"), "Choose a game and its copy type.");
+            const auto& source = req.query.at("source");
+            require(source == "unspecified" || source == "cartridge" || source == "digital", "Choose a valid game-copy setting.");
+            const auto expected = req.query.count("generation") ? std::optional<uint64_t>(number(req.query.at("generation"))) : std::nullopt;
+            library.set_game_source(req.query.at("titleId"), source == "cartridge" ? GameSource::Cartridge :
+                source == "digital" ? GameSource::Digital : GameSource::Unspecified, expected);
+            return {200, "application/json", library.snapshot_json()};
+        }
         if (req.method == "GET" && req.path == "/api/game-name") {
             require(req.query.size() == 1 && req.query.count("titleId") && valid_title_id(req.query.at("titleId")),
                     "Choose one valid game Title ID.");

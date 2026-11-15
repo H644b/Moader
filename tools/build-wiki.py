@@ -11,6 +11,7 @@ PAGES = {
     'Installation': 'docs/INSTALLATION.md',
     'CivSwitch-Entrypoint': 'docs/CIV7.md',
     'Using-Moader': 'docs/USAGE.md',
+    'Game-Card-Checks': 'docs/CARTRIDGES.md',
     'Troubleshooting': 'docs/TROUBLESHOOTING.md',
     'How-Moader-Works': 'docs/RUNTIME.md',
     'Validation': 'docs/VALIDATION.md',
@@ -81,6 +82,7 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
 | [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, crashes and setup recovery |
+| [Game-card checks](Game-Card-Checks) | Per-game copy selection, missing cards, game-key downloads, digital choices and verification limits |
 | [How Moader works](How-Moader-Works) | Console app, resident service, filesystem runtime, apply states and component lifetimes |
 | [Frequently asked questions](FAQ) | Quick answers about reboot, live changes, removal and game errors |
 | [Validation](Validation) | What was tested on hardware and what the host checks establish |
@@ -150,6 +152,10 @@ A game-only error is expected to leave the separate backend available. If the br
 
 Open **Settings → Show game names**. Missing names fall back to the real Title ID; details always retain the ID. The display preference does not change which game receives a mod.
 
+## Why does a mod say Game unavailable?
+
+Select the game and open **Settings → Game copy**. Cartridge and game-key copies require their matching inserted card. Digital is your explicit copy selection, not an ownership check. Enabled requests stay saved while new routing omits unavailable games. A failed query is reported separately from a known missing card. See [Game-card checks](Game-Card-Checks) for acknowledgement, cached-content and host-only validation limits.
+
 ## Where is the pairing code?
 
 Turn Web ON with **Y**, then press **ZR**. Enter all six digits, including leading zeros, at the displayed address. Keep the code private. Use the listener on a trusted local network.
@@ -166,6 +172,7 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
 - [App and browser usage](Using-Moader)
 - [SD card layout](Using-Moader#sd-card-layout)
 - [Settings and Advanced](Using-Moader#settings)
+- [Game-card checks](Game-Card-Checks)
 - [Debugging and screenshots](Using-Moader#debugging-and-screenshots)
 - [Troubleshooting](Troubleshooting)
 - [How it works](How-Moader-Works)

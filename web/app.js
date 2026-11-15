@@ -1,6 +1,6 @@
 "use strict";
 const $ = id => document.getElementById(id);
-const states = {disabled:"Disabled",pending:"Pending",active:"Routing active","reopen-content":"Reopen content","relaunch-game":"Relaunch game",error:"Error"};
+const states = {disabled:"Disabled",pending:"Pending",active:"Routing active","reopen-content":"Reopen content","relaunch-game":"Relaunch game",error:"Error",unavailable:"Game unavailable"};
 let token = "", state = {generation:0,mods:[],runtime:{connected:false,detail:""}}, selectedTitle = "", selectedKey = "";
 const preferenceDefaults = {gameNames:true,reducedMotion:false,webOnStart:false,webPort:7712,followLog:true};
 let preferences = {...preferenceDefaults}, settingsReady = false, settingsLoading = false, settingsSaving = false, settingsBaseline = null;
@@ -9,14 +9,16 @@ let paired = false, connected = false, busy = false, refreshTask = null, events 
 try { token = sessionStorage.getItem("moader-pairing") || ""; } catch {}
 const keyOf = mod => mod.titleId + "/" + mod.id;
 const currentMod = () => state.mods.find(mod => keyOf(mod) === selectedKey);
+const inventoryAvailable = () => state.inventory?.ready !== false && !state.inventory?.error;
 function node(tag, cls, text) { const el = document.createElement(tag); if (cls) el.className = cls; if (text !== undefined) el.textContent = text; return el; }
 function bytes(value) { if (value < 1024) return value + " B"; const unit = value < 1048576 ? 1024 : 1048576; return (value / unit).toFixed(value / unit < 10 ? 1 : 0) + (unit === 1024 ? " KiB" : " MiB"); }
 function kinds(mod) { return [mod.romfs && "RomFS",mod.exefs && "ExeFS"].filter(Boolean).join(" + ") || "No payload"; }
 function counted(value, name) { return value + " " + name + (value === 1 ? "" : "s"); }
 function remember(value) { token = value; try { if (value) sessionStorage.setItem("moader-pairing",value); else sessionStorage.removeItem("moader-pairing"); } catch {} }
 function updateControls() {
-  document.querySelectorAll(".mod-switch,#toggle-selected,#remove-selected,#show-upload,#empty-upload").forEach(button => { button.disabled = !connected || busy; });
+  document.querySelectorAll(".mod-switch,#toggle-selected,#remove-selected,#show-upload,#empty-upload").forEach(button => { button.disabled = !connected || busy || !inventoryAvailable(); });
   $("show-settings").disabled = busy || settingsSaving;
+  $("game-copy").disabled = !connected || busy || settingsSaving || !inventoryAvailable();
   updateSettingsControls();
 }
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -121,6 +123,14 @@ function renderDiagnostics() {
   $("settings-generation").textContent = String(state.generation);
   $("settings-applied-generation").textContent = runtime.appliedGeneration === undefined ? "Not reported" : String(runtime.appliedGeneration);
 }
+function renderGameSource() {
+  const mod = state.mods.find(item => item.titleId === selectedTitle);
+  $("game-copy-setting").hidden = !mod;
+  if (!mod) return;
+  $("game-copy-title").textContent = gameName(selectedTitle) || selectedTitle.toUpperCase();
+  $("game-copy").value = mod.gameSource || "unspecified";
+  $("game-copy").disabled = !connected || busy || settingsSaving || !inventoryAvailable();
+}
 function selectSettingsTab(tab, focus = false) {
   settingsTab = tab;
   for (const name of ["general","advanced","credits"]) {
@@ -217,7 +227,7 @@ function renderMods() {
   const mods = all.filter(mod => (mod.name + " " + mod.id).toLocaleLowerCase().includes(query));
   if (!mods.some(mod => keyOf(mod) === selectedKey)) selectedKey = mods[0] ? keyOf(mods[0]) : "";
   const existing = new Map([...$("mods").children].map(row => [row.dataset.key,row]));
-  $("empty-state").hidden = state.mods.length > 0; $("no-results").hidden = !all.length || mods.length > 0;
+  $("empty-state").hidden = state.mods.length > 0 || !inventoryAvailable(); $("no-results").hidden = !all.length || mods.length > 0;
   for (const [index,mod] of mods.entries()) {
     const key = keyOf(mod); let row = existing.get(key);
     if (!row) {
@@ -238,7 +248,7 @@ function renderMods() {
     row.querySelector(".mod-meta").textContent = kinds(mod) + " · " + counted(mod.fileCount,"file");
     const status = row.querySelector(".state-label"); status.className = "state-label " + (states[mod.applied] ? mod.applied : "error"); status.textContent = states[mod.applied] || "Unknown";
     const toggle = row.querySelector(".mod-switch"); toggle.setAttribute("aria-checked",String(mod.requested));
-    toggle.setAttribute("aria-label",(mod.requested ? "Disable " : "Enable ") + mod.name); toggle.disabled = busy || !connected;
+    toggle.setAttribute("aria-label",(mod.requested ? "Disable " : "Enable ") + mod.name); toggle.disabled = busy || !connected || !inventoryAvailable();
     if ($("mods").children[index] !== row) $("mods").insertBefore(row,$("mods").children[index] || null);
     existing.delete(key);
   }
@@ -256,7 +266,7 @@ function renderInspector() {
   $("inspector-detail").hidden = mod.detail === state.runtime?.detail;
   $("mod-kind").textContent = kinds(mod); $("mod-files").textContent = mod.fileCount; $("mod-size").textContent = bytes(mod.bytes); $("mod-id").textContent = mod.id;
   $("toggle-selected").textContent = mod.requested ? "Disable mod" : "Enable mod";
-  $("toggle-selected").disabled = busy || !connected; $("remove-selected").disabled = busy || !connected;
+  $("toggle-selected").disabled = busy || !connected || !inventoryAvailable(); $("remove-selected").disabled = busy || !connected || !inventoryAvailable();
   const showConfirm = confirmRemoval && confirmRemoval.key === selectedKey && confirmRemoval.generation === state.generation;
   const wasHidden = $("remove-confirm").hidden;
   $("remove-confirm").hidden = !showConfirm;
@@ -278,7 +288,11 @@ function renderEvents() {
   if (preferences.followLog && atBottom) list.scrollTop = list.scrollHeight;
 }
 function render() {
-  renderGames(); renderMods(); renderInspector(); renderDiagnostics();
+  renderGames(); renderMods(); renderInspector(); renderDiagnostics(); renderGameSource();
+  $("inventory-notice").hidden = inventoryAvailable();
+  $("inventory-detail").textContent = inventoryAvailable() ? "" :
+    (state.inventory?.ready ? "The SD scan failed. Your last complete library is shown. " : "The library could not be read from SD. ") +
+    (state.inventory?.error || "") + " Check the SD card, then choose Refresh to retry. Mod changes are paused.";
   const runtime = state.runtime || {};
   const rejected = Number(runtime.result || 0) !== 0;
   $("runtime-notice").classList.toggle("ready",!!runtime.connected && !rejected);
@@ -432,11 +446,19 @@ $("pair-form").addEventListener("submit",event => { event.preventDefault(); toke
 $("disconnect").addEventListener("click",() => { remember(""); showPair(); });
 $("game-select").addEventListener("change",event => chooseGame(event.target.value));
 $("search").addEventListener("input",() => { confirmRemoval = null; renderMods(); renderInspector(); });
+$("game-copy").addEventListener("change",async () => {
+  const titleId = selectedTitle, source = $("game-copy").value, generation = state.generation;
+  await mutate(async () => {
+    await api("/game-source?" + new URLSearchParams({titleId,source,generation}),{method:"POST",body:""});
+    message("Game copy saved. Check each mod’s apply state.");
+  });
+  renderGameSource();
+});
 $("clear-search").addEventListener("click",() => { $("search").value = ""; renderMods(); renderInspector(); });
 $("refresh").addEventListener("click",async () => {
   $("refresh").disabled = true; $("refresh").setAttribute("aria-busy","true");
-  try { await refresh(); message("Library refreshed."); }
-  catch (error) { connection(false,"Connection lost"); message(error.message,true); }
+  try { await api("/library/rescan",{method:"POST",body:""}); await refresh(); message("Library refreshed from SD."); }
+  catch (error) { message(error.message,true); try { await refresh(); } catch { connection(false,"Connection lost"); } }
   finally { $("refresh").disabled = false; $("refresh").removeAttribute("aria-busy"); }
 });
 $("copy-title").addEventListener("click",async () => message(await copyText(selectedTitle.toUpperCase()) ? "Title ID copied." : "Select the Title ID and copy it manually."));

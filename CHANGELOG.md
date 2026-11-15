@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.1.0-dev.4 — library recovery and game-card checks
+
+- Library reads use the last complete cached inventory while ZIP extraction runs. Competing library writes report that the operation is busy instead of waiting on the import lock. Ordinary app/browser polls no longer walk every disabled payload. Availability withdrawal can continue while ZIP extraction is paused.
+- SD enumeration/stat failures retain the previous inventory with a separate warning and pause mutations. Browser Refresh explicitly rescans; the resident also retries inventory scans in its background loop. Partial scans are never published as an empty library.
+- Native operation errors no longer overwrite the filesystem runtime result. A concurrent library change retains the previous native list until a complete refresh succeeds.
+- Per-game **Settings → Game copy** persists Unspecified, Cartridge/game-key or Digital selection. Current matching-card and base Program checks gate new runtime catalogues; requested mods stay saved but show **Game unavailable** with the reason. Digital is a user declaration, not detected ownership. Game-key downloads still require their matching card.
+- Availability failures fail closed, and details distinguish a blocked request, pending withdrawal, an acknowledged omission and a failed withdrawal. Already loaded assets/executable changes are not retroactively undone.
+- Includes dev.3's valid DEFLATE boundary import fix. Rebuilt app/resident have host validation only. HEN and native FS runtime are unchanged; the app display version remains `0.1.0-dev`.
+
+This update fixes reproduced manager defects. It does not establish or claim a fix for the reported fatal Minecraft/hbmenu system restart.
+
 ## v0.1.0-dev.1 — host setup update
 
 - Direct setup from a held kurumuz ns2jb session on Linux or WSL, alongside the existing mac2jb workflow. The preparation helper accepts a run directory and a local Node 24 executable.

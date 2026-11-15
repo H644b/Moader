@@ -61,6 +61,7 @@
     <label class="mobile-game" for="game-select">Game<select id="game-select"></select></label>
     <details id="game-name-details" class="game-name-details" hidden><summary>Full game name</summary><p id="game-full-name"></p></details>
     <div id="runtime-notice" class="runtime-notice"><span class="notice-mark"></span><p id="runtime-detail"></p></div>
+    <div id="inventory-notice" class="runtime-notice error" role="status" hidden><span class="notice-mark"></span><p id="inventory-detail"></p></div>
 
     <section id="upload-pane" class="upload-pane" aria-labelledby="upload-title" hidden>
       <div class="section-heading"><h2 id="upload-title">Upload a mod</h2><button id="hide-upload" class="icon-button" aria-label="Close upload"><svg><use href="#i-close"/></svg></button></div>
@@ -97,6 +98,11 @@
       </div>
       <form id="settings-form">
         <section id="settings-general" class="settings-section" role="tabpanel" aria-labelledby="tab-general">
+          <div id="game-copy-setting" class="game-copy-setting" hidden>
+            <label for="game-copy">Game copy <span id="game-copy-title"></span></label>
+            <select id="game-copy" aria-describedby="game-copy-help"><option value="unspecified">Check inserted card</option><option value="cartridge">Cartridge or game-key card</option><option value="digital">My digital copy</option></select>
+            <p id="game-copy-help" class="small-copy">Saved immediately for this game. Cartridge and game-key copies require their matching card. Choose digital only for a copy you can play without that card; this is your selection, not an ownership check.</p>
+          </div>
           <label class="setting-row" for="pref-game-names"><span><strong>Show game names</strong><span>Use installed game names when available. Title IDs stay visible.</span></span><input id="pref-game-names" type="checkbox" name="gameNames" role="switch"></label>
           <label class="setting-row" for="pref-reduced-motion"><span><strong>Reduce motion</strong><span>Turn off interface animation. Your system’s reduced-motion setting is always respected.</span></span><input id="pref-reduced-motion" type="checkbox" name="reducedMotion" role="switch"></label>
           <label class="setting-row" for="pref-follow-log"><span><strong>Follow debug log</strong><span>Follow new events while you’re at the end of the log. Scroll up to read earlier events.</span></span><input id="pref-follow-log" type="checkbox" name="followLog" role="switch"></label>

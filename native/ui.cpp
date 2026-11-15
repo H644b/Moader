@@ -29,11 +29,14 @@ uint32_t State::local_input(uint32_t buttons,unsigned debug_limit) {
         if(buttons&DownInput){debug_first=std::min(debug_first+3,debug_limit);log_paused=!(preferences.flags&moader::ipc::FollowLog)||debug_first<debug_limit;}
         if(buttons&ActivateInput)actions|=SaveReport;
     }else if(view==View::Settings){
-        if(buttons&UpInput)settings_row=(settings_row+5)%6;
-        if(buttons&DownInput)settings_row=(settings_row+1)%6;
+        if(buttons&UpInput)settings_row=(settings_row+6)%7;
+        if(buttons&DownInput)settings_row=(settings_row+1)%7;
         if(buttons&ActivateInput){
             if(settings_row<4){if(can_save){const uint32_t bits[]={moader::ipc::GameNames,moader::ipc::ReducedMotion,moader::ipc::FollowLog,moader::ipc::WebOnStart};const uint32_t fields[]={moader::ipc::NamesField,moader::ipc::MotionField,moader::ipc::FollowField,moader::ipc::StartupField};preferences.flags^=bits[settings_row];preference_mask=fields[settings_row];actions|=SavePreferences;}else unavailable();}
-            else if(settings_row==4){view=View::Advanced;advanced_row=0;}else view=View::Credits;
+            else if(settings_row==4){
+                if(can_save_game_source()){game_source=(game_source+1)%3;actions|=SaveGameSource;}
+                else {message="Select a game with a current inventory and available game-copy controls.";message_error=true;}
+            }else if(settings_row==5){view=View::Advanced;advanced_row=0;}else view=View::Credits;
         }
     }else if(view==View::Advanced){
         if(port_edit){
@@ -69,7 +72,7 @@ void State::regroup(uint64_t preferred) {
 }
 void State::move_game(int delta) {
     if(games.empty()) return;
-    game=(int(game)+delta+games.size())%games.size(); row=0; detail_first=0; confirm_remove=false;
+    game=(int(game)+delta+games.size())%games.size(); row=0; detail_first=0; confirm_remove=false;game_source_available=false;
 }
 void State::move_row(int delta) {
     if(game>=games.size()) return;
@@ -82,7 +85,7 @@ constexpr Color rgb(unsigned c) {return ((c>>16)&255)|((c>>8)&255)<<8|(c&255)<<1
 constexpr Color canvas=rgb(0xeef2f3),surface=rgb(0xffffff),subtle=rgb(0xf6f8f9),ink=rgb(0x1e303a),muted=rgb(0x536772),line=rgb(0xdce4e8),action=rgb(0x175f79),selection=rgb(0xe8f2f6),good=rgb(0x28654e),warn=rgb(0x8a551c),bad=rgb(0xa93f38),badbg=rgb(0xfff1ef),logbg=rgb(0x182b35),logink=rgb(0xdbe9f0),logmuted=rgb(0xa3bcc9),focus=rgb(0x4d99ba);
 std::string hexid(uint64_t id) {char b[20];std::snprintf(b,sizeof(b),"%016llX",(unsigned long long)id);return b;}
 std::string size_text(uint64_t n) {char b[40]; if(n>=1048576) std::snprintf(b,sizeof(b),"%.1f MiB",double(n)/1048576);else std::snprintf(b,sizeof(b),"%.1f KiB",double(n)/1024);return b;}
-const char* apply(unsigned s) {const char* names[]={"Disabled","Pending","Active","Reopen content","Relaunch game","Error"};return s<6?names[s]:"Unknown";}
+const char* apply(unsigned s) {const char* names[]={"Disabled","Pending","Active","Reopen content","Relaunch game","Error","Game unavailable"};return s<7?names[s]:"Unknown";}
 Color state_color(unsigned s) {return s==2?good:s==5?bad:s==0?muted:warn;}
 unsigned codepoint(const std::string& s,size_t& i) {
     unsigned c=(unsigned char)s[i++]; if(c<128) return c;
@@ -191,7 +194,7 @@ struct Renderer::Impl {
         rect(920,72,360,572,logbg);text(944,94,"Runtime & debug",23,logink);
         const bool live=s.connected&&(s.summary.flags&moader::ipc::BackendConnected);
         status(944,134,!s.connected?"Runtime unavailable":s.summary.last_result?"Runtime error":live?"Routing connected":"Backend not attached",!s.connected?logmuted:s.summary.last_result?rgb(0xf2b0a5):live?rgb(0x9ad2b6):rgb(0xe6bd80));
-        paragraph(944,168,!s.connected?"Service disconnected. Values and events below are last-known evidence.":s.summary.last_result?(live?"Channel connected. Last operation failed; inspect the result and events.":"The last operation failed. Inspect the result and events."):live?"Apply state follows runtime acknowledgement.":"Requests stay pending until a live backend acknowledges them.",18,logmuted,310,3);
+        paragraph(944,168,!s.connected?"Service disconnected. Values and events below are last-known evidence.":s.summary.last_result?"The filesystem runtime reported a failure. Inspect the runtime result and events.":live?"Apply state follows runtime acknowledgement.":"Requests stay pending until a live backend acknowledges them.",18,logmuted,310,3);
         rect(944,248,312,1,rgb(0x38505e));text(944,264,s.view==View::Debug?((s.preferences.flags&moader::ipc::FollowLog)&&!s.log_paused?"Events · following latest":"Event history · paused"):"Recent events",19,logink);
         const auto& lines=event_lines(s);
         if(lines.empty())paragraph(944,304,"No events yet. Library changes and runtime errors appear here.",18,logmuted,302,4);
@@ -199,15 +202,15 @@ struct Renderer::Impl {
             for(unsigned i=begin;i<lines.size()&&i<begin+10;++i)text(944,302+(i-begin)*23,lines[i],17,logink,306);
             if(s.view==View::Debug)text(944,542,"Line "+std::to_string(begin+1)+" / "+std::to_string(lines.size()),16,logmuted);
         }
-        rect(944,570,312,1,rgb(0x38505e));text(944,583,std::string(s.connected?"Library  ":"Last library  ")+std::to_string(s.summary.generation)+"    FS ack  "+std::to_string(s.summary.applied_generation),17,logmuted,310);
-        char result[40];std::snprintf(result,sizeof(result),s.connected?"Last result  0x%08X":"Last-known result  0x%08X",s.summary.last_result);text(944,608,result,17,logmuted);
+        rect(944,570,312,1,rgb(0x38505e));text(944,583,std::string(s.connected&&!s.inventory_unavailable()?"Library  ":"Last library  ")+std::to_string(s.summary.generation)+"    FS ack  "+std::to_string(s.summary.applied_generation),17,logmuted,310);
+        char result[40];std::snprintf(result,sizeof(result),s.connected?"Runtime result  0x%08X":"Last-known result  0x%08X",s.summary.last_result);text(944,608,result,17,logmuted);
 
     }
     void render(const State& s,float dt){
         const bool reduced=s.preferences.flags&moader::ipc::ReducedMotion;
         float ease=reduced?1.f:1-std::exp(-std::clamp(dt,0.f,.1f)*20);
         float target=226+(s.row%4)*60.f;float targetrail=132+(s.game%5)*88.f;
-        const float targetmenu=184+(s.view==View::Advanced?s.advanced_row:s.settings_row)*64.f;
+        const float targetmenu=s.view==View::Settings?176+s.settings_row*55.f:184+s.advanced_row*64.f;
         if(!initialized){row_y=target;rail_y=targetrail;menu_y=targetmenu;previous=s.view;initialized=true;}
         row_y+=(target-row_y)*ease;rail_y+=(targetrail-rail_y)*ease;menu_y+=(targetmenu-menu_y)*ease;
         if(previous!=s.view){panel=reduced?0:12;menu_y=targetmenu;previous=s.view;}panel*=1-ease;
@@ -218,7 +221,7 @@ struct Renderer::Impl {
         text(1056,27,!s.connected?"Service unavailable":s.summary.flags&moader::ipc::Foreground?"Foreground app":"Resident service",17,muted,200);
         rect(223,72,1,572,line);rect(224,72,696,572,surface);
         text(24,94,s.connected?"Games":"Last-known games",s.connected?22:19,ink);text(173,99,std::to_string(s.games.size()),17,muted);
-        if(s.games.empty())paragraph(24,146,"Your games appear here after the first mod upload.",18,muted,174,5);
+        if(s.games.empty())paragraph(24,146,s.inventory_unavailable()?"Waiting for a verified library inventory.":"Your games appear here after the first mod upload.",18,muted,174,5);
         const unsigned gamefirst=s.game/5*5;
         for(unsigned i=gamefirst;i<s.games.size()&&i<gamefirst+5;++i){float y=132+(i-gamefirst)*88;
             if(i==s.game){if(s.rail_focus)outline(10,rail_y-3,204,81,focus);rect(14,y,196,75,surface,7);}
@@ -235,16 +238,20 @@ struct Renderer::Impl {
         }else if(s.view==View::Settings){
             text(250,103+panel,"Settings",29,ink);
             text(250,147+panel,s.connected&&s.preferences_available?"Preferences are saved on this console.":"Saved preferences are unavailable. Credits and diagnostics remain open.",18,muted,626);
-            const char* labels[]={"Show game names","Reduce motion","Follow latest events","Start web automatically","Advanced","Credits"};
-            const char* descriptions[]={"Use installed game names; fall back to Title IDs.","Keep focus and panel changes immediate.","Follow the newest events until you scroll up.","Start the listener when the Moader service opens.","Web port, runtime details and diagnostic exports.","Project, runtime, libraries and font licenses."};
+            const char* labels[]={"Show game names","Reduce motion","Follow latest events","Start web automatically","Game copy","Advanced","Credits"};
+            const char* copy_help=s.game_source==moader::ipc::CopyDigital?"Your copy selection; ownership is not verified.":
+                s.game_source==moader::ipc::CopyCartridge?"Physical cartridge or game-key card must be inserted.":"Default checks the matching card. Game-key copies use Cartridge.";
+            const char* descriptions[]={"Use installed game names; fall back to Title IDs.","Keep focus and panel changes immediate.","Follow the newest events until you scroll up.","Start the listener when the Moader service opens.",copy_help,"Web port, runtime details and diagnostic exports.","Project, runtime, libraries and font licenses."};
             const uint32_t bits[]={moader::ipc::GameNames,moader::ipc::ReducedMotion,moader::ipc::FollowLog,moader::ipc::WebOnStart};
-            for(unsigned i=0;i<6;++i){float y=184+i*64;
-                if(i==s.settings_row)rect(250,y,644,61,selection,5);
-                text(264,y+6,labels[i],21,ink,450);text(264,y+35,descriptions[i],17,muted,606);
+            for(unsigned i=0;i<7;++i){float y=176+i*55;
+                if(i==s.settings_row)rect(250,y,644,53,selection,5);
+                const auto label=i==4&&s.game<s.games.size()?std::string("Game copy · ")+hexid(s.games[s.game].id):std::string(labels[i]);
+                text(264,y+5,label,21,ink,450);text(264,y+31,descriptions[i],17,muted,606);
                 if(i<4)text(795,y+8,s.connected&&s.preferences_available?(s.preferences.flags&bits[i]?"On":"Off"):"Unavailable",18,s.connected&&s.preferences_available?action:muted,96);
+                else if(i==4){const char* choices[]={"Unspecified","Cartridge","Digital"};text(753,y+8,s.can_save_game_source()&&s.game_source<3?choices[s.game_source]:"Unavailable",18,s.can_save_game_source()?action:muted,140);}
                 else text(804,y+8,"A  Open",18,action,88);
             }
-            rect(249,menu_y,646,2,focus);rect(249,menu_y+59,646,2,focus);
+            rect(249,menu_y,646,2,focus);rect(249,menu_y+51,646,2,focus);
             text(250,601,"Up / Down  Select     A  Change or open     B  Library",18,muted,630);
         }else if(s.view==View::Advanced){
             text(250,103+panel,"Advanced",29,ink);
@@ -298,12 +305,13 @@ struct Renderer::Impl {
             text(250,600,"Up / Down  Scroll details     B  Back to library",18,muted);
         }else{
             text(250,101+panel,"Mod library",29,ink);
-            text(250,146+panel,s.game<s.games.size()?ellipsis((s.preferences.flags&moader::ipc::GameNames)&&!s.games[s.game].name.empty()?s.games[s.game].name:hexid(s.games[s.game].id),19,525):"Upload your first mod to get started",19,muted,620);
+            text(250,146+panel,s.game<s.games.size()?ellipsis((s.preferences.flags&moader::ipc::GameNames)&&!s.games[s.game].name.empty()?s.games[s.game].name:hexid(s.games[s.game].id),19,525):s.inventory_unavailable()?"Saved library is not currently available":"Upload your first mod to get started",19,muted,620);
+            if(s.inventory_unavailable())text(250,170+panel,s.mods.empty()?"Library inventory unavailable":"Retained library · changes paused until refresh succeeds",17,warn,644);
             if(s.mods.empty()){
-                layers(250,230,action);text(290,220,"Your library is ready",26,ink);
-                paragraph(250,281,"Turn on the web interface, connect from your computer, and upload a mod ZIP for its game.",23,muted,610,4);
-                button(250,417,252,"ZR  Connection details");
-                paragraph(250,505,"Enable requests and actual runtime apply state are shown separately for every mod.",20,muted,615,3);
+                layers(250,230,action);text(290,220,s.inventory_unavailable()?"Library unavailable":"Your library is ready",26,ink);
+                paragraph(250,281,s.inventory_unavailable()?"No verified mod list is available. Saved files may still be present. Check Debug and wait for a successful inventory refresh before making changes.":"Turn on the web interface, connect from your computer, and upload a mod ZIP for its game.",23,muted,610,4);
+                button(250,417,252,s.inventory_unavailable()?"ZL  Inventory diagnostics":"ZR  Connection details");
+                paragraph(250,505,s.inventory_unavailable()?"An unavailable inventory is separate from the filesystem runtime status.":"Enable requests and actual runtime apply state are shown separately for every mod.",20,muted,615,3);
             }else if(s.game<s.games.size()){
                 rect(250,194,644,32,subtle,4);text(262,198,"Mod",17,muted);text(606,198,"Apply state",17,muted);text(795,198,"Requested",17,muted);
                 unsigned first=s.row/4*4;const auto& indexes=s.games[s.game].mods;
@@ -320,8 +328,8 @@ struct Renderer::Impl {
                     text(264,567,"Files stay in recovery storage.",18,ink);button(264,593,203,"X  Confirm remove",bad,surface);text(487,600,"B  Cancel",18,muted);
                 }else{
                     paragraph(250,524,m.detail.empty()?"No additional details. Apply state is reported by the runtime.":m.detail,19,muted,625,2);
-                    button(250,589,191,m.data.flags&moader::ipc::Requested?"A  Disable request":"A  Enable request");
-                    text(461,598,"X  Remove",19,bad);text(666,598,"R stick  Full details",18,action);
+                    button(250,589,191,s.inventory_unavailable()?"Changes paused":m.data.flags&moader::ipc::Requested?"A  Disable request":"A  Enable request");
+                    text(461,598,s.inventory_unavailable()?"ZL  Diagnostics":"X  Remove",19,s.inventory_unavailable()?warn:bad);text(666,598,"R stick  Full details",18,action);
                 }
                 text(795,148,std::to_string(s.row+1)+" / "+std::to_string(indexes.size()),17,muted,99);
             }
