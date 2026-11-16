@@ -2,6 +2,7 @@
 
 ## Unreleased — 0.1.2-dev.0
 
+- Preserve resident callback state and remaining platform resources when final startup/error shutdown retains worker ownership. Mark the service Failed and keep its owner alive without repeating that final stop.
 - Add a fixed HEN host-lifetime recorder, bounded SM mailbox sampling and cached game-arm identity observations for investigating the existing `2011-0102` failure.
 - Export acknowledged batches over the existing resident control connection, with strict reply validation, explicit gaps/backpressure and retained ownership after uncertain delivery or cleanup.
 - Add an authenticated cached diagnostic route and a macOS/Linux/WSL JSONL capture tool. Diagnostic reads acquire no new FS/HEN service sessions or SD writer.

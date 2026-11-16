@@ -29,3 +29,6 @@ with tempfile.TemporaryDirectory(prefix='moader-resident-') as temporary:
                     '-lz', '-pthread', '-o', str(binary)], check=True)
     subprocess.run([str(binary), str(work)], check=True)
     subprocess.run([str(binary), str(work), '--stop-failure'], check=True, timeout=15)
+    for scenario in ['fs', 'socket', 'ready', 'partial-start', 'outer-unwind',
+                     'success-retained', 'closed-error']:
+        subprocess.run([str(binary), str(work), '--startup-stop-' + scenario], check=True, timeout=15)

@@ -25,13 +25,19 @@ typedef struct { uint32_t lock, counter; } _LOCK_RECURSIVE_T;
 
 namespace {
 constexpr Result Failure = 0x5010;
+enum class StopOutcome { Closed, RetainedFailure, RetainedSuccess, ClosedFailure };
 struct Fake {
     PluginServiceHandler handler = nullptr;
+    PluginServiceHandler diagnostics = nullptr;
     PluginLifecycleHandler lifecycle = nullptr;
     void* context = nullptr;
+    void* diagnostics_context = nullptr;
     void* lifecycle_context = nullptr;
+    PluginService* service = nullptr;
     bool ready = false, auto_web = false, poll_error = false;
-    bool reload = false, abort_reload = false, stop_failure = false;
+    bool reload = false, abort_reload = false;
+    bool startup_stop_probe = false, partial_start = false;
+    StopOutcome stop_outcome = StopOutcome::Closed;
     Result fs_result = 0, socket_result = 0, signal_result = 0, start_result = 0, nifm_result = 0;
     unsigned fs_init = 0, fs_exit = 0, mounts = 0, unmounts = 0;
     unsigned socket_init = 0, socket_exit = 0, nifm_init = 0, nifm_exit = 0;
@@ -104,6 +110,36 @@ void fixture(const std::string& root) {
     moader::atomic_write("sdmc:/moader/preferences", std::string("1 1 0 ") +
         (fake.auto_web ? "1 " : "0 ") + std::to_string(unused_port()) + " 1");
 }
+void check_startup_retention() {
+    // Called from the real owner's retention sleep before its stack unwinds.
+    assert(fake.service && fake.service->started && fake.stops == 1);
+    assert(!fake.runtime_exit && !fake.fs_exit && !fake.unmounts &&
+           !fake.socket_exit && !fake.nifm_exit);
+    auto& endpoint = *static_cast<moader_native::ResidentControl*>(fake.lifecycle_context);
+    const Result expected = fake.stop_outcome == StopOutcome::RetainedSuccess ? moader_native::BadInput : Failure;
+    assert(!endpoint.context && endpoint.state == KaihenPluginLifecycleState_Failed &&
+           endpoint.result == expected && !endpoint.healthy && !endpoint.exit_requested);
+    const auto query = lifecycle(KaihenPluginLifecycle_Query);
+    assert(query.state == KaihenPluginLifecycleState_Failed && query.result == expected &&
+           !(query.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY));
+    moader::ipc::SummaryReply summary{};
+    assert(call(moader::ipc::Summary, nullptr, 0, &summary) == moader_native::ReloadBusy);
+    // Commit a fresh record through the registered actual callback: its cache
+    // is still alive even though no Context is available after startup failure.
+    KaihenCensusHeader header{KAIHEN_CENSUS_MAGIC,1,64,64,64,0,99,1,3,0,2,
+        KAIHEN_CENSUS_SOURCE_MASK(KaihenCensusSource_Hen),19200000};
+    KaihenCensusRecord record{2,2,0,KaihenCensusSource_Hen,KaihenCensusEvent_HenCounts,0,0,0,0,0};
+    KaihenCensusAck ack{}; size_t bytes = 0;
+    assert(fake.diagnostics == resident_diagnostics && fake.diagnostics_context);
+    assert(!fake.diagnostics(KAIHEN_CENSUS_HEADER_COMMAND,&header,sizeof(header),&ack,&bytes,fake.diagnostics_context));
+    assert(bytes == sizeof(ack) && ack.boot_id == 99 && !ack.sequence);
+    assert(!fake.diagnostics(KAIHEN_CENSUS_RECORD_COMMAND,&record,sizeof(record),&ack,&bytes,fake.diagnostics_context));
+    assert(bytes == sizeof(ack) && ack.boot_id == 99 && ack.sequence == 2);
+    assert(fake.stops == 1 && !fake.runtime_exit && !fake.fs_exit && !fake.unmounts &&
+           !fake.socket_exit && !fake.nifm_exit);
+    std::cout << "startup stop retained callback contexts and platform resources\n" << std::flush;
+    std::_Exit(0); // A bounded child, not simulated successful worker cleanup.
+}
 }
 
 extern "C" Result pluginRuntimeInitializeWithService(Handle* ready, Handle* control) { *ready = 10; *control = 11; return 0; }
@@ -111,7 +147,8 @@ extern "C" u64 svcGetSystemTick(void) { static u64 tick=100; return ++tick; }
 extern "C" void pluginRuntimeExit(void) { ++fake.runtime_exit; }
 extern "C" Result pluginServiceStart(PluginService* service, Handle control, PluginServiceHandler handler, void* context) {
     assert(control == 11); ++fake.starts; fake.handler = handler; fake.context = context;
-    service->started = R_SUCCEEDED(fake.start_result); return fake.start_result;
+    fake.service = service;
+    service->started = R_SUCCEEDED(fake.start_result) || fake.partial_start; return fake.start_result;
 }
 extern "C" Result pluginServiceStartWithLifecycle(PluginService* service, Handle control,
     PluginServiceHandler handler, void* context, PluginLifecycleHandler lifecycle, void* lifecycle_context) {
@@ -127,6 +164,7 @@ extern "C" Result pluginServiceStartWithLifecycleAndDiagnostics(PluginService* s
     PluginServiceHandler diagnostics, void* diagnostics_context) {
     // Exercise the actual callback before Context, filesystem or sockets exist.
     assert(diagnostics == resident_diagnostics && diagnostics_context && !fake.fs_init && !fake.socket_init);
+    fake.diagnostics = diagnostics; fake.diagnostics_context = diagnostics_context;
     KaihenCensusHeader header{KAIHEN_CENSUS_MAGIC,1,64,64,64,0,99,1,2,0,1,KAIHEN_CENSUS_SOURCE_MASK(KaihenCensusSource_Hen),19200000};
     KaihenCensusRecord record{1,1,0,1,KaihenCensusEvent_Boot,0,0,0,0,0};
     KaihenCensusAck ack{}; size_t size=0;
@@ -168,8 +206,10 @@ extern "C" Result pluginServiceStop(PluginService* service) {
     moader::ipc::SummaryReply summary{};
     assert(R_FAILED(call(moader::ipc::Summary, nullptr, 0, &summary)));
     ++fake.stops;
-    if (fake.stop_failure) return Failure; // Unjoined worker retains endpoint ownership.
-    service->started = false; return 0;
+    if (fake.stop_outcome == StopOutcome::RetainedFailure) return Failure;
+    if (fake.stop_outcome == StopOutcome::RetainedSuccess) return 0; // Invariant violation: ownership still wins.
+    service->started = false;
+    return fake.stop_outcome == StopOutcome::ClosedFailure ? Failure : 0;
 }
 extern "C" Result svcSignalEvent(Handle handle) {
     assert(handle == 10 && !fake.fs_init && !fake.socket_init);
@@ -204,8 +244,9 @@ extern "C" Result fsOpenDataStorageByCurrentProcess(FsStorage*) {
 extern "C" void fsStorageClose(FsStorage*) { assert(false); }
 extern "C" void svcSleepThread(s64 ns) {
     assert(ns == 1000000000); ++fake.sleeps;
+    if (fake.startup_stop_probe && fake.stops) check_startup_retention();
     if (fake.reload) {
-        if (fake.stop_failure && fake.sleeps == 3) {
+        if (fake.stop_outcome == StopOutcome::RetainedFailure && fake.sleeps == 3) {
             auto& endpoint = *static_cast<moader_native::ResidentControl*>(fake.lifecycle_context);
             assert(endpoint.state == KaihenPluginLifecycleState_Failed && !endpoint.exit_requested);
             assert(endpoint.context && endpoint.context->library.quiescing());
@@ -275,9 +316,29 @@ extern "C" Result setMakeLanguage(u64, SetLanguage*) { assert(false); return Fai
 
 int main(int argc, char** argv) {
     assert(argc == 2 || argc == 3);
+    if (argc == 3 && std::string(argv[2]).rfind("--startup-stop-",0) == 0) {
+        const std::string scenario = std::string(argv[2]).substr(std::strlen("--startup-stop-"));
+        fake = {}; fake.startup_stop_probe = true; fake.stop_outcome = StopOutcome::RetainedFailure;
+        if (scenario == "fs" || scenario == "success-retained") fake.fs_result = Failure;
+        else if (scenario == "socket" || scenario == "closed-error") fake.socket_result = Failure;
+        else if (scenario == "ready") fake.signal_result = Failure;
+        else if (scenario == "partial-start") { fake.start_result = Failure; fake.partial_start = true; }
+        else assert(scenario == "outer-unwind"); // Existing bounded owner exception after Context/web cleanup.
+        if (scenario == "success-retained") fake.stop_outcome = StopOutcome::RetainedSuccess;
+        if (scenario == "closed-error") fake.stop_outcome = StopOutcome::ClosedFailure;
+        fixture(std::filesystem::absolute(argv[1]).string() + "/startup-stop-" + scenario);
+        const Result result = moader_resident_main();
+        // A failed historical worker result with ownership cleared permits
+        // platform teardown. Do not dereference main's expired callback state.
+        assert(scenario == "closed-error" && R_FAILED(result));
+        assert(fake.stops == 1 && fake.runtime_exit == 1 && fake.fs_exit == 1 &&
+               fake.unmounts == 1 && !fake.socket_exit && !fake.nifm_exit && !fake.sleeps);
+        std::cout << "closed workers permit cleanup despite failed historical result\n";
+        return 0;
+    }
     if (argc == 3) {
         assert(std::string(argv[2]) == "--stop-failure");
-        fake = {}; fake.reload = true; fake.stop_failure = true; fake.auto_web = true;
+        fake = {}; fake.reload = true; fake.stop_outcome = StopOutcome::RetainedFailure; fake.auto_web = true;
         fixture(std::filesystem::absolute(argv[1]).string() + "/stop-failure");
         moader_resident_main();
         assert(false); // The owner must stay alive until the child checks it.

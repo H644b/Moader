@@ -193,7 +193,22 @@ int main() {
         }
         rc = BadInput;
     }
-    if (service.started) pluginServiceStop(&service);
+    if (service.started) {
+        const Result stopped = pluginServiceStop(&service);
+        if (service.started) {
+            // Stop did not prove all workers closed. Keep their main-stack
+            // contexts and every remaining platform/runtime resource alive.
+            {
+                std::lock_guard<std::mutex> lock(endpoint.mutex);
+                endpoint.state = KaihenPluginLifecycleState_Failed;
+                endpoint.result = R_FAILED(stopped) ? stopped : BadInput;
+                endpoint.healthy = false;
+                endpoint.exit_requested = false;
+            }
+            // No retry or native cleanup follows an uncertain stop.
+            while (true) svcSleepThread(1000000000);
+        }
+    }
     if (nifm_ready) nifmExit();
     if (sockets_ready) socketExit();
     if (mounted) fsdevUnmountAll();

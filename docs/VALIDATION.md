@@ -8,6 +8,10 @@ The matched 0.1.2-dev.0 HEN/bootstrap/app/resident compiled in an isolated AArch
 
 No new console test has been performed. The known crash remains unresolved, and neither a successful observer nor a regular GitHub release establishes a repair. The [capture guide](HOST_EXIT_DIAGNOSTICS.md) describes the observer's extra memory, timing overhead, deferred export and possible missing final records.
 
+A subsequent resident startup/error cleanup correction retains callback state and remaining platform resources when final plugin shutdown leaves worker ownership unresolved. Its focused actual-entry-point regressions passed with ASan/UBSan on arm64 using Apple Command Line Tools clang. An isolated AArch64 build produced the corrected resident; its exact source postimage, NSO segment hashes, bounds and decompressed privacy checks passed. The [release configuration](../config/release.json) pins that resident's separate byte identity. HEN, bootstrap, app and the native FS executable hook are unchanged by this correction.
+
+Both host profiles also prepared new immutable inputs for the corrected resident without opening a console connection. The original observer snapshots remain separate; the linked kaiHEN build proof binds the unchanged HEN/bootstrap pair. Neither resident candidate has been installed or console-tested. These checks do not establish kernel cleanup or a repair for the [unresolved `2011-0102` failure](https://github.com/H644b/Moader/issues/10).
+
 ## v0.1.1 release
 
 v0.1.1 consolidates all changes since the first `v0.1.0-dev` tag and is published with the unresolved `2011-0102` host-exit/next-game failure disclosed. The new app/resident are rebuilt with `0.1.1` labels; their exact bytes have host validation only. The matched HEN/bootstrap and native FS executable hook are unchanged from the most recent installation/startup-tested candidate below. Installation/startup success does not establish game/reload lifecycle acceptance. `console_retest_passed` and `appAndResidentHardwareTested` remain false. See the [release notes](releases/v0.1.1.md) for the cumulative changes and download choices.

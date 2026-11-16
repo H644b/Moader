@@ -12,8 +12,8 @@
     },
     "moader.nso": {
       "source": "dist/moader.nso",
-      "bytes": 689043,
-      "sha256": "a86f252426fbe60383e9e92d96277214a5ae5153a71934577fd67a9c9e844b85"
+      "bytes": 689326,
+      "sha256": "8a32af4de49e160937a461482971d8cffaa059c06dc350e705c4d5f5abbd026b"
     }
   },
   "patched_hen": {
