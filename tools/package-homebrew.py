@@ -24,8 +24,9 @@ instructions = '''Moader RELEASE_TAG (app display version APP_VERSION)
 Known issue: system error 2011-0102 has been reproduced after closing a
 homebrew host and launching Minecraft, before invoking service reload.
 Installation/startup checks passed, but this release has not passed the full
-game-exit lifecycle. See docs/VALIDATION.md
-and the release notes for the evidence and recovery instructions.
+game-exit lifecycle. Evidence and recovery instructions:
+https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/VALIDATION.md
+https://github.com/H644b/Moader/releases/tag/RELEASE_TAG
 
 Extract the switch/ and kaihen/ directories to the SD root. Open Moader
 normally from hbmenu. The M mark is shared by the app, web GUI and favicon.
