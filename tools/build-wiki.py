@@ -8,6 +8,8 @@ import re
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
+    'Release-v0.1.1': 'docs/releases/v0.1.1.md',
+    'Changelog': 'CHANGELOG.md',
     'Installation': 'docs/INSTALLATION.md',
     'CivSwitch-Entrypoint': 'docs/CIV7.md',
     'Using-Moader': 'docs/USAGE.md',
@@ -68,6 +70,8 @@ def build():
 
 Manage Switch 2 mods from your controller or a browser. Moader serves its web interface directly from the Switch, with a six-digit pairing code and no cloud account.
 
+**Known issue in {tag}:** system error `2011-0102` has been reproduced after closing a homebrew host and launching Minecraft, before invoking Reload. Read the [release notes](Release-v0.1.1) and [validation record](Validation); publication does not establish a fix.
+
 ## Start here
 
 1. **[Install Moader](Installation)** — choose the kurumuz ns2jb route on Linux/WSL, or ns2jb/mac2jb on macOS. The precompiled backend kit needs no compiler.
@@ -79,6 +83,8 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 | Guide | Covers |
 | --- | --- |
+| [v0.1.1 release notes](Release-v0.1.1) | Download choices, every change since v0.1.0-dev and the unresolved host-exit failure |
+| [Changelog](Changelog) | Release history and the unpublished dev.5 candidate |
 | [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
 | [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
@@ -150,6 +156,8 @@ Removal hides the entry and updates routing. Payloads stay available for older o
 
 A game-only error is expected to leave the separate backend available. If the browser still connects, disable/remove the offending mod and relaunch the game. Deliberate crash recovery has not been hardware-tested. An FS/HEN/system failure or console reboot can invalidate the backend. [Crash recovery](Troubleshooting#a-mod-caused-a-software-error-or-game-crash).
 
+The v0.1.1 host-exit/next-game issue has produced a system fatal before invoking Reload. It remains unresolved; see [release notes](Release-v0.1.1) and [Validation](Validation).
+
 ## Can I show game names instead of Title IDs?
 
 Open **Settings → Show game names**. Missing names fall back to the real Title ID; details always retain the ID. The display preference does not change which game receives a mod.
@@ -169,6 +177,8 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
     pages['_Sidebar'] = '''**Moader**
 
 - [Home](Home)
+- [v0.1.1 release notes](Release-v0.1.1)
+- [Changelog](Changelog)
 - [Install / Linux / WSL / macOS](Installation)
 - [CivSwitch entrypoint](CivSwitch-Entrypoint)
 - [App and browser usage](Using-Moader)

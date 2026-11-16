@@ -1,19 +1,19 @@
 {
   "name": "Moader",
-  "version": "0.1.0-dev",
-  "tag": "v0.1.0-dev.5",
-  "prerelease": true,
+  "version": "0.1.1",
+  "tag": "v0.1.1",
+  "prerelease": false,
   "repository": "H644b/Moader",
   "binaries": {
     "Moader.nro": {
       "source": "dist/Moader.nro",
       "bytes": 1937336,
-      "sha256": "3876999ecff3675c660c6b0cae08be95db43e8359f77f846e3ce48ad3236f331"
+      "sha256": "328a6e9cd704e1bc8f8548d7f39a568a6150720e662e5b98bcc6c0278623a469"
     },
     "moader.nso": {
       "source": "dist/moader.nso",
-      "bytes": 683176,
-      "sha256": "f444e0fb1185da1b95655d89510b3efa931883b13b2997d8a9db6b805480137a"
+      "bytes": 683047,
+      "sha256": "c4d283c5ed978166bc2f699598375d8e10d474b4031e21bf839554a0cd61bb2b"
     }
   },
   "patched_hen": {

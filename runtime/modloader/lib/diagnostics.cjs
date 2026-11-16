@@ -10,7 +10,7 @@ function report({session,sdPath,collection,captures=[],plan,error,status='prepar
  const parts=[],viewOffsets={},sourceOffsets={},moduleOffsets={},MAX=1024*1024;let bytes=0,omitted=0,budget=MAX/3;
  function line(value,essential=false){const text=value+'\n',n=Buffer.byteLength(text);if(bytes+n>budget&&!essential){omitted++;return false;}parts.push(text);bytes+=n;return true;}
  function patchDetail(patch){return patch.inputFormat==='pchtxt'?' compiled=IPSwitch->IPS32 BuildID='+patch.buildId+' records='+patch.patchRecords+' patchedBytes='+patch.patchedBytes:'';}
- line(sdPath==='/moader/runtime/runtime.log'?'Moader filesystem runtime 0.1.0-dev':'ns2jb-modloader '+VERSION);line('Session: '+session);line('Status: '+status);const prefix='Activation complete: ';line(prefix+'0');const readyOffset=bytes-2;
+ line(sdPath==='/moader/runtime/runtime.log'?'Moader filesystem runtime 0.1.1':'ns2jb-modloader '+VERSION);line('Session: '+session);line('Status: '+status);const prefix='Activation complete: ';line(prefix+'0');const readyOffset=bytes-2;
  if(plan?.nativeProfile)line('FS profile: '+JSON.stringify(plan.nativeProfile));
  if(plan?.nativeRuntime)line('Native components SHA-256: '+plan.nativeRuntime);
  if(error)line('Error: '+String(error.stack||error));

@@ -4,7 +4,7 @@ Start with the message in Moader's **ZL debug view** or browser debug panel. Not
 
 ## The library lags or temporarily disappears
 
-Update both the app and running resident to **v0.1.0-dev.4** using the [update instructions](INSTALLATION.md#updating). This version keeps cached complete inventories available during import and removes recursive payload scans from ordinary state polling. A busy import rejects another library change with an explanation.
+The v0.1.1 release includes the v0.1.0-dev.4 inventory fixes; its game-exit crash remains unresolved. Keep app and resident versions matched using the [update instructions](INSTALLATION.md#updating). These fixes keep cached complete inventories available during import and remove recursive payload scans from ordinary state polling. A busy import rejects another library change with an explanation.
 
 If an SD scan fails, the last complete list remains visible with a separate inventory warning. Check SD access, then use **Refresh** in the browser. The resident also retries in its background loop. A successful empty list and an unreadable library are different states; do not erase library folders or saved preferences to troubleshoot an unreadable scan.
 
