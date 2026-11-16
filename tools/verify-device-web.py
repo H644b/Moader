@@ -91,7 +91,7 @@ def native_log_acknowledged(generation, stage):
         if any('native report writer failed' in row for row in diagnostics):
             raise RuntimeError('Native report writer failed at ' + stage)
         matching = [row for row in native if (match := route.fullmatch(row)) and int(match.group(1), 16) == generation]
-        header = 'Runtime: Moader filesystem runtime 0.1.0-dev' in native
+        header = 'Runtime: Moader filesystem runtime 0.1.1' in native
         activated = 'Runtime: Activation complete: 1' in native
         loader = any(row.startswith('Runtime: Loader active ') for row in native)
         last = {'stage': stage, 'generation': generation, 'nativeRowCount': len(native),

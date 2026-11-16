@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-This branch builds an **unreleased v0.1.0-dev.5 candidate**. The repaired build completed two reloads on device but failed the subsequent normal-game launch with system error 2011-0102. Do not run its device installation commands. Use [v0.1.0-dev.4's guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md) for the published release. The candidate rebuilds the app, resident, HEN and bootstrap; the native filesystem hook is unchanged. The app still displays `0.1.0-dev`; see [Validation](VALIDATION.md) for exact evidence. The workflow below documents the intended matching backend kit.
+This source builds the **v0.1.1 release**. It includes protocol-7 service reload, the cartridge correction and the checked host installer. A fresh-boot Minecraft/hbmenu exit test still produced `2011-0102` before invoking Reload; the cause is unresolved. The v0.1.1 app/resident carry matching version labels and have host validation only. The HEN/bootstrap pair and native FS executable hook match the most recent startup-tested candidate. See [Validation](VALIDATION.md) and the [release notes](releases/v0.1.1.md) for the exact limits.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 

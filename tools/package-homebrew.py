@@ -19,7 +19,13 @@ for notice in sorted((root / 'native/third_party/licenses').glob('*.txt')):
     files['Moader-docs/licenses/' + notice.name] = notice
 app, service = files['switch/Moader.nro'].read_bytes(), files['kaihen/plugins/moader.nso'].read_bytes()
 assert app[16:20] == b'NRO0' and service[:4] == b'NSO0'
-instructions = '''Moader RELEASE_TAG (app display version 0.1.0-dev)
+instructions = '''Moader RELEASE_TAG (app display version APP_VERSION)
+
+Known issue: system error 2011-0102 has been reproduced after closing a
+homebrew host and launching Minecraft, before invoking service reload.
+Installation/startup checks passed, but this release has not passed the full
+game-exit lifecycle. See docs/VALIDATION.md
+and the release notes for the evidence and recovery instructions.
 
 Extract the switch/ and kaihen/ directories to the SD root. Open Moader
 normally from hbmenu. The M mark is shared by the app, web GUI and favicon.
@@ -77,8 +83,8 @@ or the game to relaunch. Do not infer game success from a library write.
 No device pairing code, saves, firmware, game files or private state are
 included in this package. Corresponding source, credits and build instructions:
 https://github.com/H644b/Moader/tree/RELEASE_TAG
-This is a development prerelease.
-'''.replace('RELEASE_TAG', release['tag'])
+This release includes the documented unresolved game-exit failure.
+'''.replace('RELEASE_TAG', release['tag']).replace('APP_VERSION', release['version'])
 manifest = {name: {'bytes': path.stat().st_size,
                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
             for name, path in files.items()}

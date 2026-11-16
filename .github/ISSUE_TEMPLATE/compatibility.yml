@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: Moader version
-      description: Release tag or source commit; v0.1.0-dev.2 retains the app's 0.1.0-dev label.
-      placeholder: v0.1.0-dev.2
+      description: Release tag or source commit; v0.1.1 has an unresolved game-exit crash.
+      placeholder: v0.1.1
     validations:
       required: true
   - type: input

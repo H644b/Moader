@@ -217,7 +217,7 @@ struct Renderer::Impl {
         row_y+=(target-row_y)*ease;rail_y+=(targetrail-rail_y)*ease;menu_y+=(targetmenu-menu_y)*ease;
         if(previous!=s.view){panel=reduced?0:12;menu_y=targetmenu;previous=s.view;}panel*=1-ease;
         rect(0,0,1280,720,canvas);rect(0,0,1280,72,surface);rect(0,71,1280,1,line);
-        mark(24,20,32,action);text(62,17,"Moader",29,ink);text(183,27,"0.1.0-dev",16,muted);
+        mark(24,20,32,action);text(62,17,"Moader",29,ink);text(183,27,"0.1.1",16,muted);
         status(444,25,!s.connected?"Web unknown":s.summary.flags&moader::ipc::WebRunning?"Web on":"Web off",s.connected&&(s.summary.flags&moader::ipc::WebRunning)?good:muted);
         text(574,26,s.connected?s.address:"Service disconnected",18,muted,438);
         text(1056,27,!s.connected?"Service unavailable":s.summary.flags&moader::ipc::Foreground?"Foreground app":"Resident service",17,muted,200);
@@ -278,7 +278,7 @@ struct Renderer::Impl {
             text(250,580,s.port_edit?"Left / Right  Digit     Up / Down  Value":"Up / Down  Select     A  Open or export",18,muted);
             text(250,609,s.port_edit?"A  Save port     B  Cancel edit":"B  Settings",18,muted);
         }else if(s.view==View::Credits){
-            text(250,103+panel,"Credits",29,ink);text(250,148+panel,"Moader 0.1.0-dev · built for kaiHEN on Switch 2",20,muted,625);
+            text(250,103+panel,"Credits",29,ink);text(250,148+panel,"Moader 0.1.1 · built for kaiHEN on Switch 2",20,muted,625);
             const char* titles[]={"kaiHEN / ounce-devkit / libounce","ns2jb-modloader / ns2jb","devkitPro / zlib","Noto Sans Regular","stb_truetype"};
             const char* notes[]={"Homebrew runtime, system services and framebuffer.","Retained runtime foundation and acquisition research.","Compiler, platform libraries and ZIP decoding.","The Noto Project Authors · SIL Open Font License 1.1.","Pinned font rasterizer · MIT / public-domain dual license."};
             for(unsigned i=0;i<5;++i){float y=207+i*66;text(250,y,titles[i],22,ink,625);text(250,y+31,notes[i],18,muted,625);}

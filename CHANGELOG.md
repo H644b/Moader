@@ -1,6 +1,25 @@
 # Changelog
 
-## v0.1.0-dev.5 — cartridge correction and plugin reload
+## v0.1.1 — cumulative release
+
+**Known unresolved system crash:** a fresh-boot test reached HEN/resident startup and the browser, then Minecraft launched without R unexpectedly opened hbmenu. After HOME → X closed that host, launching Minecraft again produced `2011-0102`. No service Reload had been requested that boot. This does not isolate the cause or rule out shared reload/HEN/filesystem lifecycle code. v0.1.1 is a regular release with this known issue; no crash repair or complete device lifecycle acceptance is claimed. Its version-labelled app/resident rebuild has host validation only.
+
+This release includes **all changes since v0.1.0-dev**, including the published dev.1–dev.4 updates and the previously unpublished dev.5 candidate:
+
+- **More host setup choices:** direct held-session setup with kurumuz ns2jb on Linux/WSL2 or macOS, alongside mac2jb on macOS; Node 24 selection, immutable prepared snapshots, route checks, WSL networking guidance and Linux CI preparation coverage. Host checks do not establish Linux/WSL console acceptance.
+- **Experimental CivSwitch integration:** the exact pinned `civ7-s8n` FS-only profile adds source/run qualification, authenticated bounded transports, checked RO handoff and tagged-thread adaptation. No Moader Civ7 console validation is claimed; other CivSwitch host families are not admitted by this profile.
+- **Compressed ZIP imports:** valid DEFLATE streams no longer fail at 32 KiB input/output boundaries. Decoder errors identify the entry and zlib result; truncation, CRC, size, path and trailing-data checks remain enforced.
+- **Responsive library and recovery:** complete cached inventories remain readable during extraction; competing writes report Busy. Failed/partial SD scans retain the previous inventory with a separate warning, pause unsafe mutations and retry without publishing an empty library. Browser Refresh explicitly rescans. Interface errors, scan warnings and the actual FS runtime result are separated.
+- **Per-game availability:** shared Game copy choices gate new routing for matching physical/game-key cards or explicitly selected digital copies. Requested toggles remain saved when a game is unavailable. The Z-A false block from dev.4 is corrected: repeated matching-card observations no longer require a separate installed-content base-Program predicate. Digital still checks installed noncard base Program data; this is not ownership/license verification.
+- **Cooperative service reload:** protocol 7 and **Settings → Advanced → Reload Moader service** stage and validate one replacement, coordinate shutdown, wait for the old PID, verify replacement health and reconnect the app. Busy, lost-reply and quarantined outcomes are distinguished. Two reload transactions completed on an earlier candidate, but subsequent game lifecycle acceptance failed; a later zero-reload boot reproduced the fatal.
+- **Native ownership and installer checks:** retain SM proxy contexts after failed thread joins/closes, track GameArm's installed donor by full identity, and strengthen lifecycle/SDK host fixtures. The host installer now requires an independently observed Loader receive receipt before clearing its wake event. A successful install/startup with that correction is not proof of healthy host exit or next-game admission.
+- **Matched components and documentation:** HEN/bootstrap ship as a source/patch-qualified pair, with stricter prepared-input/package validation, complete kaiHEN disclosure, expanded installation/recovery/card/reload guides, synchronized Wiki generation and clearer issue-report entrypoint fields. The native FS executable hook is unchanged by the reload feature.
+
+See [v0.1.1 release notes](docs/releases/v0.1.1.md) for downloads, update expectations and evidence limits; [all changes since the initial tag](https://github.com/H644b/Moader/compare/v0.1.0-dev...v0.1.1) and [PR #7](https://github.com/H644b/Moader/pull/7) provide the source history.
+
+## v0.1.0-dev.5 — unpublished candidate, superseded by v0.1.1
+
+This was a development candidate name, **not a published release or tag**. Its cartridge/reload changes and later ownership/installer corrections are included in v0.1.1 with the unresolved system fatal disclosed.
 
 - Matching inserted cartridges use repeated consistent card observations, without requiring an installed-content Application row. Digital still verifies installed noncard base Program content. Wrong, absent, changing and unverified cards stay blocked.
 - Patched kaiHEN protocol 7 adds `ReloadPlugin` and authoritative identity/status/capability queries. A cooperative plugin is staged, drained, stopped and replaced once under a serialized Loader lease. Existing FS routing remains in FS.
@@ -18,6 +37,18 @@
 - Includes dev.3's valid DEFLATE boundary import fix. Rebuilt app/resident have host validation only. HEN and native FS runtime are unchanged; the app display version remains `0.1.0-dev`.
 
 This update fixes reproduced manager defects. It does not establish or claim a fix for the reported fatal Minecraft/hbmenu system restart.
+
+## v0.1.0-dev.3 — compressed ZIP boundary fix
+
+- Fixes valid DEFLATE imports that fill a 32 KiB output buffer exactly while consuming the current input chunk. The decoder refills the next chunk for the specific no-progress case rather than rejecting a valid stream.
+- Decoder errors include the entry name and zlib status. Synthetic regressions cover first/repeated boundaries and exact completion while retaining truncated-stream, CRC, length, size and trailing-data rejection.
+- App/resident were rebuilt and host-tested; HEN and the native FS runtime were unchanged. No console installation or game-crash fix was established by this update.
+
+## v0.1.0-dev.2 — experimental CivSwitch host profile
+
+- Adds the pinned `civ7-s8n` host integration: held FS-only proof qualification, authenticated bounded transport, source/materialized-run checks and Civ7's tagged-thread/bootstrap adaptation.
+- Adds CivSwitch instructions, evidence boundaries, full kaiHEN modification disclosure, SD layout guidance, Wiki pages and entrypoint fields in issue reports.
+- App, resident, patched HEN and native runtime bytes were unchanged. This release added host validation only; Moader acquisition, installation and gameplay through CivSwitch were not console-tested.
 
 ## v0.1.0-dev.1 — host setup update
 
