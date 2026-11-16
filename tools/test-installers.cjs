@@ -120,6 +120,19 @@ test('runtime shares one uncertain-operation latch across selected-run and SD-st
   assert(state.error.nativeRequestUncertain);assert.deepEqual(events,['run-call']);
  }finally{if(env===undefined)delete process.env.NS2_RUN_DIR;else process.env.NS2_RUN_DIR=env;}
 });
+test('HEN installer and independent RO observer share both transport latches',async()=>{
+ const run='/host-test/switch2-Test',events=[],overrides={};
+ const runRpc={async call(){events.push('observer-call');throw Error('Synthetic native response timed out');}};
+ const runEndpoint={async request(){events.push('observer-retained');}};
+ overrides[path.join(run,'shared/rpc.cjs')]=runRpc;
+ overrides[path.join(run,'switch2/tools/endpoint.cjs')]=runEndpoint;
+ const researchRpc={async write(){events.push('installer-write');}},researchEndpoint={async request(){events.push('installer-retained');}};
+ const loader=name=>name==='shared/rpc.cjs'?researchRpc:researchEndpoint;
+ const state=stubModule('tools/install-kaihen.cjs',overrides).guardKaihenTransports(run,loader);
+ await assert.rejects(()=>runRpc.call(),/timed out/);
+ for(const operation of [()=>runEndpoint.request(),()=>researchRpc.write(),()=>researchEndpoint.request()])await assert.rejects(operation,/timed out/);
+ assert(state.error.nativeRequestUncertain);assert.deepEqual(events,['observer-call']);
+});
 test('unique snapshots retain qualified programs, metadata and kaiHEN bytes across source rebuilds',()=>fixture(async directory=>{
  const original=await shipping(directory),metadata=Buffer.from('first catalogue');
  const first=await inputs.snapshot({output:path.join(directory,'out'),kaihen:original.ship,programs:original.programs,metadata:[{target:'/moader/runtime/catalogue.bin',data:metadata}]});

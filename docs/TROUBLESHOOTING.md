@@ -134,3 +134,7 @@ Remove pairing codes, session commands, network addresses, personal paths and cr
 ## Reload progress or a lost connection during reload
 
 The protocol-7 patch adds **Settings → Advanced → Reload Moader service**. The listener closes while its process restarts. Wait for the app to reconnect, then reconnect your browser. A timeout is an unknown outcome, not proof of cancellation. Use the displayed status and save diagnostics; do not start a second writer or repeatedly submit a command after a quarantined result. [Reload guide](PLUGIN_RELOAD.md).
+
+## Installation stops during Loader restoration
+
+Keep the terminal's saved installation journal. A memory timeout does not prove the native request stopped. Do not repeat the installation, run cleanup commands, or reuse that RPC session. If the console is frozen, hold POWER for 12 seconds to turn it off, then power on normally. A new installation requires a newly acquired FS session after recovery. This development branch's Loader-restoration correction still needs console validation; see [Validation](VALIDATION.md) for the recorded failure and current scope.

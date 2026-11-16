@@ -38,6 +38,8 @@ The subsequent, uninstalled ownership repair tracks the donor object actually in
 
 The bootstrap now transfers a retained PM launch capability and the donor launch specification to HEN through an additive control command. Its host input layout stays unchanged. This needs a **matching modified HEN and bootstrap pair**, plus the rebuilt plugin runtime and cooperative resident. Updating a file cannot add commands to an older running HEN.
 
+The host installer also has a separate Loader-restoration adapter: [loader-restoration.cjs](../tools/loader-restoration.cjs) uses a checked receive acknowledgment, observed through [loader-observer.cjs](../tools/loader-observer.cjs), before clearing its parking event. The observer uses the already verified diagnostic RO and closes before that process is retired. This changes the installation procedure, not the HEN/bootstrap binary pair or either pinned acquisition provider. The failed pre-HEN installation and the adapter's validation limits are recorded in [Validation](VALIDATION.md).
+
 ## Source changes
 
 The complete patch includes the following areas; its individual file diffs are authoritative:

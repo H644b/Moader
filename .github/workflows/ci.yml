@@ -134,6 +134,8 @@ jobs:
         run: |
           python3 tools/test-setup-backend.py
           node tools/test-installers.cjs
+          node tools/test-loader-observer.cjs
+          node tools/test-loader-restoration.cjs
           node tools/test-control-resident.cjs
           node tools/test-inspect-hen.cjs
       - name: Legacy host compatibility and paired source qualification with console calls blocked

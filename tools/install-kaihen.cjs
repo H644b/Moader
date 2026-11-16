@@ -6,6 +6,16 @@ const path = require('node:path');
 const Module = require('node:module');
 const rootDir = path.resolve(__dirname, '..');
 const inputs = require('./install-inputs.cjs');
+function guardKaihenTransports(run, load, host) {
+  if (host) return require('./host-transport.cjs').install(host);
+  const {guardTransports} = require('./ready-kaihen.cjs');
+  const state = guardTransports({rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs')});
+  // The independent RO observer loads the selected run's SDK/IPC modules.
+  // Both module trees must stop at the first uncertain native operation.
+  guardTransports({rpc:require(path.join(run,'shared/rpc.cjs')),
+    endpoint:require(path.join(run,'switch2/tools/endpoint.cjs'))},state);
+  return state;
+}
 async function qualifyRelease(prepared) {
   const archive = await fs.readFile(path.join(rootDir, 'research/artifacts/kaiHEN-20261114c.zip'));
   if (inputs.digest(archive) !== '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967')
@@ -62,9 +72,7 @@ const upstream = host?.runtimeRoot || path.join(rootDir, 'research/sources/ns2jb
 const ship = prepared.kaihen;
 const output = path.join(rootDir, 'evidence/kaihen/install-' + path.basename(process.env.NS2_RUN_DIR) + '.json');
 const load = rel => host ? hosts.load(host,rel) : require(path.join(upstream, rel));
-const transportGuard = host ? require('./host-transport.cjs').install(host) : require('./ready-kaihen.cjs').guardTransports({
-  rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs'),
-});
+const transportGuard = guardKaihenTransports(process.env.NS2_RUN_DIR,load,host);
 const {Session, live, check} = load('switch2/app/session.cjs');
 const domain = load('switch2/app/domain.cjs');
 const filesystem = load('switch2/app/filesystem.cjs');
@@ -164,17 +172,46 @@ async function execute() {
   // Load the current upstream gate algorithm with run paths instead of source paths.
   // Keep the source checkout unchanged and preserve its relative dependencies.
   let launched;
-  if(host) launched = await step('Launch the checked kaiHEN RO image', () => require('./host-kaihen.cjs').launch(host,memory));
-  else {
-  const launchFilename = path.join(upstream, 'switch2/ro/launch.cjs');
-  let launchCode = await fs.readFile(launchFilename, 'utf8');
-  launchCode = "const {runPath} = require('../../shared/paths.cjs');\n" + launchCode
-    .replaceAll('path.join(__dirname, memory.info.session', "runPath('switch2', 'ro', memory.info.session");
-  const launchModule = new Module(launchFilename, module);
-  launchModule.filename = launchFilename;
-  launchModule.paths = Module._nodeModulePaths(path.dirname(launchFilename));
-  launchModule._compile(launchCode, launchFilename);
-  launched = await step('Launch the checked kaiHEN RO image', () => launchModule.exports.main({memory}));
+  const loaderRoot = await read(path.join(roDir,live.session+'-loader-root-copy.json'));
+  const loaderBindings = await read(path.join(roDir,live.session+'-bound-sessions.json'));
+  check(loaderRoot.report===memory.reportFile && loaderBindings.report===memory.reportFile,
+    'Loader observer bindings belong to another session');
+  const loaderRows = loaderBindings.rows.filter(row=>row.domain===loaderRoot.targetDomain);
+  check(loaderRows.length===1,'The bound Loader session is not unique');
+  record.loaderObserver = {resourcesRetained:false};
+  const observer = await step('Open independent Loader restoration observer', () =>
+    require('./loader-observer.cjs').openObserver({run:process.env.NS2_RUN_DIR,memory,execution,
+      state:transportGuard,record:record.loaderObserver,save:persist}));
+  try {
+    await step('Qualify independent Loader view before parking',()=>observer.qualify(loaderRows[0]));
+    // Only the temporary exported Gate class changes. Qualified provider source
+    // bytes remain untouched, including the Civ7 materialized runtime.
+    launched = await require('./loader-restoration.cjs').withGateRestoration(
+      load('switch2/ro/gate.cjs'),observer,async () => {
+        if(host) return step('Launch the checked kaiHEN RO image', () => require('./host-kaihen.cjs').launch(host,memory));
+        const launchFilename = path.join(upstream, 'switch2/ro/launch.cjs');
+        let launchCode = await fs.readFile(launchFilename, 'utf8');
+        launchCode = "const {runPath} = require('../../shared/paths.cjs');\n" + launchCode
+          .replaceAll('path.join(__dirname, memory.info.session', "runPath('switch2', 'ro', memory.info.session");
+        const launchModule = new Module(launchFilename, module);
+        launchModule.filename = launchFilename;
+        launchModule.paths = Module._nodeModulePaths(path.dirname(launchFilename));
+        launchModule._compile(launchCode, launchFilename);
+        return step('Launch the checked kaiHEN RO image', () => launchModule.exports.main({memory}));
+      });
+    const receipt = launched.restoration;
+    if (!launched.restored || !receipt?.receiptSeen || !receipt.snapshotRetired ||
+        receipt.unresolved || receipt.clear?.result!==0) {
+      const error = Error('RO launch has no checked Loader restoration receipt');
+      observer.block(error);
+      throw error;
+    }
+  } finally {
+    // This closes only after a fully acknowledged restoration and joined PM
+    // worker. An uncertain observer leaves all owned native state retained.
+    if (!transportGuard.error && !observer.uncertain && launched?.restored)
+      await step('Close Loader restoration observer', () => observer.close());
+    else { record.loaderObserver.resourcesRetained = true; await persist(); }
   }
   check(launched.imageAccepted && launched.restored, 'RO image was not accepted and restored');
   record.ro = await step('Activate kaiHEN RO and retire the identified diagnostic RO', () =>
@@ -211,5 +248,5 @@ catch (error) {
   throw error;
 }
 }
-module.exports = {main,prepareKaihen,qualifyRelease,verifyRoPackage};
+module.exports = {main,prepareKaihen,qualifyRelease,verifyRoPackage,guardKaihenTransports};
 if (require.main === module) main().catch(error => {console.error(error.stack);process.exitCode = 1;});
