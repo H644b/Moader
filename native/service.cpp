@@ -3,6 +3,7 @@
 #include "moader/ipc.hpp"
 #include "moader/library.hpp"
 #include "moader/web.hpp"
+#include "moader/host_census.hpp"
 #include "moader/runtime_backend.hpp"
 #include "web_assets.hpp"
 #include "control.hpp"
@@ -27,6 +28,17 @@ void __appExit(void) {}
 using namespace moader_native;
 
 namespace {
+// Lives outside Context and is constructed before CONTROL starts. This callback
+// must remain fixed-memory only; it is also used during early bootstrap.
+Result resident_diagnostics(u32 id, const void* input, size_t input_size,
+                            void* output, size_t* output_size, void* data) {
+    *output_size = 0;
+    KaihenCensusAck ack{};
+    bool busy = false;
+    if (!static_cast<moader::HostCensus*>(data)->receive(id, input, input_size, ack, &busy))
+        return busy ? KAIHEN_CENSUS_RECEIVER_BUSY : KAIHEN_CENSUS_RECEIVER_REJECTED;
+    std::memcpy(output, &ack, sizeof(ack)); *output_size = sizeof(ack); return 0;
+}
 // HEN's five-second ready window covers the IPC transport, not an SD scan or
 // network setup. Until initialization finishes, answer without exposing Context.
 // In particular, an early WebEnabled must not race the saved auto-start setting.
@@ -81,9 +93,12 @@ int main() {
     bool fs_ready = false, mounted = false, sockets_ready = false, nifm_ready = false;
     PluginService service{};
     ResidentControl endpoint;
+    // Distinguish a fresh receiver after resident replacement even when the
+    // producer's HEN boot ID is unchanged. A cached local tick acquires no IPC.
+    moader::HostCensus census(svcGetSystemTick());
     try {
-        rc = pluginServiceStartWithLifecycle(&service, control, resident_command, &endpoint,
-                                             resident_lifecycle, &endpoint);
+        rc = pluginServiceStartWithLifecycleAndDiagnostics(&service, control, resident_command, &endpoint,
+                                             resident_lifecycle, &endpoint, resident_diagnostics, &census);
         if (R_SUCCEEDED(rc)) rc = svcSignalEvent(ready);
         if (R_SUCCEEDED(rc)) { rc = fsInitialize(); fs_ready = R_SUCCEEDED(rc); }
         if (R_SUCCEEDED(rc)) { rc = fsdevMountSdmc(); mounted = R_SUCCEEDED(rc); }
@@ -100,7 +115,7 @@ int main() {
             });
             moader::Library library("sdmc:/moader", backend, installed_game_name, installed_game_availability);
             const auto token = pairing_token();
-            moader::WebServer web(library, "sdmc:/moader", token, moader_web_assets());
+            moader::WebServer web(library, "sdmc:/moader", token, moader_web_assets(), &census);
             Context context{library, web, token};
             nifm_ready = R_SUCCEEDED(nifmInitialize(NifmServiceType_User));
             context.network_ready = nifm_ready;

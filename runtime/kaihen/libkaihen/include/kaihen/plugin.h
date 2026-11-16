@@ -52,6 +52,7 @@
 #include <switch.h>
 #include "protocol.h"
 #include "reload.h"
+#include "census.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -131,6 +132,8 @@ typedef struct {
     PluginServiceThreadState control_thread_state;
     PluginServiceThreadState worker_thread_state;
     bool stopping;
+    PluginServiceHandler diagnostics_handler;
+    void* diagnostics_context;
 } PluginService;
 
 /// Starts the threads that create client sessions through the control session and serve them.
@@ -142,6 +145,15 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
 Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
                           PluginServiceHandler handler, void* context,
                           PluginLifecycleHandler lifecycle, void* lifecycle_context);
+
+/** Optional memory-only census receiver on the existing control thread.
+ * The callback receives one validated 64-byte header or record and returns
+ * KaihenCensusAck. It must not allocate, acquire services, issue IPC, or use
+ * the foreground command context. Its storage must outlive both threads. */
+Result pluginServiceStartWithLifecycleAndDiagnostics(PluginService* service, Handle control_session,
+                          PluginServiceHandler handler, void* context,
+                          PluginLifecycleHandler lifecycle, void* lifecycle_context,
+                          PluginServiceHandler diagnostics, void* diagnostics_context);
 
 /**
  * @brief Stops the threads and closes the client sessions. The borrowed

@@ -4,6 +4,7 @@
 #include <atomic>
 #include <switch.h>
 #include "sm_request.hpp"
+#include "census.hpp"
 
 /// HEN's SM proxy. HEN keeps FS's initialized SM session (the master) to
 /// itself and gives each homebrew program a session of its own on this
@@ -46,6 +47,9 @@ class SmProxy {
     /// Reclaims ended proxy threads. Failure retains the context and partial
     /// join state; it is never permission to free an unclosed thread object.
     Result collectFinishedSessions();
+    void setCensus(HenCensus* census) { census_ = census; }
+    // Same owner thread as openSession/reaping. Never waits, reaps, or issues IPC.
+    void sampleCensus();
 
   private:
     static constexpr size_t ThreadStackSize = 0x4000;
@@ -62,20 +66,34 @@ class SmProxy {
         std::atomic<bool> running{false};
         bool thread_started = false;
         bool thread_exited = false;
+        u64 census_id = 0;
+        HenCensusSmMailbox census_mailbox;
+        u64 census_revision = 0, census_failures = 0, census_pending = 0;
+        bool census_ended = false;
+        u32 census_class = UINT32_MAX;
+        u32 census_end_reason = 0; // worker-only; published atomically at end
     };
 
     static void sessionMain(void* argument);
     void serve(Session& session);
     /// Answers the request in the thread's message buffer. Returns false
     /// when the session is to be closed.
-    bool respond();
+    bool respond(Session& session);
     /// Asks SM for the service on the master session. The session SM returns
     /// is in *out_handle.
     Result lookUpService(const SmServiceName& name, Handle* out_handle);
     Result reapFinishedSessions();
+    void sampleSessionCensus(Session& session);
+    void classifyCensus(Session& session, bool remove = false);
 
     Handle master_ = INVALID_HANDLE;
     Mutex lock_ = {};
     /// The sessions whose thread has not been joined yet. Under lock_.
     Session* sessions_ = nullptr;
+    HenCensus* census_ = nullptr;
+    u64 census_next_id_ = 1, census_reaped_ = 0, census_loss_ = 0;
+    u64 census_counts_[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX};
+    u64 census_current_[4] = {}; // cached running, ended, joined, unstarted
+    Session* census_cursor_ = nullptr;
+    bool census_incomplete_ = false;
 };

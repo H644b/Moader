@@ -44,6 +44,21 @@ bool isCreateSession(const ounce::CmifRequest& request) {
         ounce::hasOnlyInlineData(request);
 }
 
+// CMIF includes up to fifteen alignment bytes in data_size. Meaningful
+// census data is exactly one frame; any wire padding must be zero.
+bool isCensusFrame(const ounce::CmifRequest& request) {
+    constexpr u32 FrameWords = (0x10 + sizeof(CmifInHeader) + 64 + 3) / 4;
+    if (!request.valid || request.hipc.meta.type != CmifCommandType_Request ||
+        !ounce::hasOnlyInlineData(request) || request.hipc.meta.send_pid ||
+        request.hipc.meta.num_data_words != FrameWords ||
+        (request.command_id != KAIHEN_CENSUS_HEADER_COMMAND &&
+         request.command_id != KAIHEN_CENSUS_RECORD_COMMAND) ||
+        request.data_size < 64 || request.data_size > 79) return false;
+    for (size_t i = 64; i < request.data_size; ++i)
+        if (request.data[i]) return false;
+    return true;
+}
+
 /// Creates a session pair in a free slot of the table, wakes the worker and
 /// returns the client end.
 Result createClientSession(PluginService* service, Handle* out_client) {
@@ -94,6 +109,25 @@ Result serveControlRequest(PluginService* service) {
             service->lifecycle_handler(&input, &reply, service->lifecycle_context);
         }
         return sent;
+    } else if (isCensusFrame(request) && service->diagnostics_handler) {
+        // The input lives in TLS; copy it before invoking an extension.
+        alignas(8) u8 input[64];
+        u8 output[KAIHEN_PLUGIN_MESSAGE_SIZE] = {};
+        std::memcpy(input, request.data, sizeof(input));
+        size_t output_size = 0;
+        rc = service->diagnostics_handler(request.command_id, input, sizeof(input),
+            output, &output_size, service->diagnostics_context);
+        if ((R_SUCCEEDED(rc) && output_size != sizeof(KaihenCensusAck)) ||
+            rc == MAKERESULT(Module_Libnx, LibnxError_BadInput))
+            rc = KAIHEN_CENSUS_RECEIVER_REJECTED;
+        ounce::closeRequestHandles(request);
+        ounce::writeReply(message, rc, R_SUCCEEDED(rc) ? output : nullptr,
+                          R_SUCCEEDED(rc) ? sizeof(KaihenCensusAck) : 0);
+        return ounce::sendReply(service->control_session);
+    } else if (request.valid && service->diagnostics_handler &&
+               (request.command_id == KAIHEN_CENSUS_HEADER_COMMAND ||
+                request.command_id == KAIHEN_CENSUS_RECORD_COMMAND)) {
+        rc = KAIHEN_CENSUS_RECEIVER_REJECTED;
     }
     ounce::closeRequestHandles(request);
 
@@ -327,6 +361,14 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
 Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
                           PluginServiceHandler handler, void* context,
                           PluginLifecycleHandler lifecycle, void* lifecycle_context) {
+    return pluginServiceStartWithLifecycleAndDiagnostics(service, control_session, handler, context,
+        lifecycle, lifecycle_context, nullptr, nullptr);
+}
+
+Result pluginServiceStartWithLifecycleAndDiagnostics(PluginService* service, Handle control_session,
+                          PluginServiceHandler handler, void* context,
+                          PluginLifecycleHandler lifecycle, void* lifecycle_context,
+                          PluginServiceHandler diagnostics, void* diagnostics_context) {
     if (!service || !handler || control_session == INVALID_HANDLE)
         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
 
@@ -336,6 +378,8 @@ Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_se
     service->context = context;
     service->lifecycle_handler = lifecycle;
     service->lifecycle_context = lifecycle_context;
+    service->diagnostics_handler = diagnostics;
+    service->diagnostics_context = diagnostics_context;
     mutexInit(&service->sessions_lock);
 
     Result rc = svcCreateEvent(&service->stop_write, &service->stop_read);

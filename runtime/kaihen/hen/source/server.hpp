@@ -6,6 +6,7 @@
 #include "game_arm.hpp"
 #include "sm_proxy.hpp"
 #include "plugin_reload.hpp"
+#include "census_relay.hpp"
 #include "../../libkaihen/source/cmif_server.hpp"
 
 /// HEN's IPC server. It serves the mig:usr control port, on which the
@@ -24,6 +25,8 @@ class HenServer {
 
     /// Serves requests until a kernel call fails.
     Result run();
+    // Main-thread cached producer, also used by the separately owned relay.
+    HenCensus census_;
 
   private:
     static constexpr u32 MaxSessions = 16;
@@ -59,6 +62,8 @@ class HenServer {
         Handle copy_handles[MaxCopyHandles];
         u8 data[ounce::MessageSize];
         size_t data_size;
+        bool census_scalar = false;
+        u32 census_words = 0;
     };
 
     /// What a command answers.
@@ -93,10 +98,15 @@ class HenServer {
     // The loop
     void collectWaits(WaitList& waits) const;
     void stepBetweenRequests();
+    void advanceCensusRelay();
+    bool censusControlBlocked(const PluginRecord& plugin) const;
     void acceptSession();
     Result serveSession(SessionRef session);
     Handle& sessionHandle(SessionRef session);
-    void closeSession(SessionRef session);
+    void closeSession(SessionRef session, u32 reason = 2);
+    void censusCounts();
+    void censusClose(Handle& handle, u32 caller, u32 reason, u32 slot);
+    void censusFsClone(u32 caller, Handle root, Handle clone, Result result);
 
     // Requests
     ReceivedRequest receiveRequest() const;
@@ -141,4 +151,12 @@ class HenServer {
     PluginLaunchSpec reload_spec_ = {};
     bool reload_configured_ = false;
     u64 reload_instance_ = 0;
+    u64 census_session_failures_ = 0, census_close_failures_ = 0;
+    bool census_query_ = false;
+    // Heap-backed: an unconfirmed worker may outlive server teardown. Its
+    // copied frame and borrowed control stay owned until the process exits.
+    CensusRelay* census_relay_ = nullptr;
+    u64 census_target_pid_ = 0, census_delivered_ = 0, census_last_export_ = 0;
+    bool census_header_delivered_ = false;
+    u64 census_exit_snapshot_ = 0;
 };

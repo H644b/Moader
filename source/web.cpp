@@ -1,4 +1,5 @@
 #include "moader/web.hpp"
+#include "moader/host_census.hpp"
 #include "web_worker.hpp"
 #ifdef __SWITCH__
 #include <switch.h>
@@ -181,6 +182,7 @@ void send_reply(int fd, const Reply& reply) {
 class WebServer::Impl {
 public:
     Library& library;
+    const HostCensus* host_census;
     std::string root, token, error;
     std::vector<WebAsset> assets;
     struct Upload { std::string file, title, id, name; uint64_t size = 0, received = 0; };
@@ -191,10 +193,46 @@ public:
     int client = -1;
     int listener = -1; uint16_t actual_port = 0; unsigned next_upload = 0;
     WebWorker worker;
-    Impl(Library& lib, std::string r, std::string t, std::vector<WebAsset> a) : library(lib), root(std::move(r)), token(std::move(t)), assets(std::move(a)) {
+    Impl(Library& lib, std::string r, std::string t, std::vector<WebAsset> a, const HostCensus* census) : library(lib), host_census(census), root(std::move(r)), token(std::move(t)), assets(std::move(a)) {
         require(token.size() == 6 && token.find_first_not_of("0123456789") == std::string::npos,
                 "Pairing code must contain six digits.");
         make_directories(root + "/.uploads");
+    }
+    std::string census_json() const {
+        if (!host_census) return "{\"schema\":1,\"available\":false,\"reason\":\"unsupported\"}";
+        HostCensus::Snapshot s;
+        if (!host_census->snapshot(s)) return "{\"schema\":1,\"available\":false,\"reason\":\"cache-busy\"}";
+        // Decimal strings preserve every bit of 64-bit identifiers in JS/JSON
+        // readers. This runs on the HTTP worker, outside the census cache lock.
+        std::ostringstream o;
+        const auto u64 = [&o](const char* key, uint64_t value) { o << '\"' << key << "\":\"" << value << '\"'; };
+        const auto header = [&o, &u64](const KaihenCensusHeader& h) {
+            o << "{\"magic\":" << h.magic << ",\"schema\":" << h.schema << ",\"headerBytes\":" << h.header_bytes
+              << ",\"recordBytes\":" << h.record_bytes << ",\"capacity\":" << h.capacity << ",\"flags\":" << h.flags << ',';
+            u64("bootId", h.boot_id); o << ','; u64("firstSequence", h.first_sequence); o << ',';
+            u64("nextSequence", h.next_sequence); o << ','; u64("overwritten", h.overwritten);
+            o << ",\"recordCount\":" << h.record_count << ",\"sourceMask\":" << h.source_mask << ',';
+            u64("tickFrequency", h.tick_frequency); o << '}';
+        };
+        const auto record = [&o, &u64](const KaihenCensusRecord& r) {
+            o << '{'; u64("sequence", r.sequence); o << ','; u64("tick", r.tick); o << ','; u64("ownerPid", r.owner_pid);
+            o << ",\"source\":" << r.source << ",\"event\":" << r.event << ",\"result\":" << r.result << ",\"flags\":" << r.flags << ',';
+            u64("a", r.a); o << ','; u64("b", r.b); o << ','; u64("c", r.c); o << '}';
+        };
+        o << "{\"schema\":1,\"available\":" << (s.available ? "true" : "false") << ',';
+        u64("receiverId", s.receiver_id); o << ','; u64("sessionGeneration", s.generation); o << ','; u64("acceptedRecords", s.accepted_records); o << ',';
+        u64("rejectedFrames", s.rejected_frames); o << ','; u64("busyFrames", s.busy_frames); o << ',';
+        u64("repeatedHeaders", s.repeated_headers); o << ','; u64("sequenceGaps", s.sequence_gaps); o << ',';
+        u64("tickRegressions", s.tick_regressions); o << ',';
+        u64("lastSequence", s.last_sequence);
+        o << ",\"lastCommand\":" << s.last_command << ",\"lastFrameBytes\":" << s.last_frame_bytes
+          << ",\"lastStatus\":" << static_cast<uint32_t>(s.last_status) << ",\"header\":";
+        header(s.header); o << ",\"lastHeaderFrame\":"; header(s.last_header_frame);
+        o << ','; u64("lastRecordBootId", s.last_record_boot_id);
+        o << ','; u64("lastRecordGeneration", s.last_record_generation);
+        o << ",\"lastRecordFrame\":"; record(s.last_record_frame); o << ",\"records\":[";
+        for (uint32_t i = 0; i < s.count; ++i) { if (i) o << ','; record(s.records[i]); }
+        o << "]}"; return o.str();
     }
     Reply route(const Request& req, uint32_t peer) {
         if (req.path.compare(0, 5, "/api/") != 0) {
@@ -211,6 +249,10 @@ public:
         const auto origin = req.headers.find("origin");
         if (origin != req.headers.end() && origin->second != "http://" + req.headers.at("host"))
             return {403, "application/json", "{\"error\":\"Open Moader at the address shown on your Switch.\"}"};
+        if (req.method == "GET" && req.path == "/api/diagnostics/host-census") {
+            require(req.query.empty() && req.body.empty(), "Host census does not accept parameters or a body.");
+            return {200, "application/json", census_json()};
+        }
         if (req.method == "GET" && req.path == "/api/app-screenshot") {
             require(req.query.empty(), "App screenshot does not accept path or query parameters.");
             return app_screenshot(root);
@@ -344,8 +386,8 @@ public:
         }
     }
 };
-WebServer::WebServer(Library& library, std::string root, std::string token, std::vector<WebAsset> assets)
-    : impl_(new Impl(library, std::move(root), std::move(token), std::move(assets))) {}
+WebServer::WebServer(Library& library, std::string root, std::string token, std::vector<WebAsset> assets, const HostCensus* census)
+    : impl_(new Impl(library, std::move(root), std::move(token), std::move(assets), census)) {}
 WebServer::~WebServer() { stop(); }
 bool WebServer::start(const std::string& address, uint16_t port) {
     if (impl_->enabled) return true;

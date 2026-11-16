@@ -1,6 +1,15 @@
 // Run the actual resident entry point with SDK declarations and fake Horizon
 // calls. The library, publication, web server and instance lock remain real.
+#include <array>
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
+// Parse HostCensus's standard dependencies normally, then relax access only
+// for the real cache declaration in this fixture. Production stays unchanged.
+#define private public
+#include "moader/host_census.hpp"
+#undef private
 typedef uint32_t _LOCK_T;
 typedef struct { uint32_t lock, counter; } _LOCK_RECURSIVE_T;
 #define main moader_resident_main
@@ -98,6 +107,7 @@ void fixture(const std::string& root) {
 }
 
 extern "C" Result pluginRuntimeInitializeWithService(Handle* ready, Handle* control) { *ready = 10; *control = 11; return 0; }
+extern "C" u64 svcGetSystemTick(void) { static u64 tick=100; return ++tick; }
 extern "C" void pluginRuntimeExit(void) { ++fake.runtime_exit; }
 extern "C" Result pluginServiceStart(PluginService* service, Handle control, PluginServiceHandler handler, void* context) {
     assert(control == 11); ++fake.starts; fake.handler = handler; fake.context = context;
@@ -111,6 +121,47 @@ extern "C" Result pluginServiceStartWithLifecycle(PluginService* service, Handle
     assert(R_SUCCEEDED(lifecycle(&query, &reply, lifecycle_context)));
     assert(reply.state == KaihenPluginLifecycleState_Starting && !(reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY));
     return pluginServiceStart(service, control, handler, context);
+}
+extern "C" Result pluginServiceStartWithLifecycleAndDiagnostics(PluginService* service, Handle control,
+    PluginServiceHandler handler, void* context, PluginLifecycleHandler lifecycle, void* lifecycle_context,
+    PluginServiceHandler diagnostics, void* diagnostics_context) {
+    // Exercise the actual callback before Context, filesystem or sockets exist.
+    assert(diagnostics == resident_diagnostics && diagnostics_context && !fake.fs_init && !fake.socket_init);
+    KaihenCensusHeader header{KAIHEN_CENSUS_MAGIC,1,64,64,64,0,99,1,2,0,1,KAIHEN_CENSUS_SOURCE_MASK(KaihenCensusSource_Hen),19200000};
+    KaihenCensusRecord record{1,1,0,1,KaihenCensusEvent_Boot,0,0,0,0,0};
+    KaihenCensusAck ack{}; size_t size=0;
+    assert(R_SUCCEEDED(diagnostics(KAIHEN_CENSUS_HEADER_COMMAND,&header,64,&ack,&size,diagnostics_context)));
+    assert(size==16 && ack.boot_id==99 && ack.sequence==0);
+    assert(R_SUCCEEDED(diagnostics(KAIHEN_CENSUS_RECORD_COMMAND,&record,64,&ack,&size,diagnostics_context)));
+    assert(size==16 && ack.sequence==1);
+    assert(diagnostics(KAIHEN_CENSUS_RECORD_COMMAND,&record,64,&ack,&size,diagnostics_context)==KAIHEN_CENSUS_RECEIVER_REJECTED && size==0);
+    assert(diagnostics(KAIHEN_CENSUS_HEADER_COMMAND,&header,63,&ack,&size,diagnostics_context)==KAIHEN_CENSUS_RECEIVER_REJECTED && size==0);
+    // Force actual cache contention without relying on OS scheduling. The
+    // callback must reject this unaccepted frame without changing the ACK.
+    auto& cache = *static_cast<moader::HostCensus*>(diagnostics_context);
+    assert(!cache.lock_.test_and_set(std::memory_order_acquire));
+    KaihenCensusAck busy_ack{123,456}; size_t busy_size=sizeof(busy_ack);
+    const auto busy_result=resident_diagnostics(KAIHEN_CENSUS_HEADER_COMMAND,&header,64,
+                                               &busy_ack,&busy_size,diagnostics_context);
+    cache.lock_.clear(std::memory_order_release);
+    assert(busy_result==KAIHEN_CENSUS_RECEIVER_BUSY && busy_size==0 &&
+           busy_ack.boot_id==123 && busy_ack.sequence==456);
+    std::array<std::thread,4> workers;
+    std::atomic<unsigned> waiting{0};
+    for(auto& worker:workers) worker=std::thread([&] {
+        ++waiting;
+        while(waiting.load()!=workers.size()) std::this_thread::yield();
+        for(unsigned i=0;i<10000;++i) {
+            KaihenCensusAck reply{123,123}; size_t bytes=0;
+            const auto rc=diagnostics(KAIHEN_CENSUS_HEADER_COMMAND,&header,64,&reply,&bytes,diagnostics_context);
+            if(rc==KAIHEN_CENSUS_RECEIVER_BUSY) {
+                assert(bytes==0 && reply.boot_id==123 && reply.sequence==123);
+            } else assert(!rc && bytes==16 && reply.boot_id==99 && !reply.sequence);
+        }
+    });
+    for(auto& worker:workers) worker.join();
+    assert(!fake.fs_init && !fake.socket_init);
+    return pluginServiceStartWithLifecycle(service,control,handler,context,lifecycle,lifecycle_context);
 }
 extern "C" Result pluginServiceStop(PluginService* service) {
     assert(service->started);

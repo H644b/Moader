@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — 0.1.2-dev.0
+
+- Add a fixed HEN host-lifetime recorder, bounded SM mailbox sampling and cached game-arm identity observations for investigating the existing `2011-0102` failure.
+- Export acknowledged batches over the existing resident control connection, with strict reply validation, explicit gaps/backpressure and retained ownership after uncertain delivery or cleanup.
+- Add an authenticated cached diagnostic route and a macOS/Linux/WSL JSONL capture tool. Diagnostic reads acquire no new FS/HEN service sessions or SD writer.
+- Add production IPC/receiver pipeline regressions and a [capture guide](docs/HOST_EXIT_DIAGNOSTICS.md). No console acceptance or crash repair is claimed; v0.1.1 downloads are unchanged.
+
 ## v0.1.1 — cumulative release
 
 **Known unresolved system crash:** a fresh-boot test reached HEN/resident startup and the browser, then Minecraft launched without R unexpectedly opened hbmenu. After HOME → X closed that host, launching Minecraft again produced `2011-0102`. No service Reload had been requested that boot. This does not isolate the cause or rule out shared reload/HEN/filesystem lifecycle code. v0.1.1 is a regular release with this known issue; no crash repair or complete device lifecycle acceptance is claimed. Its version-labelled app/resident rebuild has host validation only.

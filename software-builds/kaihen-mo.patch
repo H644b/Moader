@@ -1,10 +1,12 @@
 diff --git a/bootstrap/source/main.cpp b/bootstrap/source/main.cpp
+index 6fc0705..d347339 100644
 --- a/bootstrap/source/main.cpp
 +++ b/bootstrap/source/main.cpp
-@@ -395,6 +395,17 @@
+@@ -394,6 +394,17 @@ static void _launchConnectServices(LaunchState* args, bool plugin) {
+     if (R_SUCCEEDED(args->result)) {
          args->result = henAdoptServiceManager(&hen, args->input.sm_session);
      }
-     if (R_SUCCEEDED(args->result)) {
++    if (R_SUCCEEDED(args->result)) {
 +        const HenPluginLaunchConfig config = {args->pm.program_id, args->pm.flags,
 +                                             args->pm.storage_id, {0, 0, 0}};
 +        // Independent protocol session: the acquisition process may close
@@ -15,29 +17,30 @@ diff --git a/bootstrap/source/main.cpp b/bootstrap/source/main.cpp
 +        if (R_SUCCEEDED(args->result)) args->result = henConfigurePluginReload(&hen, &config, shell);
 +        if (shell != INVALID_HANDLE) svcCloseHandle(shell);
 +    }
-+    if (R_SUCCEEDED(args->result)) {
+     if (R_SUCCEEDED(args->result)) {
          args->result = henReleaseControlPort(&hen);
      }
- }
 diff --git a/common/code_mount_request.hpp b/common/code_mount_request.hpp
+index e270b04..fce3df7 100644
 --- a/common/code_mount_request.hpp
 +++ b/common/code_mount_request.hpp
-@@ -33,6 +33,11 @@
-     bool open_code;
+@@ -34,6 +34,11 @@ struct CodeMountRequest {
      CodeMountArguments arguments;
  };
-+
+ 
 +inline bool matchesCodeMount(const CodeMountRequest& request, u64 program_id, u8 storage_id) {
 +    return request.open_code && request.arguments.content_attributes == 1 &&
 +           request.arguments.program_id == program_id && request.arguments.storage_id == storage_id;
 +}
- 
++
  /// The fsp-ldr command that opens a program's code file system.
  constexpr u32 FsProxyForLoaderCommand_OpenCodeFileSystem = 0;
+ 
 diff --git a/common/control.h b/common/control.h
+index 954338d..40139ea 100644
 --- a/common/control.h
 +++ b/common/control.h
-@@ -20,7 +20,24 @@
+@@ -20,8 +20,25 @@ enum HenControlCommand {
      HenControlCommand_ReleaseControlPort = 13,
      HenControlCommand_CreateServiceManagerSession = 14,
      HenControlCommand_CloneFilesystemRoot = 15,
@@ -45,7 +48,7 @@ diff --git a/common/control.h b/common/control.h
 +    // Moader diagnostic extension. Read-only on control and homebrew sessions.
 +    HenControlCommand_MoaderGameTrace = 0x4d4f0001,
  };
-+
+ 
 +typedef struct {
 +    u64 program_id;
 +    u32 flags;
@@ -59,13 +62,15 @@ diff --git a/common/control.h b/common/control.h
 +    return serviceDispatchIn(s, HenControlCommand_ConfigurePluginReload, *config,
 +        .in_num_handles = 1, .in_handles = {shell});
 +}
++
  
  
- 
+ /// Create a fresh client session for an RO-initialized process. The caller
 diff --git a/common/domain_mount.hpp b/common/domain_mount.hpp
+index dcfb5d8..22d839e 100644
 --- a/common/domain_mount.hpp
 +++ b/common/domain_mount.hpp
-@@ -40,13 +40,7 @@
+@@ -40,13 +40,7 @@ class DomainMount {
          if (R_FAILED(rc) || !decoded.open_code) {
              return rc;
          }
@@ -81,9 +86,10 @@ diff --git a/common/domain_mount.hpp b/common/domain_mount.hpp
      }
  
 diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
+index f5d8d62..f5dbe29 100644
 --- a/common/loader_gate.hpp
 +++ b/common/loader_gate.hpp
-@@ -105,9 +105,21 @@
+@@ -105,9 +105,21 @@ enum GateStep : u32 {
      GateStep_RestoreReceiptSeen = 0x1010,
      GateStep_RestoreParentMoved = 0x1110,
      GateStep_RestoreTimeout = 0xe30,
@@ -106,13 +112,10 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
  class LoaderGate {
    public:
      using ProgressCallback = void (*)(void*, u32);
-@@ -125,6 +137,26 @@
-         if (R_SUCCEEDED(rc)) rc = replaceWaitForPark();
-         if (R_SUCCEEDED(rc)) rc = cancelWorkersForPark();
-         if (R_SUCCEEDED(rc)) rc = emptyStepForPark();
-+        return rc;
-+    }
-+
+@@ -128,6 +140,26 @@ class LoaderGate {
+         return rc;
+     }
+ 
 +    // Dedicated resident-reload path. The established park() entry point and
 +    // its synchronous bootstrap/GameArm behavior remain unchanged.
 +    Result beginPark() {
@@ -130,10 +133,13 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
 +        R_UNLESS(step_empty_, UnexpectedState);
 +        const Result rc = pollStep(nullptr, complete);
 +        if (R_SUCCEEDED(rc) && complete) park_established_ = true;
-         return rc;
-     }
- 
-@@ -191,7 +223,7 @@
++        return rc;
++    }
++
+     Result inspectForPark() {
+         LoaderSessionView view;
+         R_TRY(inspect(view, false));
+@@ -191,7 +223,7 @@ class LoaderGate {
  
          step_active_ = true;
          step_empty_ = empty;
@@ -142,7 +148,7 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
          step_next_tick_ = 0;
          step_observations_ = 0;
          R_SUCCEED();
-@@ -205,7 +237,7 @@
+@@ -205,7 +237,7 @@ class LoaderGate {
                      bool fail_after_injection = false) {
          complete = false;
          R_UNLESS(step_active_, UnexpectedState);
@@ -151,7 +157,7 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
          if (step_next_tick_ && now < step_next_tick_) R_SUCCEED();
  
          const u32 attempt = step_observations_++;
-@@ -246,11 +278,11 @@
+@@ -246,11 +278,11 @@ class LoaderGate {
                            allow_injection, fail_after_injection));
  
          step_last_action_ = diagnostic_step_;
@@ -165,7 +171,7 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
          R_SUCCEED();
      }
  
-@@ -308,6 +340,7 @@
+@@ -308,6 +340,7 @@ class LoaderGate {
      }
  
      u32 diagnosticStep() const { return diagnostic_step_; }
@@ -173,7 +179,7 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
      u32 failureStep() const {
          return diagnostic_step_ == GateStep_StepDeadline ? step_last_action_ : diagnostic_step_;
      }
-@@ -424,6 +457,7 @@
+@@ -424,6 +457,7 @@ class LoaderGate {
          if (knownWaiter(view.parent)) {
              markStep(GateStep_ObserveEpoch + attempt);
              R_TRY(memory_.read(view.parent + EpochOffset, &epoch, sizeof(epoch)));
@@ -181,7 +187,7 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
          }
  
          markStep(GateStep_ObserveHeader + attempt);
-@@ -522,19 +556,34 @@
+@@ -522,19 +556,34 @@ class LoaderGate {
      }
  
      Result inspectIdentity(LoaderSessionView& view) {
@@ -219,7 +225,7 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
          }
          R_SUCCEED();
      }
-@@ -759,6 +808,7 @@
+@@ -759,6 +808,7 @@ class LoaderGate {
      u32 diagnostic_step_ = 0;
      ProgressCallback progress_callback_ = nullptr;
      void* progress_context_ = nullptr;
@@ -228,9 +234,10 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
  
  } // namespace ounce
 diff --git a/common/package.hpp b/common/package.hpp
+index c3a647f..8587fc6 100644
 --- a/common/package.hpp
 +++ b/common/package.hpp
-@@ -29,11 +29,15 @@
+@@ -29,11 +29,15 @@ class NativePackage {
              u64 program_id;
          } request = {FsContentAttributes_None, FsFileSystemType_ApplicationPackage, 0};
  
@@ -249,6 +256,7 @@ diff --git a/common/package.hpp b/common/package.hpp
  
 diff --git a/common/plugin_launch.hpp b/common/plugin_launch.hpp
 new file mode 100644
+index 0000000..2fa7ee1
 --- /dev/null
 +++ b/common/plugin_launch.hpp
 @@ -0,0 +1,25 @@
@@ -278,9 +286,10 @@ new file mode 100644
 +};
 +static_assert(sizeof(PluginLaunchSpec) == 16);
 diff --git a/common/policy_package.cpp b/common/policy_package.cpp
+index 4d9f76d..dedfd41 100644
 --- a/common/policy_package.cpp
 +++ b/common/policy_package.cpp
-@@ -88,7 +88,7 @@
+@@ -88,7 +88,7 @@ Result saveSignedPolicy(Handle fs_root, const char* path, const SignedPolicy& po
  }
  
  Result writeExeFsPackage(Handle fs_root, const char* executable_path,
@@ -289,21 +298,21 @@ diff --git a/common/policy_package.cpp b/common/policy_package.cpp
      if (!policy.size || policy.size > SignedPolicy::Capacity) return InvalidPackage;
      SdReader reader;
      u64 main_size = 0;
-@@ -101,6 +101,13 @@
-     SdWriter writer;
+@@ -102,6 +102,13 @@ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
      rc = writer.begin(fs_root, package_path, package_size);
      if (R_FAILED(rc)) return rc;
-+
+ 
 +    Sha256Context sha;
 +    if (expected_sha256) sha256ContextCreate(&sha);
 +    const auto write = [&](const void* bytes, size_t size) {
 +        if (expected_sha256) sha256ContextUpdate(&sha, bytes, size);
 +        return writer.write(bytes, size);
 +    };
- 
++
      u8 header[HeaderSize] = {};
      std::memcpy(header, "PFS0", 4);
-@@ -115,7 +122,7 @@
+     const u32 count = 2;
+@@ -115,7 +122,7 @@ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
      std::memcpy(header + 48, &policy_size, sizeof(policy_size));
      std::memcpy(header + 56, &policy_name_offset, sizeof(policy_name_offset));
      std::memcpy(header + 64, "main\0main.npdm\0", names_size);
@@ -312,7 +321,7 @@ diff --git a/common/policy_package.cpp b/common/policy_package.cpp
  
      u8 buffer[CopyChunk];
      u64 remaining = main_size;
-@@ -124,16 +131,17 @@
+@@ -124,16 +131,17 @@ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
          u64 received = 0;
          rc = reader.read(buffer, wanted, &received);
          if (R_SUCCEEDED(rc) && received != wanted) rc = InvalidPackage;
@@ -334,9 +343,10 @@ diff --git a/common/policy_package.cpp b/common/policy_package.cpp
      return rc;
  }
 diff --git a/common/policy_package.hpp b/common/policy_package.hpp
+index bf5ff7d..55dbf47 100644
 --- a/common/policy_package.hpp
 +++ b/common/policy_package.hpp
-@@ -23,4 +23,5 @@
+@@ -23,4 +23,5 @@ Result saveSignedPolicy(Handle fs_root, const char* path, const SignedPolicy& po
  
  // Build a flat ExeFS package with /main from SD and /main.npdm from policy.
  Result writeExeFsPackage(Handle fs_root, const char* executable_path,
@@ -344,9 +354,10 @@ diff --git a/common/policy_package.hpp b/common/policy_package.hpp
 +                         const char* package_path, const SignedPolicy& policy,
 +                         u8* expected_sha256 = nullptr);
 diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
+index 7c3eb44..d3c9f6a 100644
 --- a/common/retained_memory.hpp
 +++ b/common/retained_memory.hpp
-@@ -40,6 +40,10 @@
+@@ -40,6 +40,10 @@ class RetainedMemory {
      }
  
      Result read(u64 address, void* output, u64 size) {
@@ -357,7 +368,7 @@ diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
          const struct {
              u64 process_id;
              u64 address;
-@@ -52,6 +56,7 @@
+@@ -52,6 +56,7 @@ class RetainedMemory {
              .buffers = {{output, size}},
              .in_num_handles = 1,
              .in_handles = {filesystem_process_},
@@ -365,7 +376,7 @@ diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
          );
      }
  
-@@ -166,6 +171,7 @@
+@@ -166,6 +171,7 @@ class RetainedMemory {
  
    private:
      Result writeThroughReader(u64 address, const void* input, u64 size) {
@@ -373,7 +384,7 @@ diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
          const struct {
              u64 process_id;
              u64 address;
-@@ -178,6 +184,7 @@
+@@ -178,6 +184,7 @@ class RetainedMemory {
              .buffers = {{input, size}},
              .in_num_handles = 1,
              .in_handles = {filesystem_process_},
@@ -381,10 +392,410 @@ diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
          );
      }
  
+diff --git a/hen/source/census.hpp b/hen/source/census.hpp
+new file mode 100644
+index 0000000..c7c66c2
+--- /dev/null
++++ b/hen/source/census.hpp
+@@ -0,0 +1,129 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <array>
++#include <atomic>
++#include <cstring>
++#include <limits>
++#include <kaihen/census.h>
++#ifdef LIBNX_HOST_TEST_TLS
++#include <chrono>
++#else
++#include <switch/arm/counter.h>
++#endif
++
++inline uint64_t henCensusTick() {
++#ifdef LIBNX_HOST_TEST_TLS
++    return std::chrono::steady_clock::now().time_since_epoch().count();
++#else
++    return armGetSystemTick();
++#endif
++}
++inline uint64_t henCensusFrequency() {
++#ifdef LIBNX_HOST_TEST_TLS
++    return static_cast<uint64_t>(std::chrono::steady_clock::period::den /
++                                 std::chrono::steady_clock::period::num);
++#else
++    return armGetSystemTickFreq();
++#endif
++}
++
++// Main-thread writer/readers only. Fixed storage; no services, allocations,
++// locks, cleanup, or clock reads in header()/read()/query().
++class HenCensus {
++  public:
++    enum class Query { Success, Malformed, Unavailable };
++    void initialize(uint64_t boot_id, uint64_t tick_frequency) {
++        records_ = {};
++        header_ = {KAIHEN_CENSUS_MAGIC, KAIHEN_CENSUS_SCHEMA, 64, 64,
++                   KAIHEN_CENSUS_CAPACITY, 0, boot_id, 1, 1, 0, 0, 0, tick_frequency};
++    }
++    KaihenCensusHeader header() const { return header_; }
++    bool read(uint64_t sequence, KaihenCensusRecord& out) const {
++        if (!header_.boot_id || sequence < header_.first_sequence || sequence >= header_.next_sequence)
++            return false;
++        const auto& record = records_[(sequence - 1) % KAIHEN_CENSUS_CAPACITY];
++        if (record.sequence != sequence) return false;
++        out = record;
++        return true;
++    }
++    void emit(uint32_t source, uint32_t event, uint64_t a = 0, uint64_t b = 0,
++              uint64_t c = 0, uint32_t result = 0, uint32_t flags = 0,
++              uint64_t owner_pid = 0, uint64_t tick = henCensusTick()) {
++        if (!header_.boot_id || source < 1 || source > 3 ||
++            header_.next_sequence == std::numeric_limits<uint64_t>::max()) return;
++        const uint64_t sequence = header_.next_sequence++;
++        records_[(sequence - 1) % KAIHEN_CENSUS_CAPACITY] =
++            {sequence, tick, owner_pid, source, event, result, flags, a, b, c};
++        header_.source_mask |= KAIHEN_CENSUS_SOURCE_MASK(source);
++        if (header_.record_count < KAIHEN_CENSUS_CAPACITY) header_.record_count++;
++        else {
++            header_.first_sequence++;
++            header_.overwritten++;
++            header_.flags |= KAIHEN_CENSUS_HEADER_OVERWRITTEN;
++        }
++    }
++
++    // Scalar CMIF uses 16 reserved alignment bytes in its word count. With
++    // no descriptors/handles, the actual aligned header leaves 8 trailing
++    // bytes. Their contents are padding, not an additional scalar input.
++    Query query(uint32_t command, bool scalar, uint32_t words, const void* input,
++                size_t parsed_bytes, void* output, size_t& output_bytes) const {
++        output_bytes = 0;
++        const bool get_header = command == KAIHEN_CENSUS_HEADER_COMMAND;
++        const bool get_record = command == KAIHEN_CENSUS_RECORD_COMMAND;
++        const size_t bytes = get_record ? 8 : 0;
++        if ((!get_header && !get_record) || !scalar || words != (32 + bytes) / 4 ||
++            parsed_bytes != bytes + 8 || !output || (get_record && !input)) return Query::Malformed;
++        if (get_header) {
++            if (!header_.boot_id) return Query::Unavailable;
++            std::memcpy(output, &header_, sizeof(header_));
++        } else {
++            uint64_t sequence;
++            std::memcpy(&sequence, input, sizeof(sequence));
++            KaihenCensusRecord record;
++            if (!read(sequence, record)) return Query::Unavailable;
++            std::memcpy(output, &record, sizeof(record));
++        }
++        output_bytes = 64;
++        return Query::Success;
++    }
++
++  private:
++    KaihenCensusHeader header_ = {};
++    std::array<KaihenCensusRecord, KAIHEN_CENSUS_CAPACITY> records_ = {};
++};
++
++// One worker writer, main-thread sampler. All payload fields are atomic and
++// sequentially consistent: failed single-attempt snapshots never read C++
++// non-atomic worker memory. Revision gaps count coalesced mailbox transitions.
++class HenCensusSmMailbox {
++  public:
++    enum Stage : uint32_t { Idle, LookupPending, LookupReturned, Ended };
++    struct View {
++        uint64_t revision, tick, name, lookup, failures, failure_name;
++        uint32_t stage, result, close_result, failure_result, end_reason;
++    };
++    void publish(Stage stage, uint64_t name, uint64_t lookup, uint32_t result = 0,
++                 uint32_t close_result = 0, uint32_t end_reason = 0) {
++        revision_.fetch_add(1);
++        tick_.store(henCensusTick()); name_.store(name); lookup_.store(lookup);
++        stage_.store(stage); result_.store(result); close_result_.store(close_result);
++        end_reason_.store(end_reason);
++        if (stage == LookupReturned && result) {
++            failures_.fetch_add(1); failure_name_.store(name); failure_result_.store(result);
++        }
++        revision_.fetch_add(1);
++    }
++    bool sample(View& out) const {
++        const uint64_t before = revision_.load();
++        if (before & 1) return false;
++        View view = {before, tick_.load(), name_.load(), lookup_.load(), failures_.load(),
++                     failure_name_.load(), stage_.load(), result_.load(), close_result_.load(), failure_result_.load(), end_reason_.load()};
++        if (revision_.load() != before) return false;
++        out = view;
++        return true;
++    }
++  private:
++    std::atomic<uint64_t> revision_{0}, tick_{0}, name_{0}, lookup_{0}, failures_{0}, failure_name_{0};
++    std::atomic<uint32_t> stage_{Idle}, result_{0}, close_result_{0}, failure_result_{0}, end_reason_{0};
++};
+diff --git a/hen/source/census_relay.cpp b/hen/source/census_relay.cpp
+new file mode 100644
+index 0000000..db5b7fe
+--- /dev/null
++++ b/hen/source/census_relay.cpp
+@@ -0,0 +1,192 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "census_relay.hpp"
++#include <switch/arm/counter.h>
++#include <cstring>
++
++namespace {
++constexpr Result Invalid = MAKERESULT(Module_Libnx, LibnxError_BadInput);
++constexpr Result Busy = MAKERESULT(Module_Libnx, LibnxError_AlreadyInitialized);
++constexpr Result Deadline = MAKERESULT(Module_Libnx, LibnxError_Timeout);
++constexpr u64 TransferTimeoutNs = 2000000000;
++}
++
++Result CensusRelay::start(Handle control, u64 pid, const KaihenCensusHeader& header,
++                         const KaihenCensusRecord* records, u32 count, u64 now) {
++    if (!ready() || disabledFor(pid)) return Busy;
++    if (control == INVALID_HANDLE || !pid || !header.boot_id || count > BatchCapacity ||
++        (count && !records)) return Invalid;
++    control_ = control;
++    header_ = header;
++    count_ = count;
++    if (count) std::memcpy(records_, records, count * sizeof(*records));
++    start_tick_ = now;
++    created_ = started_ = joined_ = closed_ = notified_ = join_failed_ = false;
++    finished_.store(false, std::memory_order_relaxed);
++    transfer_result_ = 0;
++    acknowledged_ = 0;
++    header_acknowledged_ = false;
++    unsupported_reply_ = false;
++    backpressure_reply_ = false;
++    report_ = {Pending, 0, pid, header.boot_id, 0, false, false};
++    Result rc = threadCreate(&thread_, worker, this, nullptr, 0x4000, 0x2c, -2);
++    if (R_FAILED(rc)) {
++        report_.state = Failed;
++        report_.result = rc;
++        disabled_pid_ = pid;
++        return rc;
++    }
++    created_ = true;
++    rc = threadStart(&thread_);
++    if (R_SUCCEEDED(rc)) {
++        started_ = true;
++        return 0;
++    }
++    // No request ran, but a failed thread close still owns its descriptor.
++    report_.result = rc;
++    disabled_pid_ = pid;
++    const Result close_result = threadClose(&thread_);
++    closed_ = R_SUCCEEDED(close_result);
++    report_.state = closed_ ? Failed : Retained;
++    join_failed_ = !closed_;
++    return rc;
++}
++
++Result CensusRelay::exchange(u32 command, const void* frame, KaihenCensusAck& acknowledgement) {
++    auto* const message = static_cast<u8*>(armGetTls());
++    std::memset(message, 0, 0x100);
++    CmifRequestFormat format{};
++    format.request_id = command;
++    format.data_size = 64;
++    const auto request = cmifMakeRequest(message, format);
++    std::memcpy(request.data, frame, 64);
++    const Result transport = svcSendSyncRequest(control_);
++    if (R_FAILED(transport)) return transport; // TLS is not a confirmed reply
++
++    HipcHeader hipc{};
++    std::memcpy(&hipc, message, sizeof(hipc));
++    if (hipc.has_special_header) {
++        HipcSpecialHeader special{};
++        std::memcpy(&special, message + sizeof(hipc), sizeof(special));
++        const u32 count = special.num_copy_handles + special.num_move_handles;
++        const size_t offset = sizeof(hipc) + sizeof(special) + (special.send_pid ? 8 : 0);
++        // HIPC's two four-bit counts bound this list to thirty handles. A
++        // completed native reply owns these received references even when its
++        // scalar envelope is invalid. Close once; retain any failed closes.
++        if (count > 30 || offset + count * sizeof(Handle) > 0x100) return Invalid;
++        Result close_failure = 0;
++        for (u32 i = 0; i < count; ++i) {
++            Handle handle;
++            std::memcpy(&handle, message + offset + i * sizeof(handle), sizeof(handle));
++            ++unexpected_handles_;
++            const Result rc = svcCloseHandle(handle);
++            if (R_FAILED(rc)) {
++                unexpected_[retained_handles_++] = handle;
++                if (!close_failure) close_failure = rc;
++            }
++        }
++        return close_failure ? close_failure : Invalid;
++    }
++    if (hipc.type || hipc.num_send_statics || hipc.num_send_buffers || hipc.num_recv_buffers ||
++        hipc.num_exch_buffers || hipc.recv_static_mode || hipc.padding || hipc.recv_list_offset ||
++        (hipc.num_data_words != 8 && hipc.num_data_words != 12)) return Invalid;
++    CmifOutHeader reply{};
++    std::memcpy(&reply, message + 16, sizeof(reply));
++    if (reply.magic != CMIF_OUT_HEADER_MAGIC || reply.version || reply.token) return Invalid;
++    const bool success = R_SUCCEEDED(reply.result);
++    if (hipc.num_data_words != (success ? 12 : 8)) return Invalid;
++    for (size_t i = 8; i < 16; ++i) if (message[i]) return Invalid;
++    const size_t payload_end = 32 + (success ? sizeof(KaihenCensusAck) : 0);
++    const size_t declared_end = 8 + hipc.num_data_words * 4;
++    for (size_t i = payload_end; i < declared_end; ++i) if (message[i]) return Invalid;
++    if (!success) {
++        unsupported_reply_ = command == KAIHEN_CENSUS_HEADER_COMMAND && reply.result == Invalid;
++        backpressure_reply_ = reply.result == KAIHEN_CENSUS_RECEIVER_BUSY;
++        return reply.result;
++    }
++    std::memcpy(&acknowledgement, message + 32, sizeof(acknowledgement));
++    return 0;
++}
++
++Result CensusRelay::transfer() {
++    KaihenCensusAck ack{};
++    Result rc = exchange(KAIHEN_CENSUS_HEADER_COMMAND, &header_, ack);
++    if (R_FAILED(rc)) return rc;
++    if (ack.boot_id != header_.boot_id || ack.sequence) return Invalid;
++    header_acknowledged_ = true;
++    for (u32 i = 0; i < count_; ++i) {
++        ack = {};
++        rc = exchange(KAIHEN_CENSUS_RECORD_COMMAND, &records_[i], ack);
++        if (R_FAILED(rc)) return rc;
++        if (ack.boot_id != header_.boot_id || ack.sequence != records_[i].sequence) return Invalid;
++        acknowledged_ = ack.sequence;
++    }
++    return 0;
++}
++
++void CensusRelay::worker(void* context) {
++    auto& self = *static_cast<CensusRelay*>(context);
++    self.transfer_result_ = self.transfer();
++    self.finished_.store(true, std::memory_order_release);
++}
++
++bool CensusRelay::poll(u64 now) {
++    if (notified_ || !created_ || closed_ || join_failed_) return false;
++    const auto deadline = [&] {
++        if (!report_.timed_out && now - start_tick_ >= armNsToTicks(TransferTimeoutNs)) {
++            // There is no safe cancellation of SendSyncRequest. Keep the worker,
++            // buffer and borrowed control endpoint alive; never replay it.
++            report_.timed_out = true;
++            report_.state = Retained;
++            report_.result = Deadline;
++            disabled_pid_ = report_.process_id;
++            poisoned_ = true;
++            return true;
++        }
++        return false;
++    };
++    if (!finished_.load(std::memory_order_acquire)) return deadline();
++    report_.acknowledged = acknowledged_;
++    report_.header_acknowledged = header_acknowledged_;
++    report_.unexpected_handles = unexpected_handles_;
++    report_.retained_handles = retained_handles_;
++    Result rc = 0;
++    if (started_ && !joined_) {
++        // finished_ precedes SDK TLS cleanup. Observe real kernel thread exit
++        // with a zero-timeout wait; never block HEN on threadWaitForExit().
++        s32 index = -1;
++        rc = svcWaitSynchronization(&index, &thread_.handle, 1, 0);
++        if (rc == KERNELRESULT(TimedOut)) return deadline();
++        if (R_SUCCEEDED(rc) && index != 0) rc = Invalid;
++        if (R_SUCCEEDED(rc)) joined_ = true;
++    }
++    if (R_SUCCEEDED(rc)) {
++        rc = threadClose(&thread_);
++        if (R_SUCCEEDED(rc)) closed_ = true;
++    }
++    notified_ = true;
++    if (R_FAILED(rc)) {
++        join_failed_ = true;
++        disabled_pid_ = report_.process_id;
++        poisoned_ = true;
++        report_.state = Retained;
++        report_.result = rc;
++        return true;
++    }
++    if (report_.timed_out) {
++        // A late completion does not silently re-enable this channel.
++        report_.state = Failed;
++        return true;
++    }
++    report_.result = transfer_result_;
++    if (backpressure_reply_) report_.state = Deferred;
++    else if (R_SUCCEEDED(transfer_result_)) report_.state = Complete;
++    else {
++        disabled_pid_ = report_.process_id;
++        // An explicit unsupported command is a completed legacy reply. Other
++        // failures are not permission to reuse an uncertain control channel.
++        const bool unsupported = unsupported_reply_;
++        report_.state = retained_handles_ ? Retained : (unsupported ? Unsupported : Failed);
++        poisoned_ = !unsupported;
++    }
++    return true;
++}
+diff --git a/hen/source/census_relay.hpp b/hen/source/census_relay.hpp
+new file mode 100644
+index 0000000..5bc4669
+--- /dev/null
++++ b/hen/source/census_relay.hpp
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++
++#include <atomic>
++#include <switch.h>
++#include <kaihen/census.h>
++
++// One diagnostic batch at a time, over an existing plugin-control endpoint.
++// The owner must pin that endpoint while ownsControl() is true. This object
++// must remain alive if a native call or worker join cannot be confirmed.
++class CensusRelay {
++  public:
++    static constexpr u32 BatchCapacity = 8;
++    enum State : u32 { Idle, Pending, Complete, Unsupported, Failed, Retained, Deferred };
++    struct Report {
++        State state = Idle;
++        Result result = 0;
++        u64 process_id = 0, boot_id = 0, acknowledged = 0;
++        bool header_acknowledged = false;
++        bool timed_out = false;
++        u32 unexpected_handles = 0, retained_handles = 0;
++    };
++
++    Result start(Handle borrowed_control, u64 process_id, const KaihenCensusHeader& header,
++                 const KaihenCensusRecord* records, u32 count, u64 now);
++    // Main-loop maintenance only, never called by a passive census query.
++    // Returns true once when a batch becomes terminal or ownership is retained.
++    bool poll(u64 now);
++    bool ownsControl(Handle control, u64 process_id) const {
++        return created_ && !closed_ && control_ == control && report_.process_id == process_id;
++    }
++    bool ready() const { return (!created_ || closed_) && !retained_handles_; }
++    bool disabledFor(u64 pid) const { return poisoned_ || (disabled_pid_ && disabled_pid_ == pid); }
++    bool blocksControl(Handle control, u64 pid) const {
++        return ownsControl(control, pid) || (poisoned_ && report_.process_id == pid);
++    }
++    const Report& report() const { return report_; }
++
++  private:
++    static void worker(void* context);
++    Result transfer();
++    Result exchange(u32 command, const void* frame, KaihenCensusAck& acknowledgement);
++    Thread thread_{};
++    Handle control_ = INVALID_HANDLE;
++    KaihenCensusHeader header_{};
++    KaihenCensusRecord records_[BatchCapacity]{};
++    u32 count_ = 0;
++    u64 start_tick_ = 0, disabled_pid_ = 0;
++    bool created_ = false, started_ = false, joined_ = false, closed_ = false;
++    bool notified_ = false, join_failed_ = false, poisoned_ = false;
++    std::atomic<bool> finished_{false};
++    Result transfer_result_ = 0;
++    u64 acknowledged_ = 0;
++    bool header_acknowledged_ = false;
++    bool unsupported_reply_ = false;
++    bool backpressure_reply_ = false;
++    Handle unexpected_[30]{};
++    u32 unexpected_handles_ = 0, retained_handles_ = 0;
++    Report report_{};
++};
 diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
+index 4d2ba21..843d489 100644
 --- a/hen/source/game_arm.cpp
 +++ b/hen/source/game_arm.cpp
-@@ -46,9 +46,10 @@
+@@ -46,9 +46,10 @@ u32 faultCause(u32 point, u32 value) {
  }
  
  bool containsEntry(const ounce::DomainEntry entries[ounce::MaxDomainEntries], u32 count,
@@ -397,7 +808,60 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
              return true;
          }
      }
-@@ -191,6 +192,7 @@
+@@ -172,6 +173,7 @@ Result GameArm::start(Handle filesystem_root, Handle bootstrap_process) {
+     started_ = true;
+     state_ = State::OpenPackage;
+     status_.phase = HenGamePhase_OpeningPackage;
++    recordState();
+     return 0;
+ }
+ 
+@@ -179,6 +181,38 @@ HenGameStatus GameArm::status() const {
+     return status_;
+ }
+ 
++void GameArm::recordCensus(u32 event, u64 a, u64 b, u64 c, Result result, u32 flags) {
++    if (census_) census_->emit(KaihenCensusSource_Game, event, a, b, c, result,
++        flags | (status_.process_id ? KaihenCensusFlag_OwnerKnown : 0), status_.process_id);
++}
++
++void GameArm::recordState() {
++    const u64 flags = (started_ ? 1 : 0) | (reload_leased_ ? 2 : 0) |
++        (bootstrap_restore_pending_ ? 4 : 0) | (step_started_ ? 8 : 0) |
++        (capture_pending_ ? 16 : 0) | (policy_ready_ ? 32 : 0);
++    const std::array<u64, 6> view = {static_cast<u64>(state_), status_.phase,
++        status_.result, (static_cast<u64>(status_.serial) << 32) | status_.mounts,
++        status_.process_id, flags};
++    if (!census_state_valid_ || view != census_state_) {
++        recordCensus(KaihenCensusEvent_GameState, view[0],
++            (static_cast<u64>(status_.serial) << 32) | status_.phase,
++            (flags << 32) | status_.mounts, status_.result,
++            KaihenCensusFlag_Cached | KaihenCensusFlag_ResultKnown);
++        census_state_ = view; census_state_valid_ = true;
++    }
++}
++
++bool GameArm::diagnosticsIdle() const {
++    return started_ && gate_ && !reload_leased_ && !step_started_ &&
++        !bootstrap_restore_pending_ && !gate_->pendingRestoreWithReceipt() &&
++        (state_ == State::WaitForInput || state_ == State::WaitExit);
++}
++
++void GameArm::releaseReloadLease() {
++    reload_leased_ = false;
++    recordState();
++}
++
+ void GameArm::fault(Result result) {
+     const GameTraceSnapshot previous = trace_.snapshot();
+     const u32 cause = gate_failure_step_
+@@ -188,9 +222,13 @@ void GameArm::fault(Result result) {
+     status_.result = result;
+     status_.phase = HenGamePhase_Fault;
+     state_ = State::Fault;
++    recordCensus(KaihenCensusEvent_GameFault, cause, gate_failure_step_, status_.serial,
++                 result, KaihenCensusFlag_ResultKnown);
++    recordState();
  }
  
  void GameArm::step() {
@@ -405,10 +869,11 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
      Result rc = 0;
      switch (state_) {
      case State::Inactive:
-@@ -241,6 +243,16 @@
+@@ -241,6 +279,18 @@ void GameArm::step() {
      if (R_FAILED(rc)) {
          fault(rc);
      }
++    recordState();
 +}
 +
 +bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
@@ -416,13 +881,32 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
 +        bootstrap_restore_pending_ || gate_->pendingRestoreWithReceipt() ||
 +        (state_ != State::WaitForInput && state_ != State::WaitExit)) return false;
 +    reload_leased_ = true;
++    recordState();
 +    out = {memory_config_, gate_config_, mount_config_, reader_session_,
 +           filesystem_process_, filesystem_root_, loader_root_, monitor_};
 +    return true;
  }
  
  Result GameArm::openPackage() {
-@@ -468,7 +480,7 @@
+@@ -271,6 +321,8 @@ Result GameArm::openPackage() {
+     capture_pending_ = false;
+     gate_failure_step_ = 0;
+     step_started_ = false;
++    census_process_gone_ = false;
++    census_match_valid_ = false;
+     before_step_count_ = 0;
+     current_mount_ = mount_config_;
+     gate_.emplace(*memory_, gate_config_);
+@@ -414,6 +466,8 @@ GameArm::InputChoice GameArm::sampleR() {
+         }
+         fresh = true;
+         if (state.buttons & HidNpadButton_R) {
++            recordCensus(KaihenCensusEvent_GameInput, static_cast<u64>(ids[index]),
++                state.buttons, state.sampling_number, 0, KaihenCensusFlag_Before);
+             trace_.write(GameTracePoint_InputSample, 0, static_cast<u32>(index + 1));
+             return InputChoice::Pressed;
+         }
+@@ -468,7 +522,7 @@ Result GameArm::receiveGameMount() {
      trace_.write(GameTracePoint_SecondSnapshotDone, rc, after_count);
      if (R_FAILED(rc)) return restoreGate(rc);
  
@@ -431,26 +915,36 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
          first_closed_ = true;
      }
      bool matching = false;
-@@ -514,8 +526,17 @@
+@@ -514,10 +568,27 @@ Result GameArm::receiveGameMount() {
          // restored, the pending title can continue on its stock CodeFS.
          return restoreGate(rc, State::WaitProcess);
      }
 -    rc = mount_->exchange(code_);
 +    rc = exchangeGameCode();
      return restoreGate(rc, R_SUCCEEDED(rc) ? State::WaitProcess : State::Fault);
-+}
-+
+ }
+ 
 +Result GameArm::exchangeGameCode() {
++    const u64 original_code = code_.object;
 +    const Result rc = mount_->exchange(code_);
 +    // The entry now holds the package's donor, not the original stock
 +    // CodeFS object. Track that identity until host exit; an address alone
 +    // can be recycled by unrelated plugin/package allocations.
-+    if (R_SUCCEEDED(rc)) code_.object = current_mount_.donor_object;
++    if (R_SUCCEEDED(rc)) {
++        code_.object = current_mount_.donor_object;
++        recordCensus(KaihenCensusEvent_GameCodeIdentity, code_.address, code_.object,
++            code_.metadata, rc, KaihenCensusFlag_After | KaihenCensusFlag_ResultKnown);
++        recordCensus(KaihenCensusEvent_GameDonorIdentity, current_mount_.donor_entry,
++            original_code, current_mount_.donor_metadata, rc,
++            KaihenCensusFlag_After | KaihenCensusFlag_ResultKnown);
++    }
 +    return rc;
- }
- 
++}
++
  Result GameArm::waitForProcess() {
-@@ -538,7 +559,10 @@
+     u64 pid = 0;
+     Result rc = active_title_ ? pmdmntGetProcessId(&pid, active_title_)
+@@ -538,7 +609,10 @@ Result GameArm::waitForProcess() {
              return rc;
          }
          if (!allow_bridge_process_ && !isApplicationProgram(title)) {
@@ -462,7 +956,7 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
          }
          active_title_ = title;
      }
-@@ -563,9 +587,9 @@
+@@ -563,9 +637,9 @@ Result GameArm::capturePolicy() {
      if (R_FAILED(rc)) return rc;
      if (program_id != active_title_) return UnexpectedState;
  
@@ -474,23 +968,57 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
      capture_attempts_++;
      trace_.write(GameTracePoint_PolicyCaptureAttempt, 0, capture_attempts_);
  
-@@ -619,7 +643,7 @@
+@@ -614,14 +688,37 @@ Result GameArm::pollProcessExit() {
+         return rc;
+     }
+ 
++    if (!census_process_gone_) {
++        census_last_exit_pid_ = status_.process_id;
++        recordCensus(KaihenCensusEvent_GameProcessGone, active_title_, status_.serial, 0,
++            rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++        census_process_gone_ = true;
++    }
++
+     if (!capture_pending_) {
+         ounce::DomainEntry entries[ounce::MaxDomainEntries];
          u32 count = 0;
          GameMount final_mount(*memory_, mount_config_);
-         R_TRY(final_mount.snapshot(entries, count));
+-        R_TRY(final_mount.snapshot(entries, count));
 -        if (containsEntry(entries, count, code_.address)) return 0;
-+        if (containsEntry(entries, count, code_)) return 0;
++        const Result snapshot_rc = final_mount.snapshot(entries, count);
++        const bool matched = R_SUCCEEDED(snapshot_rc) && containsEntry(entries, count, code_);
++        if (!census_match_valid_ || matched != census_matched_ || R_FAILED(snapshot_rc)) {
++            recordCensus(KaihenCensusEvent_GameDomainMatch,
++                R_SUCCEEDED(snapshot_rc) ? (matched ? 1 : 0) : 2, count, status_.serial,
++                snapshot_rc, KaihenCensusFlag_Cached | KaihenCensusFlag_ResultKnown);
++            census_matched_ = matched; census_match_valid_ = true;
++        }
++        R_TRY(snapshot_rc);
++        if (matched) return 0;
++    }
++    if (package_) {
++        recordCensus(KaihenCensusEvent_GamePackageClosed, current_mount_.donor_entry,
++            code_.object, status_.serial, 0, KaihenCensusFlag_Before);
++        package_->close();
++        // NativePackage::close/fsFsClose return void. Never invent a successful
++        // native close result; these records only prove the call returned.
++        recordCensus(KaihenCensusEvent_GamePackageClosed, current_mount_.donor_entry,
++            code_.object, status_.serial, 0, KaihenCensusFlag_After);
      }
-     if (package_) package_->close();
+-    if (package_) package_->close();
      package_.reset();
+     mount_.reset();
+     gate_.reset();
 diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
+index 441bdbf..815ca55 100644
 --- a/hen/source/game_arm.hpp
 +++ b/hen/source/game_arm.hpp
-@@ -7,13 +7,22 @@
+@@ -7,13 +7,23 @@
  #include "../../common/package.hpp"
  #include "../../common/loader_gate.hpp"
  #include "game_trace.hpp"
 +#include "../../common/plugin_launch.hpp"
++#include "census.hpp"
  
  using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
 -using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
@@ -510,17 +1038,22 @@ diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
    public:
      ~GameArm();
  
-@@ -27,6 +36,9 @@
+@@ -27,6 +37,14 @@ class GameArm {
      Result start(Handle filesystem_root, Handle bootstrap_process);
      void step();
      HenGameStatus status() const;
 +    GameTraceSnapshot trace() const { return trace_.snapshot(); }
 +    bool acquireReloadLease(PluginLaunchContext& out);
-+    void releaseReloadLease() { reload_leased_ = false; }
++    void releaseReloadLease();
++    void setCensus(HenCensus* census) { census_ = census; recordState(); }
++    // Cached state only. No probe, PM/FS/RO call, cleanup, or lease acquisition.
++    bool diagnosticsIdle() const;
++    // Cached existing PM observation; no new process query for diagnostics.
++    u64 lastObservedExit() const { return census_last_exit_pid_; }
  
    private:
      enum class InputChoice {
-@@ -52,6 +64,7 @@
+@@ -52,6 +70,7 @@ class GameArm {
      Result waitForInput();
      Result parkGate();
      Result receiveGameMount();
@@ -528,7 +1061,17 @@ diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
      Result waitForProcess();
      Result capturePolicy();
      Result pollProcessExit();
-@@ -98,6 +111,7 @@
+@@ -62,6 +81,9 @@ class GameArm {
+     Result initializeInput();
+     InputChoice sampleR();
+     void fault(Result result);
++    void recordState();
++    void recordCensus(u32 event, u64 a = 0, u64 b = 0, u64 c = 0,
++                      Result result = 0, u32 flags = 0);
+ 
+     HenGameConfig configuration_ = {};
+     ounce::RetainedMemoryConfig memory_config_ = {};
+@@ -98,6 +120,7 @@ class GameArm {
      bool handles1_ = false;
      bool started_ = false;
      bool policy_ready_ = false;
@@ -536,8 +1079,19 @@ diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
      bool capture_pending_ = false;
      u32 capture_attempts_ = 0;
      u64 capture_next_tick_ = 0;
+@@ -105,4 +128,9 @@ class GameArm {
+     State recovery_target_ = State::Fault;
+     Result last_restore_result_ = 0;
+     u32 gate_failure_step_ = 0;
++    HenCensus* census_ = nullptr;
++    std::array<u64, 6> census_state_ = {};
++    bool census_state_valid_ = false, census_process_gone_ = false, census_match_valid_ = false;
++    bool census_matched_ = false;
++    u64 census_last_exit_pid_ = 0;
+ };
 diff --git a/hen/source/lifecycle_client.hpp b/hen/source/lifecycle_client.hpp
 new file mode 100644
+index 0000000..c45c059
 --- /dev/null
 +++ b/hen/source/lifecycle_client.hpp
 @@ -0,0 +1,74 @@
@@ -617,6 +1171,7 @@ new file mode 100644
 +} // namespace reload
 diff --git a/hen/source/plugin_reload.cpp b/hen/source/plugin_reload.cpp
 new file mode 100644
+index 0000000..0e42908
 --- /dev/null
 +++ b/hen/source/plugin_reload.cpp
 @@ -0,0 +1,512 @@
@@ -1134,6 +1689,7 @@ new file mode 100644
 +}
 diff --git a/hen/source/plugin_reload.hpp b/hen/source/plugin_reload.hpp
 new file mode 100644
+index 0000000..a0f6ab7
 --- /dev/null
 +++ b/hen/source/plugin_reload.hpp
 @@ -0,0 +1,105 @@
@@ -1244,6 +1800,7 @@ new file mode 100644
 +};
 diff --git a/hen/source/reload_diagnostics.hpp b/hen/source/reload_diagnostics.hpp
 new file mode 100644
+index 0000000..4311077
 --- /dev/null
 +++ b/hen/source/reload_diagnostics.hpp
 @@ -0,0 +1,42 @@
@@ -1291,6 +1848,7 @@ new file mode 100644
 +} // namespace reload
 diff --git a/hen/source/reload_state.hpp b/hen/source/reload_state.hpp
 new file mode 100644
+index 0000000..beecdc0
 --- /dev/null
 +++ b/hen/source/reload_state.hpp
 @@ -0,0 +1,177 @@
@@ -1472,9 +2030,17 @@ new file mode 100644
 +}
 +} // namespace reload
 diff --git a/hen/source/server.cpp b/hen/source/server.cpp
+index 0245a79..d77c964 100644
 --- a/hen/source/server.cpp
 +++ b/hen/source/server.cpp
-@@ -23,6 +23,7 @@
+@@ -1,5 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-only
+ #include <cstring>
++#include <new>
+ #include "server.hpp"
+ 
+ namespace {
+@@ -23,6 +24,7 @@ bool hasBuffers(const HipcMetadata& meta) {
  HenServer::HenServer() = default;
  
  HenServer::~HenServer() {
@@ -1482,32 +2048,283 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
      ounce::closeHandle(&fs_root_);
      ounce::closeHandle(&sm_session_);
      if (settings_ready_) {
-@@ -44,6 +45,8 @@
+@@ -39,11 +41,19 @@ HenServer::~HenServer() {
+     }
+     ounce::closeHandle(&port_);
+     for (PluginRecord& plugin : plugins_) {
+-        ounce::closeHandle(&plugin.control_session);
++        if (!censusControlBlocked(plugin)) ounce::closeHandle(&plugin.control_session);
+     }
++    // A pending/failed join still borrows its heap state and control session.
++    // The kernel will reclaim them when HEN exits; do not free them early.
++    if (census_relay_ && census_relay_->ready()) delete census_relay_;
  }
  
  Result HenServer::initialize() {
 +    reload_instance_ = randomGet64();
 +    if (!reload_instance_) reload_instance_ = armGetSystemTick() | 1;
++    census_.initialize(reload_instance_, henCensusFrequency());
++    game_.setCensus(&census_);
++    sm_proxy_.setCensus(&census_);
      status_.protocol_version = HEN_PROTOCOL_VERSION;
      Result rc = svcGetProcessId(&status_.process_id, CUR_PROCESS_HANDLE);
      if (R_SUCCEEDED(rc)) {
-@@ -98,6 +101,7 @@
+@@ -55,6 +65,15 @@ Result HenServer::initialize() {
+                                       false, MaxSessions);
+     }
+     status_.initialization_result = rc;
++    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_Boot,
++        HEN_PROTOCOL_VERSION, MaxSessions, 0, rc,
++        KaihenCensusFlag_ResultKnown | (status_.process_id ? KaihenCensusFlag_OwnerKnown : 0), status_.process_id);
++    censusCounts();
++    if (R_SUCCEEDED(rc)) {
++        census_relay_ = new (std::nothrow) CensusRelay;
++        if (!census_relay_) census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_RelayState,
++            0, CensusRelay::Failed, 0, MAKERESULT(Module_Libnx, LibnxError_OutOfMemory), KaihenCensusFlag_ResultKnown);
++    }
+     return rc;
+ }
+ 
+@@ -77,11 +96,13 @@ Result HenServer::run() {
+                 continue;
+             }
+             if (R_FAILED(rc)) {
++                census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_ServerFailure, 1, 0, 0, rc, KaihenCensusFlag_ResultKnown);
+                 return rc;
+             }
+             continue;
+         }
+         if (R_FAILED(rc) && !(index != waits.port_index && rc == KERNELRESULT(ConnectionClosed))) {
++            census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_ServerFailure, 2, index, 0, rc, KaihenCensusFlag_ResultKnown);
+             return rc;
+         }
+ 
+@@ -91,13 +112,18 @@ Result HenServer::run() {
+         }
+         const SessionRef session = waits.sessions[index];
+         if (rc == KERNELRESULT(ConnectionClosed)) {
+-            closeSession(session);
++            closeSession(session, 1);
+             continue;
+         }
+         const Result serve_result = serveSession(session);
          if (R_FAILED(serve_result)) {
++            census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_ServerFailure, 3, index, 0,
++                serve_result, KaihenCensusFlag_ResultKnown);
              return serve_result;
          }
-+        advanceReload();
++        // Census queries are scalar memory copies, including their dispatch
++        // tail. They must not advance a pending native reload operation.
++        if (!census_query_) advanceReload();
      }
  }
  
-@@ -124,6 +128,7 @@
+@@ -124,27 +150,108 @@ void HenServer::collectWaits(WaitList& waits) const {
  
  /// Advances game arming between incoming requests.
  void HenServer::stepBetweenRequests() {
+-    game_.step();
 +    advanceReload();
-     game_.step();
++    sm_proxy_.sampleCensus();
++    advanceCensusRelay();
++    // A diagnostic batch starts only while the gate is idle. Keep it idle
++    // until the worker has returned and its join/close are confirmed.
++    if (!census_relay_ || census_relay_->ready()) game_.step();
      svcSleepThread(IdleSleepNs);
  }
-@@ -250,6 +255,12 @@
+ 
++bool HenServer::censusControlBlocked(const PluginRecord& plugin) const {
++    return census_relay_ && census_relay_->blocksControl(plugin.control_session, plugin.process_id);
++}
++
++void HenServer::advanceCensusRelay() {
++    if (!census_relay_) return;
++    const u64 now = armGetSystemTick();
++    if (census_relay_->poll(now)) {
++        const auto& report = census_relay_->report();
++        if (report.process_id == census_target_pid_ && report.boot_id == reload_instance_) {
++            census_header_delivered_ |= report.header_acknowledged;
++            if (report.acknowledged > census_delivered_) census_delivered_ = report.acknowledged;
++        }
++        // Successful delivery must not create new records, or the exporter
++        // would continuously generate its own backlog.
++        if (report.state != CensusRelay::Complete) census_.emit(KaihenCensusSource_Hen,
++            KaihenCensusEvent_RelayState, report.process_id,
++            u64(report.state) | (u64(report.unexpected_handles) << 32) | (u64(report.retained_handles) << 48),
++            report.acknowledged, report.result,
++            KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After | KaihenCensusFlag_OwnerKnown,
++            report.process_id);
++    }
++    const u64 exited = game_.lastObservedExit();
++    if (exited && exited != census_exit_snapshot_) {
++        // A retained channel is one of the states under investigation. Take
++        // a local slot snapshot even when none of those channels has closed.
++        censusCounts();
++        census_exit_snapshot_ = exited;
++    }
++    if (!census_relay_->ready() || reload_journal_.active || !game_.diagnosticsIdle() ||
++        now - census_last_export_ < armNsToTicks(100000000)) return;
++    const u64 current = game_.status().process_id;
++    const bool observed_host_exit = exited && (!current || current == exited);
++    if (!observed_host_exit)
++        for (Handle session : homebrew_sessions_) if (session != INVALID_HANDLE) return;
++    auto* plugin = findPlugin("moader");
++    if (!plugin || !plugin->process_id || plugin->control_session == INVALID_HANDLE ||
++        census_relay_->disabledFor(plugin->process_id) || censusControlBlocked(*plugin)) return;
++    if (plugin->process_id != census_target_pid_) {
++        census_target_pid_ = plugin->process_id;
++        census_delivered_ = 0;
++        census_header_delivered_ = false;
++    }
++    const auto header = census_.header();
++    u64 next = census_delivered_ + 1;
++    if (next < header.first_sequence) next = header.first_sequence;
++    if (census_header_delivered_ && next >= header.next_sequence) return;
++    KaihenCensusRecord batch[CensusRelay::BatchCapacity]{};
++    u32 count = 0;
++    while (count < CensusRelay::BatchCapacity && next < header.next_sequence) {
++        if (!census_.read(next++, batch[count])) return;
++        ++count;
++    }
++    census_last_export_ = now;
++    const Result rc = census_relay_->start(plugin->control_session, plugin->process_id,
++        header, batch, count, now);
++    if (R_FAILED(rc)) census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_RelayState,
++        plugin->process_id, census_relay_->report().state, census_delivered_, rc,
++        KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++}
++
+ void HenServer::acceptSession() {
+     Handle session = INVALID_HANDLE;
+-    if (R_FAILED(svcAcceptSession(&session, port_))) {
++    const Result rc = svcAcceptSession(&session, port_);
++    if (R_FAILED(rc)) {
++        ++census_session_failures_;
++        census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated, UINT32_MAX, 0, 0,
++            rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++        censusCounts();
+         return;
+     }
+-    for (Handle& available : sessions_) {
++    for (u32 index = 0; index < MaxSessions; index++) {
++        Handle& available = sessions_[index];
+         if (available == INVALID_HANDLE) {
+             available = session;
++            census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated,
++                (u64(1) << 32) | index, session, 0, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++            censusCounts();
+             return;
+         }
+     }
+-    svcCloseHandle(session);
++    ++census_session_failures_;
++    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated,
++        (u64(1) << 32) | UINT32_MAX, session, 0, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++    censusClose(session, 1, 5, UINT32_MAX);
++    censusCounts();
+ }
+ 
+ /// Answers the request that the session sent.
+ Result HenServer::serveSession(SessionRef session) {
+     const ReceivedRequest request = receiveRequest();
++    census_query_ = request.command_id == KAIHEN_CENSUS_HEADER_COMMAND ||
++                    request.command_id == KAIHEN_CENSUS_RECORD_COMMAND;
+     if (request.type == CmifCommandType_Close) {
+         closeSession(session);
+         return 0;
+@@ -163,10 +270,10 @@ Result HenServer::serveSession(SessionRef session) {
+                       &reply.copy_handle, num_copy_handles);
+     const Result rc = ounce::sendReply(sessionHandle(session));
+     if (reply.close_copy_after_send) {
+-        ounce::closeHandle(&reply.copy_handle);
++        censusClose(reply.copy_handle, 4, 3, session.index);
+     }
+     if (rc == KERNELRESULT(ConnectionClosed)) {
+-        closeSession(session);
++        closeSession(session, 3);
+         return 0;
+     }
+     return rc;
+@@ -177,11 +284,41 @@ Handle& HenServer::sessionHandle(SessionRef session) {
+                                                  : sessions_[session.index];
+ }
+ 
+-void HenServer::closeSession(SessionRef session) {
+-    ounce::closeHandle(&sessionHandle(session));
++void HenServer::censusClose(Handle& handle, u32 caller, u32 reason, u32 slot) {
++    if (handle == INVALID_HANDLE) return;
++    const Handle original = handle;
++    const Result rc = svcCloseHandle(handle);
++    handle = INVALID_HANDLE; // preserve the existing close policy
++    if (R_FAILED(rc)) ++census_close_failures_;
++    census_.emit(KaihenCensusSource_Hen,
++        R_SUCCEEDED(rc) ? KaihenCensusEvent_SessionClosed : KaihenCensusEvent_SessionCloseFailure,
++        original, slot, (static_cast<u64>(reason) << 32) | caller, rc,
++        KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++}
++
++void HenServer::censusCounts() {
++    u64 controls = 0, homebrew = 0, processes = 0;
++    for (u32 index = 0; index < MaxSessions; index++) {
++        controls += sessions_[index] != INVALID_HANDLE;
++        homebrew += homebrew_sessions_[index] != INVALID_HANDLE;
++        processes += homebrew_processes_[index] != INVALID_HANDLE;
++    }
++    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_HenCounts,
++        (controls << 32) | homebrew, processes,
++        (census_close_failures_ << 32) | (census_session_failures_ & UINT32_MAX), 0, KaihenCensusFlag_Cached);
++}
++
++void HenServer::censusFsClone(u32 caller, Handle root, Handle clone, Result result) {
++    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_FsClone,
++        caller, root, clone, result, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++}
++
++void HenServer::closeSession(SessionRef session, u32 reason) {
++    censusClose(sessionHandle(session), session.kind == SessionKind::Homebrew ? 2 : 1, reason, session.index);
+     if (session.kind == SessionKind::Homebrew) {
+-        ounce::closeHandle(&homebrew_processes_[session.index]);
++        censusClose(homebrew_processes_[session.index], 3, reason, session.index);
+     }
++    censusCounts();
+ }
+ 
+ //-----------------------------------------------------------------------------
+@@ -197,6 +334,10 @@ HenServer::ReceivedRequest HenServer::receiveRequest() const {
+ 
+     ReceivedRequest request = {};
+     request.type = meta.type;
++    if (parsed.valid) request.command_id = parsed.command_id;
++    request.census_words = meta.num_data_words;
++    request.census_scalar = !hasBuffers(meta) && !meta.num_copy_handles &&
++        !meta.num_move_handles && !meta.send_pid && meta.type == CmifCommandType_Request;
+     request.num_copy_handles = meta.num_copy_handles < MaxCopyHandles ? meta.num_copy_handles
+                                                                       : MaxCopyHandles;
+     for (u32 index = 0; index < request.num_copy_handles; index++) {
+@@ -209,7 +350,6 @@ HenServer::ReceivedRequest HenServer::receiveRequest() const {
+ 
+     request.accepted = parsed.valid && !hasBuffers(meta) && !meta.num_move_handles;
+     if (request.accepted) {
+-        request.command_id = parsed.command_id;
+         request.data_size = parsed.data_size < sizeof(request.data) ? parsed.data_size
+                                                                     : sizeof(request.data);
+         std::memcpy(request.data, parsed.data, request.data_size);
+@@ -238,6 +378,14 @@ HenServer::CommandReply HenServer::serveRequest(const ReceivedRequest& request,
+     }
+ 
+     switch (request.command_id) {
++    case KAIHEN_CENSUS_HEADER_COMMAND:
++    case KAIHEN_CENSUS_RECORD_COMMAND: {
++        const HenCensus::Query result = census_.query(request.command_id, request.census_scalar,
++            request.census_words, request.data, request.data_size, reply.data, reply.data_size);
++        reply.result = result == HenCensus::Query::Success ? 0 :
++            MAKERESULT(Module_Libnx, result == HenCensus::Query::Unavailable ? LibnxError_NotFound : LibnxError_BadInput);
++        return reply;
++    }
+     case HenControlCommand_GetStatus:
+         if (!request.num_copy_handles) {
+             reply.result = 0;
+@@ -250,6 +398,12 @@ HenServer::CommandReply HenServer::serveRequest(const ReceivedRequest& request,
              reply.setData(game_.status());
          }
          return reply;
@@ -1520,7 +2337,7 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
      default:
          break;
      }
-@@ -268,6 +279,20 @@
+@@ -268,6 +422,20 @@ void HenServer::serveControlCommand(const ReceivedRequest& request, CommandReply
      const Handle* handles = request.copy_handles;
  
      switch (request.command_id) {
@@ -1541,7 +2358,15 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
      case HenControlCommand_ConfigureGame:
          if (!copies && request.data_size >= sizeof(HenGameConfig)) {
              HenGameConfig configuration;
-@@ -358,6 +383,54 @@
+@@ -334,6 +502,7 @@ void HenServer::serveControlCommand(const ReceivedRequest& request, CommandReply
+         // A plugin's FS root: a session of its own, not HEN's root.
+         if (!copies && fs_root_ != INVALID_HANDLE) {
+             reply.result = cmifCloneCurrentObject(fs_root_, &reply.copy_handle);
++            censusFsClone(1, fs_root_, reply.copy_handle, reply.result);
+             reply.close_copy_after_send = R_SUCCEEDED(reply.result);
+         }
+         break;
+@@ -358,12 +527,61 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
      }
  
      switch (request.command_id) {
@@ -1596,10 +2421,48 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
      case HenHomebrewCommand_GetFilesystemRoot:
          if (fs_root_ == INVALID_HANDLE) {
              reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
-@@ -516,6 +589,12 @@
+             break;
+         }
+         reply.result = cmifCloneCurrentObject(fs_root_, &reply.copy_handle);
++        censusFsClone(2, fs_root_, reply.copy_handle, reply.result);
+         reply.close_copy_after_send = R_SUCCEEDED(reply.result);
+         break;
+     case HenHomebrewCommand_GetSettingsSession:
+@@ -427,6 +645,7 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
+ Result HenServer::startGameArm(Handle bootstrap_process) {
+     Handle root = INVALID_HANDLE;
+     Result rc = cmifCloneCurrentObject(fs_root_, &root);
++    censusFsClone(3, fs_root_, root, rc);
+     if (R_FAILED(rc)) {
+         return rc;
+     }
+@@ -447,13 +666,21 @@ Result HenServer::createHomebrewSession(Handle copied_process, Handle* out_clien
+         Handle server = INVALID_HANDLE;
+         Handle client = INVALID_HANDLE;
+         Result rc = svcCreateSession(&server, &client, 0, 0);
++        census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated,
++            (u64(2) << 32) | index, server, copied_process, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++        if (R_FAILED(rc)) ++census_session_failures_;
+         if (R_SUCCEEDED(rc)) {
+             homebrew_sessions_[index] = server;
+             homebrew_processes_[index] = copied_process;
+             *out_client = client;
+         }
++        censusCounts();
+         return rc;
+     }
++    ++census_session_failures_;
++    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated, (u64(2) << 32) | UINT32_MAX, 0, copied_process,
++        MAKERESULT(Module_Libnx, LibnxError_OutOfMemory), KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++    censusCounts();
+     return MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
+ }
+ 
+@@ -516,6 +743,13 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
          if (std::strcmp(plugins_[index].name.name, name.name)) {
              continue;
          }
++        if (censusControlBlocked(plugins_[index])) return reload::Busy;
 +        if (plugins_[index].operation_id) {
 +            const auto* operation = reload_journal_.find(plugins_[index].operation_id);
 +            if ((operation && (operation->status.flags & (HEN_PLUGIN_RELOAD_BUSY | HEN_PLUGIN_RELOAD_BLOCKED))) ||
@@ -1609,7 +2472,7 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
          Service control = {};
          serviceCreate(&control, plugins_[index].control_session);
          control.own_handle = false;
-@@ -525,6 +604,10 @@
+@@ -525,6 +759,10 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
          );
          // The plugin closed its control session, so it no longer serves.
          if (rc == KERNELRESULT(ConnectionClosed)) {
@@ -1620,12 +2483,21 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
              removePlugin(index);
              return MAKERESULT(Module_Libnx, LibnxError_NotFound);
          }
-@@ -547,8 +630,111 @@
+@@ -534,6 +772,7 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
+ }
+ 
+ void HenServer::removePlugin(u32 index) {
++    if (censusControlBlocked(plugins_[index])) return;
+     svcCloseHandle(plugins_[index].control_session);
+     plugin_count_--;
+     for (u32 next = index; next < plugin_count_; next++) {
+@@ -547,8 +786,115 @@ void HenServer::removePlugin(u32 index) {
  /// the two can still name a plugin that exits in the meantime.
  void HenServer::removeExitedPlugins() {
      for (u32 index = plugin_count_; index > 0; index--) {
 -        if (!game_.processExists(plugins_[index - 1].process_id)) {
-+        if (!plugins_[index - 1].operation_id && !game_.processExists(plugins_[index - 1].process_id)) {
++        if (!plugins_[index - 1].operation_id && !censusControlBlocked(plugins_[index - 1]) &&
++            !game_.processExists(plugins_[index - 1].process_id)) {
              removePlugin(index - 1);
          }
      }
@@ -1664,16 +2536,19 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
 +    reload::Journal::Entry* entry = nullptr;
 +    R_TRY(reload_journal_.lookup(caller_pid, request, &entry));
 +    if (entry) { out = entry->status; return 0; }
++    if (census_relay_ && !census_relay_->ready()) return reload::Busy;
 +    if (!reload_configured_) return reload::Capability;
 +    if (request.instance_id != reload_instance_) return reload::Stale;
 +    auto* plugin = findPlugin(request.name);
 +    if (!plugin || !plugin->process_id || plugin->process_id != request.expected_process_id ||
 +        plugin->generation != request.expected_generation || plugin->generation == UINT64_MAX ||
 +        plugin->control_session == INVALID_HANDLE) return reload::Stale;
++    if (censusControlBlocked(*plugin)) return reload::Busy;
 +    PluginLaunchContext context = {};
 +    if (!game_.acquireReloadLease(context)) return reload::Busy;
 +    Handle fs = INVALID_HANDLE, sm = INVALID_HANDLE;
 +    Result rc = cmifCloneCurrentObject(fs_root_, &fs);
++    censusFsClone(4, fs_root_, fs, rc);
 +    if (R_SUCCEEDED(rc)) rc = sm_proxy_.openSession(&sm);
 +    if (R_SUCCEEDED(rc)) rc = reload_journal_.begin(caller_pid, request, &entry);
 +    if (R_FAILED(rc)) {
@@ -1734,17 +2609,37 @@ diff --git a/hen/source/server.cpp b/hen/source/server.cpp
 +    if (!quarantine) game_.releaseReloadLease();
 +}
 diff --git a/hen/source/server.hpp b/hen/source/server.hpp
+index fc0e61c..5dc92ab 100644
 --- a/hen/source/server.hpp
 +++ b/hen/source/server.hpp
-@@ -5,6 +5,7 @@
+@@ -5,6 +5,8 @@
  #include "../../common/control.h"
  #include "game_arm.hpp"
  #include "sm_proxy.hpp"
 +#include "plugin_reload.hpp"
++#include "census_relay.hpp"
  #include "../../libkaihen/source/cmif_server.hpp"
  
  /// HEN's IPC server. It serves the mig:usr control port, on which the
-@@ -84,6 +85,9 @@
+@@ -23,6 +25,8 @@ class HenServer {
+ 
+     /// Serves requests until a kernel call fails.
+     Result run();
++    // Main-thread cached producer, also used by the separately owned relay.
++    HenCensus census_;
+ 
+   private:
+     static constexpr u32 MaxSessions = 16;
+@@ -58,6 +62,8 @@ class HenServer {
+         Handle copy_handles[MaxCopyHandles];
+         u8 data[ounce::MessageSize];
+         size_t data_size;
++        bool census_scalar = false;
++        u32 census_words = 0;
+     };
+ 
+     /// What a command answers.
+@@ -84,15 +90,23 @@ class HenServer {
          HenPluginName name = {};
          u64 process_id = 0;
          Handle control_session = INVALID_HANDLE;
@@ -1754,7 +2649,22 @@ diff --git a/hen/source/server.hpp b/hen/source/server.hpp
      };
  
      // The loop
-@@ -112,6 +116,10 @@
+     void collectWaits(WaitList& waits) const;
+     void stepBetweenRequests();
++    void advanceCensusRelay();
++    bool censusControlBlocked(const PluginRecord& plugin) const;
+     void acceptSession();
+     Result serveSession(SessionRef session);
+     Handle& sessionHandle(SessionRef session);
+-    void closeSession(SessionRef session);
++    void closeSession(SessionRef session, u32 reason = 2);
++    void censusCounts();
++    void censusClose(Handle& handle, u32 caller, u32 reason, u32 slot);
++    void censusFsClone(u32 caller, Handle root, Handle clone, Result result);
+ 
+     // Requests
+     ReceivedRequest receiveRequest() const;
+@@ -112,6 +126,10 @@ class HenServer {
      Result openPlugin(const HenPluginName& name, Handle* out_session);
      void removePlugin(u32 index);
      void removeExitedPlugins();
@@ -1765,7 +2675,7 @@ diff --git a/hen/source/server.hpp b/hen/source/server.hpp
  
      Handle port_ = INVALID_HANDLE;
      Handle fs_root_ = INVALID_HANDLE;
-@@ -127,4 +135,10 @@
+@@ -127,4 +145,18 @@ class HenServer {
      u32 plugin_count_ = 0;
      HenStatus status_ = {};
      GameArm game_ = {};
@@ -1775,16 +2685,26 @@ diff --git a/hen/source/server.hpp b/hen/source/server.hpp
 +    PluginLaunchSpec reload_spec_ = {};
 +    bool reload_configured_ = false;
 +    u64 reload_instance_ = 0;
++    u64 census_session_failures_ = 0, census_close_failures_ = 0;
++    bool census_query_ = false;
++    // Heap-backed: an unconfirmed worker may outlive server teardown. Its
++    // copied frame and borrowed control stay owned until the process exits.
++    CensusRelay* census_relay_ = nullptr;
++    u64 census_target_pid_ = 0, census_delivered_ = 0, census_last_export_ = 0;
++    bool census_header_delivered_ = false;
++    u64 census_exit_snapshot_ = 0;
  };
 diff --git a/hen/source/sm_proxy.cpp b/hen/source/sm_proxy.cpp
+index cfae891..c1ecc4b 100644
 --- a/hen/source/sm_proxy.cpp
 +++ b/hen/source/sm_proxy.cpp
-@@ -44,25 +44,37 @@
+@@ -44,32 +44,67 @@ void SmProxy::setMaster(Handle master) {
  }
  
  /// Joins and frees the sessions whose thread has ended. Under lock_.
 -void SmProxy::reapFinishedSessions() {
 +Result SmProxy::reapFinishedSessions() {
++    sampleCensus();
      Session** link = &sessions_;
      while (Session* session = *link) {
          if (session->running.load(std::memory_order_acquire)) {
@@ -1793,16 +2713,32 @@ diff --git a/hen/source/sm_proxy.cpp b/hen/source/sm_proxy.cpp
          }
 -        threadWaitForExit(&session->thread);
 -        threadClose(&session->thread);
++        sampleSessionCensus(*session); // ended publisher is stable before deletion
 +        if (session->thread_started && !session->thread_exited) {
 +            const Result rc = threadWaitForExit(&session->thread);
-+            if (R_FAILED(rc)) return rc;
++            if (R_FAILED(rc)) {
++                if (census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++                    session->census_id, 5, 0, rc, KaihenCensusFlag_ResultKnown);
++                return rc;
++            }
 +            session->thread_exited = true;
++            if (census_) classifyCensus(*session);
 +        }
 +        const Result rc = threadClose(&session->thread);
-+        if (R_FAILED(rc)) return rc;
++        if (R_FAILED(rc)) {
++            if (census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++                session->census_id, 6, session->thread_exited, rc, KaihenCensusFlag_ResultKnown);
++            sampleCensus();
++            return rc;
++        }
++        if (census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmReaped,
++            session->census_id, ++census_reaped_, census_loss_, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++        if (census_cursor_ == session) census_cursor_ = session->next;
++        if (census_) classifyCensus(*session, true);
          *link = session->next;
          delete session;
      }
++    sampleCensus();
 +    return 0;
 +}
 +
@@ -1820,65 +2756,293 @@ diff --git a/hen/source/sm_proxy.cpp b/hen/source/sm_proxy.cpp
 +    if (R_FAILED(reap)) return reap;
  
      Session* session = new (std::nothrow) Session;
-     if (!session)
-@@ -79,14 +91,23 @@
+-    if (!session)
++    if (!session) {
++        if (census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++            0, 1, 0, MAKERESULT(Module_Libnx, LibnxError_OutOfMemory), KaihenCensusFlag_ResultKnown);
+         return MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
++    }
++    session->census_id = census_next_id_++;
+ 
+     Handle client = INVALID_HANDLE;
+     Result rc = svcCreateSession(&session->server, &client, 0, 0);
++    if (census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmCreated,
++        session->census_id, session->server, client, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+     if (R_FAILED(rc)) {
+         delete session;
+         return rc;
+@@ -79,20 +114,45 @@ Result SmProxy::openSession(Handle* out_client) {
      session->running.store(true, std::memory_order_release);
      rc = threadCreate(&session->thread, sessionMain, session, nullptr,
                        ThreadStackSize, ThreadPriority, -2);
++    if (R_FAILED(rc) && census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++        session->census_id, 3, 0, rc, KaihenCensusFlag_ResultKnown);
 +    bool thread_created = R_SUCCEEDED(rc);
      if (R_SUCCEEDED(rc)) {
          rc = threadStart(&session->thread);
 -        if (R_FAILED(rc))
 -            threadClose(&session->thread);
 +        session->thread_started = R_SUCCEEDED(rc);
++        if (census_) census_->emit(KaihenCensusSource_Sm,
++            R_SUCCEEDED(rc) ? KaihenCensusEvent_SmStarted : KaihenCensusEvent_SmFailure,
++            session->census_id, 4, 0, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
      }
      if (R_FAILED(rc)) {
-         svcCloseHandle(session->server);
-         svcCloseHandle(client);
+-        svcCloseHandle(session->server);
+-        svcCloseHandle(client);
++        const Result server_close = svcCloseHandle(session->server);
++        const Result client_close = svcCloseHandle(client);
++        if (census_ && R_FAILED(server_close)) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++            session->census_id, 8, session->server, server_close, KaihenCensusFlag_ResultKnown);
++        if (census_ && R_FAILED(client_close)) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++            session->census_id, 9, client, client_close, KaihenCensusFlag_ResultKnown);
 +        session->server = INVALID_HANDLE;
 +        session->running.store(false, std::memory_order_release);
-+        if (thread_created && R_FAILED(threadClose(&session->thread))) {
++        const Result close_rc = thread_created ? threadClose(&session->thread) : 0;
++        if (thread_created && R_FAILED(close_rc)) {
++            if (census_) census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++                session->census_id, 6, 0, close_rc, KaihenCensusFlag_ResultKnown);
 +            // Keep the descriptor's backing context after an unstarted
 +            // thread could not be closed. A later collection resumes it.
 +            session->next = sessions_;
 +            sessions_ = session;
++            if (census_) classifyCensus(*session);
++            sampleCensus();
 +            return rc;
 +        }
          delete session;
          return rc;
      }
+ 
+     session->next = sessions_;
+     sessions_ = session;
++    if (census_) classifyCensus(*session);
++    sampleCensus();
+     *out_client = client;
+     return 0;
+ }
+@@ -104,21 +164,31 @@ void SmProxy::sessionMain(void* argument) {
+ 
+ void SmProxy::serve(Session& session) {
+     Handle reply_target = INVALID_HANDLE;
++    Result receive_result = 0;
+     for (;;) {
+         s32 index = -1;
+         const Result rc = svcReplyAndReceive(&index, &session.server, 1, reply_target, UINT64_MAX);
+         reply_target = INVALID_HANDLE;
+         // SessionClosed: the program closed its end (or exited).
+-        if (R_FAILED(rc) || !respond())
++        receive_result = rc;
++        if (R_FAILED(rc)) {
++            session.census_end_reason = rc == KERNELRESULT(ConnectionClosed) ? 1 : 4;
++            break;
++        }
++        if (!respond(session))
+             break;
+         reply_target = session.server;
+     }
+-    svcCloseHandle(session.server);
++    const Result close_result = svcCloseHandle(session.server);
+     session.server = INVALID_HANDLE;
++    HenCensusSmMailbox::View last = {};
++    session.census_mailbox.sample(last); // this worker is its sole writer
++    session.census_mailbox.publish(HenCensusSmMailbox::Ended, last.name, last.lookup,
++                                   receive_result, close_result, session.census_end_reason);
+     session.running.store(false, std::memory_order_release);
+ }
+ 
+-bool SmProxy::respond() {
++bool SmProxy::respond(Session& session) {
+     void* const message = armGetTls();
+     // A forwarded request reuses the message buffer: decode the program's
+     // request completely first.
+@@ -126,8 +196,10 @@ bool SmProxy::respond() {
+ 
+     switch (request.kind) {
+     case RequestKind::Close:
++        session.census_end_reason = 2;
+         return false;
+     case RequestKind::Invalid:
++        session.census_end_reason = 3;
+         closeCarriedHandles(message);
+         return false;
+     case RequestKind::QueryPointerBufferSize:
+@@ -150,8 +222,17 @@ bool SmProxy::respond() {
+         rc = 0;
+         break;
+     case Command::GetServiceHandle:
++    {
++        HenCensusSmMailbox::View last = {};
++        session.census_mailbox.sample(last);
++        const u64 lookup = last.lookup + 1;
++        u64 name = 0;
++        std::memcpy(&name, &request.name, sizeof(name));
++        session.census_mailbox.publish(HenCensusSmMailbox::LookupPending, name, lookup);
+         rc = lookUpService(request.name, &handle);
++        session.census_mailbox.publish(HenCensusSmMailbox::LookupReturned, name, lookup, rc);
+         break;
++    }
+     case Command::RegisterService:
+     case Command::UnregisterService:
+         // A registration through the master would be FS's, and would
+@@ -165,6 +246,91 @@ bool SmProxy::respond() {
+     return true;
+ }
+ 
++void SmProxy::classifyCensus(Session& session, bool remove) {
++    const auto adjust = [&](u32 state, bool add) {
++        if (state == UINT32_MAX) return;
++        const unsigned category = (state & 1) ? 0 : 1;
++        if (add) census_current_[category]++; else census_current_[category]--;
++        if (state & 2) { if (add) census_current_[2]++; else census_current_[2]--; }
++        if (state & 4) { if (add) census_current_[3]++; else census_current_[3]--; }
++    };
++    const u32 state = remove ? UINT32_MAX :
++        (session.running.load(std::memory_order_acquire) ? 1u : 0u) |
++        (session.thread_exited ? 2u : 0u) | (!session.thread_started ? 4u : 0u);
++    if (state != session.census_class) {
++        adjust(session.census_class, false); adjust(state, true); session.census_class = state;
++    }
++}
++
++void SmProxy::sampleSessionCensus(Session& item) {
++    if (!census_) return;
++    classifyCensus(item);
++    Session* session = &item;
++    HenCensusSmMailbox::View view = {};
++    if (!session->census_mailbox.sample(view)) return;
++    if (view.revision == session->census_revision) return;
++    const u64 skipped = (view.revision - session->census_revision) / 2;
++    if (skipped > 1) {
++        census_loss_ += skipped - 1;
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmMailboxLoss,
++            session->census_id, skipped - 1, census_loss_, 0, KaihenCensusFlag_Cached);
++    }
++    if (view.failures != session->census_failures) {
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmFailure,
++            session->census_id, (view.failures << 32) | 7, view.failure_name, view.failure_result,
++            KaihenCensusFlag_ResultKnown | KaihenCensusFlag_Cached |
++                (view.failures > session->census_failures + 1 ? KaihenCensusFlag_Incomplete : 0));
++        session->census_failures = view.failures;
++    }
++    if (session->census_pending && view.lookup != session->census_pending) {
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmLookupEnd,
++            session->census_id, 0, session->census_pending, 0,
++            KaihenCensusFlag_Cached | KaihenCensusFlag_Incomplete);
++        session->census_pending = 0;
++    }
++    if (view.stage == HenCensusSmMailbox::LookupPending && view.lookup != session->census_pending) {
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmLookupBegin,
++            session->census_id, view.name, view.lookup, 0, KaihenCensusFlag_Cached | KaihenCensusFlag_Before);
++        session->census_pending = view.lookup;
++    } else if (view.stage != HenCensusSmMailbox::LookupPending && session->census_pending) {
++        const bool known = view.lookup == session->census_pending && view.stage == HenCensusSmMailbox::LookupReturned;
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmLookupEnd,
++            session->census_id, view.name, view.lookup, known ? view.result : 0,
++            KaihenCensusFlag_Cached | (known ? KaihenCensusFlag_ResultKnown : KaihenCensusFlag_Incomplete),
++            0);
++        session->census_pending = 0;
++    }
++    if (view.stage == HenCensusSmMailbox::Ended && !session->census_ended) {
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmEnded,
++            session->census_id, (u64(view.end_reason) << 32) | view.result, view.name, view.close_result,
++            KaihenCensusFlag_Cached | KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
++        session->census_ended = true;
++    }
++    session->census_revision = view.revision;
++}
++
++void SmProxy::sampleCensus() {
++    if (!census_) return;
++    // Existing session registry is owner-thread-only. Workers only publish
++    // atomic mailboxes. At most 16 contexts are inspected per idle sample.
++    if (!census_cursor_) census_cursor_ = sessions_;
++    for (unsigned budget = 0; census_cursor_ && budget < 16; budget++) {
++        Session* current = census_cursor_;
++        census_cursor_ = current->next;
++        sampleSessionCensus(*current);
++    }
++    const bool incomplete = census_cursor_ != nullptr;
++    const u64 running = census_current_[0], ended = census_current_[1];
++    const u64 retained = (census_current_[2] << 32) | census_current_[3];
++    if (running != census_counts_[0] || ended != census_counts_[1] || retained != census_counts_[2] ||
++        (census_incomplete_ && !incomplete)) {
++        census_->emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmCounts, running, ended, retained,
++            0, KaihenCensusFlag_Cached | (incomplete ? KaihenCensusFlag_Incomplete : 0));
++        census_counts_[0] = running; census_counts_[1] = ended; census_counts_[2] = retained;
++        census_incomplete_ = incomplete;
++    }
++}
++
+ Result SmProxy::lookUpService(const SmServiceName& name, Handle* out_handle) {
+     Service master;
+     serviceCreate(&master, master_);
 diff --git a/hen/source/sm_proxy.hpp b/hen/source/sm_proxy.hpp
+index 251ebe3..884a9e9 100644
 --- a/hen/source/sm_proxy.hpp
 +++ b/hen/source/sm_proxy.hpp
-@@ -43,6 +43,9 @@
+@@ -4,6 +4,7 @@
+ #include <atomic>
+ #include <switch.h>
+ #include "sm_request.hpp"
++#include "census.hpp"
+ 
+ /// HEN's SM proxy. HEN keeps FS's initialized SM session (the master) to
+ /// itself and gives each homebrew program a session of its own on this
+@@ -43,6 +44,12 @@ class SmProxy {
      /// There is no fixed number of sessions: it fails only when HEN cannot
      /// allocate the session or create its thread.
      Result openSession(Handle* out_client);
 +    /// Reclaims ended proxy threads. Failure retains the context and partial
 +    /// join state; it is never permission to free an unclosed thread object.
 +    Result collectFinishedSessions();
++    void setCensus(HenCensus* census) { census_ = census; }
++    // Same owner thread as openSession/reaping. Never waits, reaps, or issues IPC.
++    void sampleCensus();
  
    private:
      static constexpr size_t ThreadStackSize = 0x4000;
-@@ -57,6 +60,8 @@
+@@ -57,20 +64,36 @@ class SmProxy {
          Thread thread = {};
          Handle server = INVALID_HANDLE;
          std::atomic<bool> running{false};
 +        bool thread_started = false;
 +        bool thread_exited = false;
++        u64 census_id = 0;
++        HenCensusSmMailbox census_mailbox;
++        u64 census_revision = 0, census_failures = 0, census_pending = 0;
++        bool census_ended = false;
++        u32 census_class = UINT32_MAX;
++        u32 census_end_reason = 0; // worker-only; published atomically at end
      };
  
      static void sessionMain(void* argument);
-@@ -67,7 +72,7 @@
+     void serve(Session& session);
+     /// Answers the request in the thread's message buffer. Returns false
+     /// when the session is to be closed.
+-    bool respond();
++    bool respond(Session& session);
      /// Asks SM for the service on the master session. The session SM returns
      /// is in *out_handle.
      Result lookUpService(const SmServiceName& name, Handle* out_handle);
 -    void reapFinishedSessions();
 +    Result reapFinishedSessions();
++    void sampleSessionCensus(Session& session);
++    void classifyCensus(Session& session, bool remove = false);
  
      Handle master_ = INVALID_HANDLE;
      Mutex lock_ = {};
+     /// The sessions whose thread has not been joined yet. Under lock_.
+     Session* sessions_ = nullptr;
++    HenCensus* census_ = nullptr;
++    u64 census_next_id_ = 1, census_reaped_ = 0, census_loss_ = 0;
++    u64 census_counts_[3] = {UINT64_MAX, UINT64_MAX, UINT64_MAX};
++    u64 census_current_[4] = {}; // cached running, ended, joined, unstarted
++    Session* census_cursor_ = nullptr;
++    bool census_incomplete_ = false;
+ };
 diff --git a/hen/test.sh b/hen/test.sh
+index a413b1a..e5fcd25 100755
 --- a/hen/test.sh
 +++ b/hen/test.sh
 @@ -4,12 +4,13 @@
@@ -1897,12 +3061,547 @@ diff --git a/hen/test.sh b/hen/test.sh
 -$cxx $flags -I"$nx/include" -I../libkaihen/include tests/sm_request_test.cpp -o build/tests/sm_request
 -build/tests/sm_request
 +flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
-+for test in mount_request sm_request reload lifecycle_server loader_gate session_lifetime; do
++for test in mount_request sm_request reload lifecycle_server loader_gate session_lifetime hen_census; do
 +    $cxx $flags -Itests/host -I"$nx/include" -I../libkaihen/include "tests/${test}_test.cpp" -o "$out/$test"
 +    "$out/$test"
 +done
+diff --git a/hen/tests/census_control_test.cpp b/hen/tests/census_control_test.cpp
+new file mode 100644
+index 0000000..5fc32c8
+--- /dev/null
++++ b/hen/tests/census_control_test.cpp
+@@ -0,0 +1,127 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstring>
++#include <cstdio>
++#include <initializer_list>
++#include "../../libkaihen/source/plugin_server.cpp"
++
++namespace {
++alignas(16) u8 tls[0x100];
++unsigned callbacks, replies, closes, creates;
++Result reply_transport = 0, callback_result = 0;
++size_t callback_size = sizeof(KaihenCensusAck);
++bool overwrite_tls = false;
++u32 expected_command;
++u8 expected_input[64];
++}
++extern "C" {
++void* armGetTls() { return tls; }
++void mutexLock(Mutex*) {}
++void mutexUnlock(Mutex*) {}
++Result svcCloseHandle(Handle h) { assert(h == 77); ++closes; return 0; }
++Result svcSignalEvent(Handle) { return 0; }
++Result svcCreateEvent(Handle* w, Handle* r) { *w = 60; *r = 61; return 0; }
++Result svcClearEvent(Handle) { return 0; }
++Result svcCreateSession(Handle* s, Handle* c, u32, u64) {
++    ++creates; *s = 50; *c = 51; return 0;
++}
++Result svcReplyAndReceive(s32*, const Handle*, s32 n, Handle h, u64 timeout) {
++    assert(n == 0 && h == 20 && timeout == 0);
++    ++replies;
++    return R_SUCCEEDED(reply_transport) ? KERNELRESULT(TimedOut) : reply_transport;
++}
++Result threadCreate(Thread*, ThreadFunc, void*, void*, size_t, int, int) { return 0; }
++Result threadStart(Thread*) { return 0; }
++Result threadClose(Thread*) { return 0; }
++Result threadWaitForExit(Thread*) { return 0; }
++}
++namespace {
++Result receiver(u32 command, const void* input, size_t size, void* output, size_t* out_size, void* ctx) {
++    assert(ctx == &callbacks && command == expected_command && size == 64);
++    assert(!std::memcmp(input, expected_input, 64));
++    if (overwrite_tls) {
++        std::memset(tls, 0xa5, sizeof(tls));
++        assert(!std::memcmp(input, expected_input, 64)); // input is not borrowed TLS
++    }
++    ++callbacks;
++    const KaihenCensusAck ack{91, command == KAIHEN_CENSUS_HEADER_COMMAND ? 0u : 7u};
++    std::memcpy(output, &ack, sizeof(ack));
++    *out_size = callback_size;
++    return callback_result;
++}
++void request(u32 command, u32 bytes = 64, bool handles = false, bool pid = false) {
++    std::memset(tls, 0, sizeof(tls));
++    CmifRequestFormat format{};
++    format.request_id = command;
++    format.data_size = bytes;
++    format.num_handles = handles ? 1 : 0;
++    format.send_pid = pid;
++    auto msg = cmifMakeRequest(tls, format);
++    if (handles) msg.hipc.copy_handles[0] = 77;
++    for (size_t i = 0; i < sizeof(expected_input); ++i) expected_input[i] = u8(i + 1);
++    std::memcpy(msg.data, expected_input, bytes < 64 ? bytes : 64);
++    expected_command = command;
++    callbacks = replies = closes = 0;
++}
++Result response(KaihenCensusAck* ack = nullptr) {
++    const auto hipc = hipcParseRequest(tls);
++    assert(!hipc.meta.num_copy_handles && !hipc.meta.num_move_handles);
++    const auto* header = static_cast<const CmifOutHeader*>(cmifGetAlignedDataStart(hipc.data.data_words, tls));
++    assert(header->magic == CMIF_OUT_HEADER_MAGIC);
++    if (ack && R_SUCCEEDED(header->result)) std::memcpy(ack, header + 1, sizeof(*ack));
++    return header->result;
++}
++void rejected(PluginService& service) {
++    assert(!serveControlRequest(&service));
++    assert(R_FAILED(response()) && callbacks == 0 && replies == 1);
++}
++}
++int main() {
++    PluginService service{};
++    service.control_session = 20;
++    service.diagnostics_handler = receiver;
++    service.diagnostics_context = &callbacks;
++    for (u32 command : {KAIHEN_CENSUS_HEADER_COMMAND, KAIHEN_CENSUS_RECORD_COMMAND}) {
++        request(command);
++        assert(isCensusFrame(ounce::parseRequest(tls)));
++        overwrite_tls = true;
++        assert(!serveControlRequest(&service));
++        overwrite_tls = false;
++        KaihenCensusAck ack{};
++        assert(!response(&ack) && ack.boot_id == 91);
++        assert(ack.sequence == (command == KAIHEN_CENSUS_HEADER_COMMAND ? 0 : 7));
++        assert(callbacks == 1 && replies == 1 && !closes && !creates);
++    }
++    request(KAIHEN_CENSUS_HEADER_COMMAND, 60); rejected(service);
++    assert(response() == KAIHEN_CENSUS_RECEIVER_REJECTED);
++    request(KAIHEN_CENSUS_HEADER_COMMAND, 80); rejected(service);
++    request(KAIHEN_CENSUS_HEADER_COMMAND);
++    auto parsed = ounce::parseRequest(tls);
++    assert(parsed.data_size > 64);
++    const_cast<u8*>(parsed.data)[64] = 1;
++    rejected(service); // nonzero alignment padding is not a frame
++    request(KAIHEN_CENSUS_HEADER_COMMAND, 64, true); rejected(service);
++    assert(closes == 1); // malformed transferred handles still closed once
++    request(KAIHEN_CENSUS_HEADER_COMMAND, 64, false, true); rejected(service);
++    request(KAIHEN_CENSUS_HEADER_COMMAND + 10); rejected(service);
++    request(KAIHEN_CENSUS_HEADER_COMMAND);
++    service.diagnostics_handler = nullptr; rejected(service);
++    assert(response() == MAKERESULT(Module_Libnx, LibnxError_BadInput));
++    service.diagnostics_handler = receiver;
++    request(KAIHEN_CENSUS_RECORD_COMMAND);
++    callback_size = 8;
++    assert(!serveControlRequest(&service) && response() == KAIHEN_CENSUS_RECEIVER_REJECTED && callbacks == 1);
++    callback_size = sizeof(KaihenCensusAck);
++    request(KAIHEN_CENSUS_HEADER_COMMAND);
++    callback_result = MAKERESULT(Module_Libnx, LibnxError_BadInput);
++    assert(!serveControlRequest(&service) && response() == KAIHEN_CENSUS_RECEIVER_REJECTED);
++    request(KAIHEN_CENSUS_RECORD_COMMAND);
++    callback_result = MAKERESULT(345, 222);
++    assert(!serveControlRequest(&service) && response() == callback_result);
++    callback_result = 0;
++    request(KAIHEN_CENSUS_RECORD_COMMAND);
++    reply_transport = KERNELRESULT(ConnectionClosed);
++    assert(serveControlRequest(&service) == reply_transport && callbacks == 1 && replies == 1);
++    assert(!creates); // diagnostic path never creates another client session
++    std::puts("census control: real CMIF dispatch, strict frames, owned input, legacy/error replies, no new session passed");
++}
+diff --git a/hen/tests/census_pipeline_test.cpp b/hen/tests/census_pipeline_test.cpp
+new file mode 100644
+index 0000000..238a18a
+--- /dev/null
++++ b/hen/tests/census_pipeline_test.cpp
+@@ -0,0 +1,111 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Production ring -> relay -> real CMIF server -> resident cache. Scripted
++// worker scheduling and a loopback SVC seam do not model kernel concurrency.
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include "../source/census.hpp"
++#include "../source/census_relay.cpp"
++#include "../../libkaihen/source/plugin_server.cpp"
++#include "../../../../include/moader/host_census.hpp"
++
++namespace {
++alignas(16) u8 tls[0x100];
++PluginService endpoint{};
++ThreadFunc entry;
++void* argument;
++unsigned requests, replies, waits, closes;
++bool bad_ack = false;
++bool short_ack = false;
++}
++extern "C" {
++void* armGetTls() { return tls; }
++void mutexLock(Mutex*) {}
++void mutexUnlock(Mutex*) {}
++Result threadCreate(Thread* thread, ThreadFunc f, void* a, void*, size_t, int, int) {
++    thread->handle = 80; entry = f; argument = a; return 0;
++}
++Result threadStart(Thread*) { return 0; }
++Result threadWaitForExit(Thread*) { assert(false); return 1; }
++Result svcWaitSynchronization(s32* index, const Handle* handles, s32 count, u64 timeout) {
++    assert(count == 1 && handles[0] == 80 && !timeout); ++waits; *index = 0; return 0;
++}
++Result threadClose(Thread*) { ++closes; return 0; }
++Result svcCreateEvent(Handle*, Handle*) { assert(false); return 1; }
++Result svcSignalEvent(Handle) { assert(false); return 1; }
++Result svcClearEvent(Handle) { assert(false); return 1; }
++Result svcCloseHandle(Handle) { assert(false); return 1; }
++Result svcCreateSession(Handle*, Handle*, u32, u64) { assert(false); return 1; }
++Result svcReplyAndReceive(s32*, const Handle*, s32 count, Handle reply, u64 timeout) {
++    assert(!count && reply == 20 && !timeout); ++replies;
++    return KERNELRESULT(TimedOut);
++}
++Result svcSendSyncRequest(Handle h) {
++    assert(h == 42); ++requests;
++    assert(isCensusFrame(ounce::parseRequest(tls))); // includes real SDK padding
++    assert(!serveControlRequest(&endpoint));
++    return 0;
++}
++}
++namespace {
++Result receive(u32 command, const void* input, size_t bytes, void* output, size_t* output_bytes, void* context) {
++    auto& cache = *static_cast<moader::HostCensus*>(context);
++    KaihenCensusAck ack{}; bool busy = false;
++    *output_bytes = 0;
++    if (!cache.receive(command, input, bytes, ack, &busy))
++        return busy ? KAIHEN_CENSUS_RECEIVER_BUSY : KAIHEN_CENSUS_RECEIVER_REJECTED;
++    if (bad_ack) ++ack.boot_id;
++    std::memcpy(output, &ack, sizeof(ack)); *output_bytes = short_ack ? 8 : sizeof(ack); return 0;
++}
++}
++int main() {
++    HenCensus producer;
++    producer.initialize(99, 31250000);
++    for (u64 i = 1; i <= 80; ++i)
++        producer.emit(KaihenCensusSource_Hen, KaihenCensusEvent_HenCounts, i, 0, 0, 0, 0, 0, i);
++    moader::HostCensus cache(123);
++    endpoint.control_session = 20;
++    endpoint.diagnostics_handler = receive;
++    endpoint.diagnostics_context = &cache;
++    CensusRelay relay;
++    u64 delivered = 0;
++    bool changed = false;
++    while (delivered + 1 < producer.header().next_sequence) {
++        const auto h = producer.header();
++        u64 next = delivered + 1 < h.first_sequence ? h.first_sequence : delivered + 1;
++        KaihenCensusRecord batch[CensusRelay::BatchCapacity]{};
++        u32 count = 0;
++        while (count < CensusRelay::BatchCapacity && next < h.next_sequence)
++            assert(producer.read(next++, batch[count++]));
++        assert(!relay.start(42, 211, h, batch, count, 100));
++        if (!changed) {
++            // New records committed after the immutable batch was copied.
++            for (u64 i = 81; i <= 90; ++i)
++                producer.emit(KaihenCensusSource_Sm, KaihenCensusEvent_SmCounts, i, 0, 0, 0, 0, 0, i);
++            changed = true;
++        }
++        std::memset(tls, 0xa5, sizeof(tls)); // dirty first IPC buffer must not leak into padding
++        entry(argument);
++        assert(relay.poll(101) && relay.report().state == CensusRelay::Complete);
++        delivered = relay.report().acknowledged;
++    }
++    moader::HostCensus::Snapshot s;
++    assert(cache.snapshot(s) && s.available && s.header.boot_id == 99 && s.last_sequence == 90);
++    assert(s.header.first_sequence == 27 && s.header.overwritten == 26);
++    assert(s.sequence_gaps == 2 && s.records[0].sequence == 27 && s.records[s.count - 1].sequence == 90);
++    assert(s.accepted_records == 72 && s.rejected_frames == 0 && requests == replies && waits == closes);
++    // A malformed success ACK stops the sender even if the receiver accepted
++    // the header. It never silently replays the uncertain frame.
++    CensusRelay malformed;
++    bad_ack = true;
++    assert(!malformed.start(42, 212, producer.header(), nullptr, 0, 200));
++    entry(argument); assert(malformed.poll(201));
++    assert(malformed.report().state == CensusRelay::Failed && malformed.blocksControl(42, 212));
++    CensusRelay contract;
++    bad_ack = false; short_ack = true;
++    assert(!contract.start(42, 213, producer.header(), nullptr, 0, 300));
++    entry(argument); assert(contract.poll(301));
++    assert(contract.report().state == CensusRelay::Failed &&
++        contract.report().result == KAIHEN_CENSUS_RECEIVER_REJECTED && contract.blocksControl(42, 213));
++    std::puts("census pipeline: production ring/SDK/dispatcher/cache, dirty TLS, wrap and in-flight mutation passed");
++}
+diff --git a/hen/tests/census_relay_test.cpp b/hen/tests/census_relay_test.cpp
+new file mode 100644
+index 0000000..36e00df
+--- /dev/null
++++ b/hen/tests/census_relay_test.cpp
+@@ -0,0 +1,192 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include "../source/census_relay.cpp"
++#include "../../libkaihen/source/cmif_server.hpp"
++
++namespace {
++alignas(16) u8 tls[0x100];
++ThreadFunc entry;
++void* argument;
++unsigned sends, waits, closes, creates;
++unsigned fail_at;
++Result transport_failure, reply_failure, create_failure, start_failure, wait_failure, close_failure;
++bool wrong_ack;
++bool exit_pending;
++unsigned unexpected_copy, unexpected_move;
++bool reply_pid, short_reply, oversized_reply, bad_magic, bad_version, bad_padding, error_with_ack;
++Result received_close_failure;
++unsigned received_closes;
++}
++extern "C" {
++void* armGetTls() { return tls; }
++Result threadCreate(Thread* thread, ThreadFunc f, void* a, void*, size_t, int, int) {
++    ++creates; thread->handle = 80; entry = f; argument = a; return create_failure;
++}
++Result threadStart(Thread*) { return start_failure; }
++Result threadWaitForExit(Thread*) { assert(false); return 1; }
++Result svcWaitSynchronization(s32* index, const Handle* handles, s32 count, u64 timeout) {
++    assert(count == 1 && handles[0] == 80 && !timeout); ++waits;
++    *index = 0; return exit_pending ? KERNELRESULT(TimedOut) : wait_failure;
++}
++Result threadClose(Thread*) { ++closes; return close_failure; }
++Result svcCloseHandle(Handle handle) { assert(handle == 77 || handle == 78); ++received_closes; return received_close_failure; }
++Result svcSendSyncRequest(Handle control) {
++    assert(control == 42);
++    const auto request = ounce::parseRequest(tls);
++    assert(request.valid && ounce::hasOnlyInlineData(request));
++    assert(request.command_id == KAIHEN_CENSUS_HEADER_COMMAND || request.command_id == KAIHEN_CENSUS_RECORD_COMMAND);
++    ++sends;
++    if (sends == fail_at && R_FAILED(transport_failure)) return transport_failure;
++    u64 sequence = 0;
++    if (request.command_id == KAIHEN_CENSUS_RECORD_COMMAND) {
++        KaihenCensusRecord record{};
++        std::memcpy(&record, request.data, sizeof(record)); sequence = record.sequence;
++    }
++    const KaihenCensusAck ack{wrong_ack ? 99u : 12u, sequence};
++    const Result rc = sends == fail_at ? reply_failure : 0;
++    ounce::writeReply(tls, rc, R_SUCCEEDED(rc) ? &ack : nullptr, R_SUCCEEDED(rc) ? sizeof(ack) : 0);
++    if (unexpected_copy || unexpected_move || reply_pid) {
++        std::memset(tls, 0, sizeof(tls));
++        const auto out = hipcMakeRequestInline(tls, .num_data_words=12, .send_pid=reply_pid,
++            .num_copy_handles=unexpected_copy, .num_move_handles=unexpected_move);
++        if (unexpected_copy) out.copy_handles[0] = 77;
++        if (unexpected_move) out.move_handles[0] = 78;
++        auto* h = static_cast<CmifOutHeader*>(cmifGetAlignedDataStart(out.data_words,tls));
++        *h = {CMIF_OUT_HEADER_MAGIC,0,0,0}; std::memcpy(h+1,&ack,sizeof(ack));
++    } else {
++        auto* h = reinterpret_cast<CmifOutHeader*>(tls + 16);
++        if (short_reply) reinterpret_cast<HipcHeader*>(tls)->num_data_words=0;
++        if (oversized_reply || error_with_ack) reinterpret_cast<HipcHeader*>(tls)->num_data_words=16;
++        if (bad_magic) h->magic = 0;
++        if (bad_version) h->version = 2;
++        if (bad_padding) tls[48] = 1;
++    }
++    return 0;
++}
++}
++namespace {
++const KaihenCensusHeader header{KAIHEN_CENSUS_MAGIC, 1, 64, 64, 64, 0, 12, 1, 5, 0, 4, 2, 31250000};
++KaihenCensusRecord records[4] = {{1}, {2}, {3}, {4}};
++void reset() {
++    sends = waits = closes = creates = fail_at = 0;
++    transport_failure = reply_failure = create_failure = start_failure = wait_failure = close_failure = 0;
++    wrong_ack = false;
++    exit_pending = reply_pid = short_reply = oversized_reply = bad_magic = bad_version = bad_padding = error_with_ack = false;
++    unexpected_copy = unexpected_move = received_closes = 0; received_close_failure = 0;
++}
++void run() { assert(entry); entry(argument); }
++void start(CensusRelay& relay) {
++    assert(!relay.start(42, 211, header, records, 4, 100));
++    assert(relay.ownsControl(42, 211) && !relay.ready() && !sends);
++}
++}
++int main() {
++    reset();
++    CensusRelay relay;
++    start(relay);
++    assert(!relay.poll(101) && !waits && !closes);
++    assert(R_FAILED(relay.start(42, 211, header, records, 4, 101)) && creates == 1);
++    run();
++    assert(relay.ownsControl(42, 211)); // completion publication is not a joined worker
++    assert(relay.poll(102) && relay.ready() && !relay.ownsControl(42, 211));
++    assert(relay.report().state == CensusRelay::Complete && relay.report().acknowledged == 4);
++    assert(relay.report().header_acknowledged && sends == 5 && waits == 1 && closes == 1);
++    assert(!relay.poll(103) && waits == 1 && closes == 1);
++
++    reset();
++    CensusRelay failed;
++    fail_at = 3; transport_failure = KERNELRESULT(ConnectionClosed);
++    start(failed); run(); assert(failed.poll(102));
++    assert(sends == 3 && failed.report().acknowledged == 1 && failed.report().state == CensusRelay::Failed);
++    assert(failed.blocksControl(42, 211) && failed.disabledFor(211) && failed.ready());
++    assert(R_FAILED(failed.start(42, 211, header, records, 4, 103)) && sends == 3);
++    assert(R_FAILED(failed.start(43, 212, header, records, 4, 104)));
++    assert(failed.blocksControl(42, 211)); // another target never clears poison
++
++    reset();
++    CensusRelay legacy;
++    fail_at = 1; reply_failure = MAKERESULT(Module_Libnx, LibnxError_BadInput);
++    start(legacy); run(); assert(legacy.poll(102));
++    assert(legacy.report().state == CensusRelay::Unsupported && legacy.disabledFor(211));
++    assert(!legacy.blocksControl(42, 211) && sends == 1);
++
++    reset();
++    CensusRelay busy;
++    fail_at = 3; reply_failure = KAIHEN_CENSUS_RECEIVER_BUSY;
++    start(busy); run(); assert(busy.poll(102));
++    assert(busy.report().state == CensusRelay::Deferred && busy.report().acknowledged == 1);
++    assert(!busy.disabledFor(211) && !busy.blocksControl(42, 211));
++    fail_at = 0; reply_failure = 0; sends = 0;
++    assert(!busy.start(42, 211, header, records + 1, 3, 103));
++    run(); assert(busy.poll(104) && busy.report().acknowledged == 4 && sends == 4);
++
++    reset();
++    CensusRelay malformed;
++    wrong_ack = true;
++    start(malformed); run(); assert(malformed.poll(102));
++    assert(malformed.report().state == CensusRelay::Failed && malformed.blocksControl(42, 211));
++    assert(sends == 1); // bad success acknowledgement is not a legacy error
++
++    for (unsigned variant = 0; variant < 9; ++variant) {
++        reset(); CensusRelay invalid;
++        if (variant == 0) short_reply = true;
++        if (variant == 1) oversized_reply = true;
++        if (variant == 2) bad_magic = true;
++        if (variant == 3) bad_version = true;
++        if (variant == 4) bad_padding = true;
++        if (variant == 5) reply_pid = true;
++        if (variant == 6) unexpected_copy = 1;
++        if (variant == 7) unexpected_move = 1;
++        if (variant == 8) { error_with_ack = true; fail_at = 1; reply_failure = MAKERESULT(Module_Libnx,LibnxError_BadInput); }
++        start(invalid); run(); assert(invalid.poll(102));
++        assert(invalid.report().state == CensusRelay::Failed && invalid.blocksControl(42,211) && sends == 1);
++        assert(received_closes == (variant == 6 || variant == 7 ? 1u : 0u));
++    }
++
++    reset(); CensusRelay leaked;
++    unexpected_copy = 1; received_close_failure = MAKERESULT(345,224);
++    start(leaked); run(); assert(leaked.poll(102));
++    assert(leaked.report().state == CensusRelay::Retained && !leaked.ready());
++    assert(leaked.report().unexpected_handles == 1 && leaked.report().retained_handles == 1);
++    assert(!leaked.poll(103) && received_closes == 1); // failed closes retain ownership without replay
++
++    reset(); CensusRelay exiting;
++    start(exiting); run(); exit_pending = true;
++    assert(!exiting.poll(101) && !closes && exiting.ownsControl(42,211));
++    assert(exiting.poll(100 + armNsToTicks(2000000000)) && !closes && exiting.report().timed_out);
++    exit_pending = false;
++    assert(exiting.poll(100 + armNsToTicks(3000000000)) && exiting.blocksControl(42,211));
++
++    reset();
++    CensusRelay timeout;
++    start(timeout);
++    assert(timeout.poll(100 + armNsToTicks(2000000000)) && !waits && !closes);
++    assert(timeout.report().state == CensusRelay::Retained && timeout.ownsControl(42, 211));
++    assert(!timeout.poll(100 + armNsToTicks(3000000000)) && !sends);
++    run(); assert(timeout.poll(100 + armNsToTicks(4000000000)));
++    assert(timeout.ready() && timeout.report().timed_out && timeout.disabledFor(211));
++    assert(timeout.blocksControl(42, 211)); // late success never silently enables replay
++
++    reset();
++    CensusRelay bad_wait;
++    start(bad_wait); run(); wait_failure = MAKERESULT(345, 221);
++    assert(bad_wait.poll(102) && !bad_wait.ready() && bad_wait.ownsControl(42, 211));
++    assert(bad_wait.report().state == CensusRelay::Retained && waits == 1 && !closes);
++    assert(!bad_wait.poll(103) && waits == 1); // uncertain joins are not automatically replayed
++
++    reset();
++    CensusRelay bad_close;
++    start(bad_close); run(); close_failure = MAKERESULT(345, 222);
++    assert(bad_close.poll(102) && !bad_close.ready() && bad_close.ownsControl(42, 211));
++    assert(waits == 1 && closes == 1 && !bad_close.poll(103) && waits == 1 && closes == 1);
++
++    reset();
++    CensusRelay unstarted;
++    start_failure = MAKERESULT(345, 223); close_failure = MAKERESULT(345, 222);
++    assert(R_FAILED(unstarted.start(42, 211, header, records, 4, 100)));
++    assert(unstarted.ownsControl(42, 211) && !unstarted.ready() && !sends && !waits && closes == 1);
++    assert(!unstarted.poll(101) && closes == 1);
++    std::puts("census relay: real SDK messages, one worker, partial ACK, legacy detection, timeout and retained join ownership passed");
++}
+diff --git a/hen/tests/hen_census_test.cpp b/hen/tests/hen_census_test.cpp
+new file mode 100644
+index 0000000..40cf7db
+--- /dev/null
++++ b/hen/tests/hen_census_test.cpp
+@@ -0,0 +1,80 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstdio>
++#include <thread>
++#include "../source/census.hpp"
++#include "../../libkaihen/source/cmif_server.hpp"
++
++namespace { alignas(16) unsigned char tls[0x100]; }
++extern "C" void* armGetTls() { return tls; }
++
++int main() {
++    HenCensus census;
++    KaihenCensusRecord record = {};
++    assert(!census.read(0, record));
++    census.initialize(99, 31250000);
++    for (unsigned i = 0; i < 80; i++)
++        census.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated, i, 2, 3, 0,
++            KaihenCensusFlag_ResultKnown, 0, 100 + i);
++    auto header = census.header();
++    assert(header.magic == KAIHEN_CENSUS_MAGIC && header.schema == 1);
++    assert(header.first_sequence == 17 && header.next_sequence == 81);
++    assert(header.record_count == 64 && header.overwritten == 16 && header.flags == 1);
++    assert(header.source_mask == KAIHEN_CENSUS_SOURCE_MASK(KaihenCensusSource_Hen));
++    assert(!census.read(16, record) && !census.read(81, record));
++    for (uint64_t i = 17; i < 81; i++) {
++        assert(census.read(i, record));
++        assert(record.sequence == i && record.a == i - 1 && record.tick == 99 + i);
++    }
++    // Run actual SDK request packing and the actual production scalar query.
++    for (const uint32_t command : {KAIHEN_CENSUS_HEADER_COMMAND, KAIHEN_CENSUS_RECORD_COMMAND}) {
++        std::memset(tls, 0, sizeof(tls));
++        CmifRequestFormat format = {}; format.request_id = command;
++        format.data_size = command == KAIHEN_CENSUS_RECORD_COMMAND ? 8 : 0;
++        auto wire = cmifMakeRequest(tls, format);
++        const uint64_t sequence = 80;
++        if (format.data_size) std::memcpy(wire.data, &sequence, 8);
++        auto parsed = ounce::parseRequest(tls);
++        std::array<unsigned char, 64> output = {}; size_t bytes = 0;
++        const auto query = [&](bool scalar, uint32_t words, size_t size) {
++            return census.query(command, scalar, words, parsed.data, size, output.data(), bytes);
++        };
++        assert(parsed.valid && ounce::hasOnlyInlineData(parsed));
++        assert(query(true, parsed.hipc.meta.num_data_words, parsed.data_size) == HenCensus::Query::Success && bytes == 64);
++        if (format.data_size) {
++            std::memcpy(&record, output.data(), 64); assert(record.sequence == 80);
++        } else {
++            KaihenCensusHeader returned; std::memcpy(&returned, output.data(), 64); assert(returned.boot_id == 99);
++        }
++        assert(query(false, parsed.hipc.meta.num_data_words, parsed.data_size) == HenCensus::Query::Malformed && bytes == 0);
++        assert(query(true, parsed.hipc.meta.num_data_words + 1, parsed.data_size + 4) == HenCensus::Query::Malformed);
++        assert(query(true, parsed.hipc.meta.num_data_words, parsed.data_size - 1) == HenCensus::Query::Malformed);
++    }
++    unsigned char output[64]; size_t bytes;
++    uint64_t gone = 16;
++    assert(census.query(KAIHEN_CENSUS_RECORD_COMMAND, true, 10, &gone, 16, output, bytes) == HenCensus::Query::Unavailable);
++    assert(census.header().next_sequence == header.next_sequence); // no query mutation
++
++    // Real concurrent publication/sampling. Every successful SC snapshot must
++    // have a self-consistent name/lookup pair; a sampler never spins for it.
++    HenCensusSmMailbox mailbox;
++    std::atomic<bool> done{false};
++    std::thread worker([&] {
++        for (uint64_t i = 1; i <= 10000; i++) {
++            mailbox.publish(HenCensusSmMailbox::LookupPending, i, i);
++            mailbox.publish(HenCensusSmMailbox::LookupReturned, i, i, i == 10000 ? 123 : 0);
++        }
++        mailbox.publish(HenCensusSmMailbox::Ended, 10000, 10000, 45, 67);
++        done.store(true);
++    });
++    while (!done.load()) {
++        HenCensusSmMailbox::View view;
++        if (mailbox.sample(view)) assert(!(view.revision & 1) && view.name == view.lookup);
++    }
++    worker.join();
++    HenCensusSmMailbox::View final;
++    assert(mailbox.sample(final));
++    assert(final.stage == HenCensusSmMailbox::Ended && final.result == 45 && final.close_result == 67);
++    assert(final.failures == 1 && final.failure_name == 10000 && final.failure_result == 123);
++    std::puts("HEN census: production wrap/read, real CMIF scalar validation and concurrent atomic mailbox passed");
++}
 diff --git a/hen/tests/host/switch.h b/hen/tests/host/switch.h
 new file mode 100644
+index 0000000..9b98bbe
 --- /dev/null
 +++ b/hen/tests/host/switch.h
 @@ -0,0 +1,20 @@
@@ -1928,6 +3627,7 @@ new file mode 100644
 +}
 diff --git a/hen/tests/host/sys/lock.h b/hen/tests/host/sys/lock.h
 new file mode 100644
+index 0000000..b641abc
 --- /dev/null
 +++ b/hen/tests/host/sys/lock.h
 @@ -0,0 +1,6 @@
@@ -1939,6 +3639,7 @@ new file mode 100644
 +typedef struct { uint32_t lock; uint32_t counter; } _LOCK_RECURSIVE_T;
 diff --git a/hen/tests/lifecycle_server_test.cpp b/hen/tests/lifecycle_server_test.cpp
 new file mode 100644
+index 0000000..6077785
 --- /dev/null
 +++ b/hen/tests/lifecycle_server_test.cpp
 @@ -0,0 +1,106 @@
@@ -2050,6 +3751,7 @@ new file mode 100644
 +}
 diff --git a/hen/tests/loader_gate_test.cpp b/hen/tests/loader_gate_test.cpp
 new file mode 100644
+index 0000000..638fd25
 --- /dev/null
 +++ b/hen/tests/loader_gate_test.cpp
 @@ -0,0 +1,468 @@
@@ -2523,6 +4225,7 @@ new file mode 100644
 +}
 diff --git a/hen/tests/reload_test.cpp b/hen/tests/reload_test.cpp
 new file mode 100644
+index 0000000..3747804
 --- /dev/null
 +++ b/hen/tests/reload_test.cpp
 @@ -0,0 +1,302 @@
@@ -2828,11 +4531,363 @@ new file mode 100644
 +    journal(); flow(); lifecycleContract(); publicationRaces(); wire();
 +    std::puts("reload: real orchestration failure matrix, idempotency/expiry/quarantine and ABI envelopes passed");
 +}
+diff --git a/hen/tests/server_census_test.cpp b/hen/tests/server_census_test.cpp
+new file mode 100644
+index 0000000..f905428
+--- /dev/null
++++ b/hen/tests/server_census_test.cpp
+@@ -0,0 +1,345 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Actual HenServer scheduler/registry + actual relay + SDK CMIF + production
++// plugin-control receiver. GameArm/PluginReload and Horizon execution are
++// narrow deterministic boundaries, not a Switch kernel/FS capacity model.
++#include <algorithm>
++#include <array>
++#include <atomic>
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include <new>
++#include <optional>
++#include <vector>
++#include <switch.h>
++#include <switch/arm/counter.h>
++extern "C" {
++#include <switch/kernel/random.h>
++#include <switch/kernel/jit.h>
++#include <switch/services/set.h>
++#include <switch/services/fs.h>
++}
++struct SchedulerGateClock {
++    static u64 now() { return 0; }
++    static u64 toNs(u64 value) { return value * 32; }
++    static u64 toTicks(u64 value) { return value / 32; }
++};
++// Reuse the existing test-only friend, without adding a production seam.
++#define KAIHEN_GAME_ARM_TEST_CLOCK SchedulerGateClock
++#include "../source/game_arm.hpp"
++#undef KAIHEN_GAME_ARM_TEST_CLOCK
++#include "../source/sm_proxy.hpp"
++#include "../source/plugin_reload.hpp"
++#include "../source/census_relay.hpp"
++#include "../../common/control.h"
++#include "../../libkaihen/source/cmif_server.hpp"
++// Dependencies/standard headers are parsed normally first. Access is relaxed
++// only for this fixture's actual HenServer declaration; production is frozen.
++#define private public
++#include "../source/server.hpp"
++#undef private
++
++struct GameArmLifetimeTest {
++    static void observedExit(GameArm& game, u64 pid) { game.census_last_exit_pid_ = pid; }
++};
++
++namespace scheduler_fixture {
++struct Environment {
++    u64 now = armNsToTicks(100000000) + 10;
++    u64 selected_pid = 0;
++    bool gate_idle = true, process_exists = true, kernel_exited = false;
++    unsigned game_steps = 0, lease_attempts = 0, process_checks = 0;
++    unsigned creates = 0, starts = 0, waits = 0, closes = 0, handle_closes = 0;
++    unsigned service_acquisitions = 0, sleeps = 0, sends = 0, replies = 0;
++    unsigned pid_queries = 0;
++    Result wait_failure = 0, close_failure = 0;
++    u64 busy_sequence = 0, failed_sequence = 0;
++    bool busy_sent = false;
++    ThreadFunc worker = nullptr;
++    void* argument = nullptr;
++    std::vector<u64> attempted, accepted;
++    std::vector<Handle> closed_handles;
++};
++Environment* environment;
++u64 now() { assert(environment); return environment->now; }
++}
++// The production scheduler's clock call is substituted in this TU only. The
++// real counter header was already parsed; no native instruction is executed.
++#define armGetSystemTick scheduler_fixture::now
++#include "../source/server.cpp"
++#undef armGetSystemTick
++#include "../source/census_relay.cpp"
++#include "../../libkaihen/source/plugin_server.cpp"
++#include "../../../../include/moader/host_census.hpp"
++
++namespace scheduler_fixture {
++alignas(16) u8 tls[0x100];
++PluginService endpoint;
++moader::HostCensus* receiver;
++Result receive(u32 command, const void* input, size_t bytes, void* output,
++               size_t* output_bytes, void*) {
++    auto& env = *environment;
++    *output_bytes = 0;
++    if (command == KAIHEN_CENSUS_RECORD_COMMAND) {
++        KaihenCensusRecord record; assert(bytes == sizeof(record)); std::memcpy(&record, input, bytes);
++        env.attempted.push_back(record.sequence);
++        if (record.sequence == env.busy_sequence && !env.busy_sent) {
++            env.busy_sent = true;
++            return KAIHEN_CENSUS_RECEIVER_BUSY;
++        }
++    }
++    KaihenCensusAck ack{};
++    bool busy = false;
++    if (!receiver->receive(command, input, bytes, ack, &busy))
++        return busy ? KAIHEN_CENSUS_RECEIVER_BUSY : KAIHEN_CENSUS_RECEIVER_REJECTED;
++    if (command == KAIHEN_CENSUS_RECORD_COMMAND) env.accepted.push_back(ack.sequence);
++    std::memcpy(output, &ack, sizeof(ack)); *output_bytes = sizeof(ack);
++    return 0;
++}
++}
++
++// GameArm gate/PM engine is intentionally not run. The actual scheduler must
++// consult diagnosticsIdle and suppress step/lease admission at its real sites.
++GameArm::~GameArm() = default;
++bool GameArm::diagnosticsIdle() const { return scheduler_fixture::environment->gate_idle; }
++HenGameStatus GameArm::status() const {
++    HenGameStatus value{}; value.process_id = scheduler_fixture::environment->selected_pid; return value;
++}
++void GameArm::step() { scheduler_fixture::environment->game_steps++; }
++bool GameArm::processExists(u64) { scheduler_fixture::environment->process_checks++; return scheduler_fixture::environment->process_exists; }
++bool GameArm::acquireReloadLease(PluginLaunchContext&) { scheduler_fixture::environment->lease_attempts++; assert(false); return false; }
++void GameArm::releaseReloadLease() { assert(false); }
++// No active Reload worker is created. These definitions satisfy the actual
++// admission method's references; reaching them is outside this fixture.
++Result PluginReload::start(const Input&, const HenPluginReloadStatus&) { assert(false); return 1; }
++HenPluginReloadStatus PluginReload::status() { assert(false); return {}; }
++HenPluginReloadDiagnostics PluginReload::diagnostics() { assert(false); return {}; }
++bool PluginReload::join() { assert(false); return false; }
++void SmProxy::sampleCensus() {} // worker mailboxes have their own production tests
++Result SmProxy::openSession(Handle*) { assert(false); return 1; }
++
++extern "C" {
++void* armGetTls() { return scheduler_fixture::tls; }
++void mutexLock(Mutex*) {}
++void mutexUnlock(Mutex*) {}
++Result threadCreate(Thread* thread, ThreadFunc entry, void* argument, void*, size_t, int, int) {
++    auto& env = *scheduler_fixture::environment;
++    assert(!env.worker); ++env.creates; thread->handle = 80;
++    env.worker = entry; env.argument = argument; env.kernel_exited = false;
++    return 0;
++}
++Result threadStart(Thread*) { ++scheduler_fixture::environment->starts; return 0; }
++Result threadWaitForExit(Thread*) { assert(false && "scheduler may not block on a worker"); return 1; }
++Result svcWaitSynchronization(s32* index, const Handle* handles, s32 count, u64 timeout) {
++    auto& env = *scheduler_fixture::environment;
++    assert(count == 1 && handles[0] == 80 && timeout == 0); ++env.waits;
++    *index = 0;
++    return env.kernel_exited ? env.wait_failure : KERNELRESULT(TimedOut);
++}
++Result threadClose(Thread*) {
++    auto& env = *scheduler_fixture::environment; ++env.closes;
++    if (env.close_failure) return env.close_failure;
++    env.worker = nullptr; env.argument = nullptr; return 0;
++}
++Result svcCloseHandle(Handle handle) {
++    auto& env = *scheduler_fixture::environment; ++env.handle_closes; env.closed_handles.push_back(handle); return 0;
++}
++void svcSleepThread(s64) { ++scheduler_fixture::environment->sleeps; }
++Result svcGetProcessId(u64* pid, Handle handle) {
++    ++scheduler_fixture::environment->pid_queries; assert(handle == 77); *pid = 9000; return 0;
++}
++void setsysExit() { assert(false); }
++Result svcCreateEvent(Handle*, Handle*) { assert(false); return 1; }
++Result svcSignalEvent(Handle) { assert(false); return 1; }
++Result svcClearEvent(Handle) { assert(false); return 1; }
++Result svcCreateSession(Handle*, Handle*, u32, u64) { assert(false && "diagnostic export created a session"); return 1; }
++Result smGetServiceWrapper(Service*, SmServiceName) {
++    ++scheduler_fixture::environment->service_acquisitions; assert(false); return 1;
++}
++Result smGetServiceOriginal(Handle*, SmServiceName) {
++    ++scheduler_fixture::environment->service_acquisitions; assert(false); return 1;
++}
++Result fsStorageRead(FsStorage*, s64, void*, u64) { assert(false); return 1; }
++Result fsStorageWrite(FsStorage*, s64, const void*, u64) { assert(false); return 1; }
++Result svcReplyAndReceive(s32*, const Handle*, s32 count, Handle reply, u64 timeout) {
++    assert(count == 0 && reply == 20 && timeout == 0); ++scheduler_fixture::environment->replies;
++    return KERNELRESULT(TimedOut);
++}
++Result svcSendSyncRequest(Handle handle) {
++    using namespace scheduler_fixture;
++    auto& env = *environment; assert(handle == 42 || handle == 43); ++env.sends;
++    const auto request = ounce::parseRequest(tls);
++    assert(request.valid && ounce::hasOnlyInlineData(request) && isCensusFrame(request));
++    if (request.command_id == KAIHEN_CENSUS_RECORD_COMMAND) {
++        KaihenCensusRecord record; std::memcpy(&record, request.data, sizeof(record));
++        if (record.sequence == env.failed_sequence) return KERNELRESULT(ConnectionClosed);
++    }
++    assert(!serveControlRequest(&endpoint)); // actual production CMIF server
++    return 0;
++}
++}
++
++namespace scheduler_fixture {
++struct Fixture {
++    Environment env;
++    HenServer server;
++    moader::HostCensus cache{123};
++    Fixture() {
++        environment = &env; receiver = &cache;
++        endpoint = {}; endpoint.control_session = 20;
++        endpoint.diagnostics_handler = receive;
++        server.census_.initialize(12, 31250000);
++        for (u64 i = 1; i <= 3; i++) server.census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_HenCounts, i);
++        server.census_relay_ = new CensusRelay;
++        server.reload_instance_ = 12; server.reload_configured_ = true;
++        server.plugin_count_ = 1;
++        std::strcpy(server.plugins_[0].name.name, "moader");
++        server.plugins_[0].control_session = 42; server.plugins_[0].process_id = 211;
++    }
++    ~Fixture() {
++        // Modeled whole-process teardown AFTER assertions. A retained fake
++        // worker has no OS thread and is never invoked again. Production's
++        // retention is tested before this harness-only memory disposal.
++        env.worker = nullptr; env.argument = nullptr;
++        auto* relay = server.census_relay_; server.census_relay_ = nullptr; delete relay;
++        for (auto& plugin : server.plugins_) plugin.control_session = INVALID_HANDLE;
++        for (auto& handle : server.homebrew_sessions_) handle = INVALID_HANDLE;
++        for (auto& handle : server.homebrew_processes_) handle = INVALID_HANDLE;
++        assert(env.service_acquisitions == 0);
++    }
++    void tick() { server.stepBetweenRequests(); }
++    void runWorker(bool exited = true) {
++        assert(env.worker); const auto worker = env.worker; void* const argument = env.argument;
++        worker(argument); env.kernel_exited = exited;
++    }
++    void interval() { env.now += armNsToTicks(100000001); }
++    void pinnedAdmission() {
++        const auto sends = env.sends, handles = env.handle_closes, processes = env.process_checks;
++        HenPluginName name{}; std::strcpy(name.name, "moader"); Handle opened = 0;
++        assert(server.openPlugin(name, &opened) == reload::Busy && opened == 0);
++        server.removePlugin(0); server.removeExitedPlugins();
++        assert(server.plugin_count_ == 1 && server.plugins_[0].control_session == 42);
++        assert(env.handle_closes == handles && env.process_checks == processes && env.sends == sends);
++        HenPluginReloadRequest request{};
++        request.instance_id = 12; request.nonce = 1; request.expected_process_id = 211; request.expected_generation = 1;
++        std::strcpy(request.name, "moader"); HenPluginReloadStatus output{};
++        // A homebrew client arriving after a batch began may ask to reload.
++        // Its existing channel/process binding is supplied, not acquired here.
++        const Handle previous_channel = server.homebrew_sessions_[0];
++        const Handle previous_process = server.homebrew_processes_[0];
++        server.homebrew_sessions_[0] = 55; server.homebrew_processes_[0] = 77;
++        assert(server.submitReload(0, request, output) == reload::Busy);
++        server.homebrew_sessions_[0] = previous_channel;
++        server.homebrew_processes_[0] = previous_process;
++        assert(env.lease_attempts == 0 && env.sends == sends);
++    }
++};
++}
++
++int main() {
++    using namespace scheduler_fixture;
++    {
++        Fixture f;
++        f.server.homebrew_sessions_[0] = 55; f.server.homebrew_processes_[0] = 77; f.tick();
++        assert(!f.env.creates && !f.env.sends);
++        f.server.homebrew_sessions_[0] = 0;
++        f.server.homebrew_processes_[0] = 0;
++        f.server.reload_journal_.active = 999; f.tick();
++        assert(!f.env.creates);
++        f.server.reload_journal_.active = 0; f.env.gate_idle = false; f.tick();
++        assert(!f.env.creates);
++        f.env.gate_idle = true;
++        const auto steps = f.env.game_steps; f.tick();
++        assert(f.env.creates == 1 && f.env.game_steps == steps && !f.env.sends);
++        f.env.process_exists = false; f.pinnedAdmission();
++        f.tick(); assert(f.env.creates == 1 && f.env.game_steps == steps);
++        f.runWorker(false); // finished publication alone is NOT kernel exit
++        f.tick();
++        assert(f.server.census_delivered_ == 0 && !f.env.closes && f.env.game_steps == steps);
++        assert(f.server.census_relay_->ownsControl(42, 211)); f.pinnedAdmission();
++        f.env.kernel_exited = true; f.tick();
++        assert(f.server.census_delivered_ == 3 && f.server.census_header_delivered_);
++        assert(f.env.closes == 1 && f.env.game_steps == steps + 1);
++        assert(f.env.accepted == std::vector<u64>({1, 2, 3}));
++        f.server.removeExitedPlugins();
++        assert(!f.server.plugin_count_ && f.env.process_checks == 1);
++        assert(std::count(f.env.closed_handles.begin(), f.env.closed_handles.end(), 42) == 1);
++    }
++    {
++        Fixture f; f.env.busy_sequence = 2; f.tick(); f.runWorker(); f.tick();
++        assert(f.server.census_delivered_ == 1 && f.server.census_relay_->report().state == CensusRelay::Deferred);
++        assert(f.env.accepted == std::vector<u64>({1}));
++        f.interval(); f.tick(); f.runWorker(); f.tick();
++        assert(f.env.accepted == std::vector<u64>({1, 2, 3, 4})); // includes the single Deferred event
++        assert(f.env.attempted == std::vector<u64>({1, 2, 2, 3, 4}));
++        assert(f.server.census_delivered_ == f.env.accepted.back());
++        assert(f.env.creates == 2); // one retry batch, never replay accepted record 1
++    }
++    {
++        Fixture f;
++        f.server.homebrew_sessions_[0] = 55; f.server.homebrew_processes_[0] = 77;
++        f.env.selected_pid = 800; f.env.gate_idle = false;
++        GameArmLifetimeTest::observedExit(f.server.game_, 800);
++        f.tick();
++        assert(f.server.census_exit_snapshot_ == 800 && !f.env.creates);
++        const auto after_snapshot = f.server.census_.header().next_sequence;
++        KaihenCensusRecord counts{};
++        assert(f.server.census_.read(after_snapshot - 1, counts));
++        assert(counts.event == KaihenCensusEvent_HenCounts && counts.a == 1 && counts.b == 1);
++        f.tick(); assert(f.server.census_.header().next_sequence == after_snapshot); // one exit snapshot
++        f.env.gate_idle = true; f.tick();
++        assert(f.env.creates == 1); // observed exit permits capture of still-retained channels
++        f.runWorker(); f.tick();
++        assert(f.server.census_delivered_ == 4 && f.server.homebrew_sessions_[0] == 55);
++        assert(!f.env.pid_queries && !f.env.process_checks && !f.env.handle_closes);
++    }
++    {
++        Fixture f;
++        f.server.homebrew_sessions_[0] = 55; f.server.homebrew_processes_[0] = 77;
++        GameArmLifetimeTest::observedExit(f.server.game_, 800);
++        f.env.selected_pid = 801; f.tick();
++        assert(!f.env.creates); // a different known live host restores the zero-channel guard
++        assert(!f.env.pid_queries && !f.env.process_checks);
++        f.server.homebrew_sessions_[0] = f.server.homebrew_processes_[0] = 0;
++        f.tick(); assert(f.env.creates == 1); f.runWorker(); f.tick();
++        assert(!f.env.pid_queries && !f.env.process_checks);
++    }
++    {
++        Fixture f;
++        f.server.homebrew_sessions_[0] = 55; f.server.homebrew_processes_[0] = 77;
++        GameArmLifetimeTest::observedExit(f.server.game_, 800);
++        f.env.selected_pid = 0; f.tick(); // cached exit survives the modeled package-reset status
++        assert(f.env.creates == 1 && f.server.game_.lastObservedExit() == 800);
++        assert(!f.env.pid_queries && !f.env.process_checks); f.runWorker(); f.tick();
++    }
++    {
++        Fixture f; f.env.failed_sequence = 2; f.tick(); f.runWorker(); f.tick();
++        assert(f.server.census_delivered_ == 1 && f.server.census_relay_->ready());
++        f.env.process_exists = false; f.pinnedAdmission();
++        const auto creates = f.env.creates;
++        // Deliberate private registry replacement tests the defensive new-PID
++        // poison boundary; production removal itself correctly refused above.
++        f.server.plugins_[0].process_id = 212; f.server.plugins_[0].control_session = 43;
++        f.interval(); f.tick();
++        assert(f.env.creates == creates && f.server.census_relay_->disabledFor(212));
++    }
++    for (bool fail_close : {false, true}) {
++        Fixture f; f.tick(); f.runWorker();
++        if (fail_close) f.env.close_failure = MAKERESULT(345, 222);
++        else f.env.wait_failure = MAKERESULT(345, 221);
++        const auto steps = f.env.game_steps; f.tick();
++        assert(!f.server.census_relay_->ready() && f.env.game_steps == steps);
++        f.env.process_exists = false; f.pinnedAdmission();
++        const auto waits = f.env.waits, closes = f.env.closes;
++        f.env.wait_failure = f.env.close_failure = 0; f.interval(); f.tick();
++        assert(f.env.waits == waits && f.env.closes == closes && f.env.creates == 1);
++        assert(f.server.census_relay_->ownsControl(42, 211));
++    }
++    {
++        Fixture f; f.tick(); const auto steps = f.env.game_steps;
++        f.env.now += armNsToTicks(2000000001); f.tick();
++        assert(f.server.census_relay_->report().timed_out && f.server.census_delivered_ == 0);
++        assert(f.env.game_steps == steps && !f.env.sends); f.pinnedAdmission();
++    }
++    std::puts("actual HenServer scheduler/registry + relay/CMIF/receiver: admission, cached-exit exception, ownership pinning, ACK cursor, Busy resume and boot poison passed");
++}
 diff --git a/hen/tests/session_lifetime_test.cpp b/hen/tests/session_lifetime_test.cpp
 new file mode 100644
+index 0000000..0cda1ea
 --- /dev/null
 +++ b/hen/tests/session_lifetime_test.cpp
-@@ -0,0 +1,512 @@
+@@ -0,0 +1,564 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// Actual plugin runtime and SM proxy loops, real SDK clone/close/IPC packing,
 +// counted fake kernel. FS's quota/peer teardown are a MODEL, not device proof.
@@ -3164,6 +5219,7 @@ new file mode 100644
 +struct GameArmLifetimeTest {
 +    static void run(Handle root) {
 +        using namespace kernel;
++        HenCensus diagnostics; diagnostics.initialize(888, 1000000000);
 +        realm = 1; memory.fill(0);
 +        const unsigned baseline = fs_live;
 +        GameArm game;
@@ -3176,6 +5232,7 @@ new file mode 100644
 +            game.memory_config_.storage = service(Kind::Other, 1);
 +            game.monitor_ = service(Kind::Monitor, 1);
 +        }
++        game.setCensus(&diagnostics);
 +        serviceCreate(pmdmntGetServiceSession(), game.monitor_);
 +        game.memory_.emplace(game.memory_config_, game.reader_session_, game.filesystem_process_);
 +        assert(!game.memory_->begin());
@@ -3194,11 +5251,13 @@ new file mode 100644
 +        put<u64>(game.code_.address + 0x18, Domain);
 +        game.gate_.emplace(*game.memory_, game.gate_config_);
 +        game.state_ = GameArm::State::WaitExit; game.started_ = true; game.status_.process_id = 800;
++        assert(game.diagnosticsIdle());
 +        assert(fs_live == baseline + 2); // GameArm root + active package session
 +        game.step(); // PID gone, but the actual installed CodeFS still exists
 +        assert(game.package_ && game.state_ == GameArm::State::WaitExit);
 +        PluginLaunchContext lease{};
 +        assert(game.acquireReloadLease(lease));
++        assert(!game.diagnosticsIdle());
 +        put<u64>(game.code_.address + 0x20, OtherObject); // same slot reused for another object
 +        game.step(); // reload lease keeps the original tracking/resources pinned
 +        assert(game.package_ && fs_live == baseline + 2);
@@ -3206,6 +5265,17 @@ new file mode 100644
 +        assert(!game.package_ && game.state_ == GameArm::State::OpenPackage && game.status_.serial == 1);
 +        assert(fs_live == baseline + 1); // package session really closed in the counted kernel
 +        game.step(); assert(game.state_ == GameArm::State::WaitForInput);
++        assert(game.diagnosticsIdle());
++        bool code_seen = false, donor_seen = false, gone_seen = false, match_seen = false, close_seen = false;
++        for (u64 sequence = diagnostics.header().first_sequence; sequence < diagnostics.header().next_sequence; sequence++) {
++            KaihenCensusRecord event; assert(diagnostics.read(sequence, event));
++            if (event.event == KaihenCensusEvent_GameCodeIdentity) { code_seen = true; assert(event.b == DonorObject); }
++            if (event.event == KaihenCensusEvent_GameDonorIdentity) { donor_seen = true; assert(event.b == StockObject); }
++            if (event.event == KaihenCensusEvent_GameProcessGone) gone_seen = true;
++            if (event.event == KaihenCensusEvent_GameDomainMatch && event.a == 0) match_seen = true;
++            if (event.event == KaihenCensusEvent_GamePackageClosed) { close_seen = true; assert(!(event.flags & KaihenCensusFlag_ResultKnown)); }
++        }
++        assert(code_seen && donor_seen && gone_seen && match_seen && close_seen);
 +        ounce::DomainEntry recycled[] = {{0x100, 0x200, 1}};
 +        assert(!containsEntry(recycled, 1, {0x100, 0x300, 1}));
 +    }
@@ -3284,6 +5354,7 @@ new file mode 100644
 +
 +int main() {
 +    using namespace kernel;
++    HenCensus diagnostics; diagnostics.initialize(777, 1000000000); proxy.setCensus(&diagnostics);
 +    { std::lock_guard guard(lock); root = service(Kind::Fs, 1); master = service(Kind::Master, 1); }
 +    proxy.setMaster(master);
 +    Handle sm_client = 0; assert(!proxy.openSession(&sm_client));
@@ -3316,6 +5387,13 @@ new file mode 100644
 +        assert(fs_live == steady_fs && fs_peak <= FsBudget);
 +    }
 +    stop(resident); finishProxies(proxy); assert(fs_live == 1);
++    proxy.sampleCensus();
++    bool census_reaped = false;
++    for (u64 sequence = diagnostics.header().first_sequence; sequence < diagnostics.header().next_sequence; sequence++) {
++        KaihenCensusRecord event; assert(diagnostics.read(sequence, event));
++        census_reaped |= event.event == KaihenCensusEvent_SmReaped;
++    }
++    assert(census_reaped && diagnostics.header().overwritten > 0);
 +    GameArmLifetimeTest::run(root); assert(fs_live == 1);
 +    // HOME/process exit while a service lookup is outstanding: execute the
 +    // real proxy reply path and kernel-model move cleanup, not just encoding.
@@ -3341,11 +5419,41 @@ new file mode 100644
 +    fail_start = fail_close = 1;
 +    assert(proxy.openSession(&sm_client) == StartFailure && tasks.size() == 1);
 +    assert(!proxy.collectFinishedSessions() && tasks.empty()); // unstarted: no wait
++    // More than one bounded sampler slice. Sampling alone must never join or
++    // reclaim these ended contexts; a later explicit collector still owns it.
++    std::array<Handle, 20> census_clients{};
++    for (Handle& handle : census_clients) assert(!proxy.openSession(&handle));
++    for (Handle handle : census_clients) svcCloseHandle(handle);
++    waitForEnded();
++    const unsigned sample_waits = wait_calls, sample_closes = close_calls;
++    for (unsigned slice = 0; slice < 4; slice++) {
++        const auto first = diagnostics.header().next_sequence;
++        proxy.sampleCensus();
++        unsigned terminal_events = 0;
++        for (u64 seq = first; seq < diagnostics.header().next_sequence; seq++) {
++            KaihenCensusRecord event; assert(diagnostics.read(seq, event));
++            terminal_events += event.event == KaihenCensusEvent_SmEnded;
++        }
++        assert(terminal_events <= 16);
++    }
++    assert(wait_calls == sample_waits && close_calls == sample_closes && tasks.size() == 20);
++    KaihenCensusRecord counts = {};
++    for (u64 seq = diagnostics.header().first_sequence; seq < diagnostics.header().next_sequence; seq++) {
++        KaihenCensusRecord event; assert(diagnostics.read(seq, event));
++        if (event.event == KaihenCensusEvent_SmCounts) counts = event;
++    }
++    assert(counts.a == 0 && counts.b == 20 && counts.c == 0);
++    const u64 steady_sequence = diagnostics.header().next_sequence;
++    for (unsigned slice = 0; slice < 4; slice++) proxy.sampleCensus();
++    assert(diagnostics.header().next_sequence == steady_sequence); // no idle count flood
++    finishProxies(proxy);
++    assert(tasks.empty());
 +    svcCloseHandle(root); svcCloseHandle(master);
 +    assert(!fs_live && handles.empty());
 +    std::puts("actual plugin runtime/SM proxy: 40 reloads, host exits, next-game service admission, bounded clone/handle counts and retained failed joins passed");
 +}
 diff --git a/libkaihen/include/kaihen.h b/libkaihen/include/kaihen.h
+index eb2ffbd..f33afc4 100644
 --- a/libkaihen/include/kaihen.h
 +++ b/libkaihen/include/kaihen.h
 @@ -24,6 +24,7 @@
@@ -3356,7 +5464,7 @@ diff --git a/libkaihen/include/kaihen.h b/libkaihen/include/kaihen.h
  
  /// Gets the ldr:ro session that hbloader passes to the NRO. The Service does
  /// not own the handle: do not close it. Returns LibnxError_NotFound when the
-@@ -167,3 +168,20 @@
+@@ -167,3 +168,20 @@ NX_INLINE Result henOpenPlugin(Service* s, const HenPluginName* name, Service* o
          serviceCreate(out, session);
      return rc;
  }
@@ -3377,18 +5485,122 @@ diff --git a/libkaihen/include/kaihen.h b/libkaihen/include/kaihen.h
 +NX_INLINE Result henGetPluginReloadDiagnostics(Service* s, u64 operation_id, HenPluginReloadDiagnostics* out) {
 +    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginReloadDiagnostics, operation_id, *out);
 +}
+diff --git a/libkaihen/include/kaihen/census.h b/libkaihen/include/kaihen/census.h
+new file mode 100644
+index 0000000..44906d1
+--- /dev/null
++++ b/libkaihen/include/kaihen/census.h
+@@ -0,0 +1,96 @@
++/* SPDX-License-Identifier: ISC */
++#pragma once
++
++#include <stdint.h>
++#include <stddef.h>
++
++/* Optional diagnostic extension. This is independent of protocol 7 and is
++ * feature-detected. Reading or accepting these frames must only copy memory:
++ * no service acquisition, FS/PM/RO call, cleanup, or native handle transfer. */
++#define KAIHEN_CENSUS_MAGIC UINT32_C(0x31534348) /* HCS1, little endian */
++#define KAIHEN_CENSUS_SCHEMA 1
++#define KAIHEN_CENSUS_CAPACITY 64
++#define KAIHEN_CENSUS_HEADER_COMMAND UINT32_C(0x4d4f0010)
++#define KAIHEN_CENSUS_RECORD_COMMAND UINT32_C(0x4d4f0011)
++#define KAIHEN_CENSUS_HEADER_OVERWRITTEN UINT32_C(1)
++#define KAIHEN_CENSUS_SOURCE_MASK(source) (UINT32_C(1) << (source))
++#define KAIHEN_CENSUS_KNOWN_SOURCE_MASK UINT32_C(14)
++/* Completed receiver replies: Busy confirms the frame was not accepted and
++ * may be sent later; Rejected is terminal for this diagnostic stream. */
++#define KAIHEN_CENSUS_RECEIVER_BUSY (UINT32_C(345) | (UINT32_C(9) << 9))
++#define KAIHEN_CENSUS_RECEIVER_REJECTED (UINT32_C(345) | (UINT32_C(10) << 9))
++
++enum KaihenCensusSource {
++    KaihenCensusSource_Hen = 1,
++    KaihenCensusSource_Sm = 2,
++    KaihenCensusSource_Game = 3,
++};
++enum KaihenCensusFlags {
++    KaihenCensusFlag_OwnerKnown = 1,
++    KaihenCensusFlag_Cached = 2,
++    KaihenCensusFlag_ResultKnown = 4,
++    KaihenCensusFlag_Before = 8,
++    KaihenCensusFlag_After = 16,
++    KaihenCensusFlag_Incomplete = 32,
++};
++enum KaihenCensusEvent {
++    KaihenCensusEvent_Boot = 1,
++    KaihenCensusEvent_SessionCreated = 2,
++    KaihenCensusEvent_SessionClosed = 3,
++    KaihenCensusEvent_SessionCloseFailure = 4,
++    KaihenCensusEvent_FsClone = 5,
++    KaihenCensusEvent_HenCounts = 6,
++    KaihenCensusEvent_ServerFailure = 7,
++    KaihenCensusEvent_RelayState = 8,
++    KaihenCensusEvent_SmCreated = 16,
++    KaihenCensusEvent_SmStarted = 17,
++    KaihenCensusEvent_SmEnded = 18,
++    KaihenCensusEvent_SmReaped = 19,
++    KaihenCensusEvent_SmFailure = 20,
++    KaihenCensusEvent_SmLookupBegin = 21,
++    KaihenCensusEvent_SmLookupEnd = 22,
++    KaihenCensusEvent_SmCounts = 23,
++    KaihenCensusEvent_SmMailboxLoss = 24,
++    KaihenCensusEvent_GameState = 32,
++    KaihenCensusEvent_GameInput = 33,
++    KaihenCensusEvent_GameCodeIdentity = 34,
++    KaihenCensusEvent_GameDonorIdentity = 35,
++    KaihenCensusEvent_GameProcessGone = 36,
++    KaihenCensusEvent_GameDomainMatch = 37,
++    KaihenCensusEvent_GamePackageClosed = 38,
++    KaihenCensusEvent_GameFault = 39,
++};
++
++typedef struct {
++    uint32_t magic;
++    uint16_t schema, header_bytes;
++    uint16_t record_bytes, capacity;
++    uint32_t flags;
++    uint64_t boot_id;
++    uint64_t first_sequence, next_sequence, overwritten;
++    uint32_t record_count, source_mask;
++    uint64_t tick_frequency;
++} KaihenCensusHeader;
++
++typedef struct {
++    uint64_t sequence, tick, owner_pid;
++    uint32_t source, event, result, flags;
++    uint64_t a, b, c;
++} KaihenCensusRecord;
++
++/* Header acknowledgement has sequence 0; a record acknowledgement echoes its
++ * committed sequence. A relay never replays an uncertain native request. */
++typedef struct {
++    uint64_t boot_id, sequence;
++} KaihenCensusAck;
++
++#ifdef __cplusplus
++static_assert(sizeof(KaihenCensusHeader) == 64);
++static_assert(sizeof(KaihenCensusRecord) == 64);
++static_assert(sizeof(KaihenCensusAck) == 16);
++static_assert(offsetof(KaihenCensusRecord, a) == 40);
++#else
++_Static_assert(sizeof(KaihenCensusHeader) == 64, "census header layout");
++_Static_assert(sizeof(KaihenCensusRecord) == 64, "census record layout");
++_Static_assert(sizeof(KaihenCensusAck) == 16, "census acknowledgement layout");
++#endif
 diff --git a/libkaihen/include/kaihen/plugin.h b/libkaihen/include/kaihen/plugin.h
+index 816737e..2c4ef84 100644
 --- a/libkaihen/include/kaihen/plugin.h
 +++ b/libkaihen/include/kaihen/plugin.h
-@@ -51,6 +51,7 @@
+@@ -51,6 +51,8 @@
  
  #include <switch.h>
  #include "protocol.h"
 +#include "reload.h"
++#include "census.h"
  
  #ifdef __cplusplus
  extern "C" {
-@@ -96,6 +97,13 @@
+@@ -96,6 +98,13 @@ typedef Result (*PluginServiceHandler)(u32 command_id, const void* input,
  /// Maximum number of client sessions that a PluginService serves at once.
  #define KAIHEN_PLUGIN_MAX_SESSIONS 16
  
@@ -3402,7 +5614,7 @@ diff --git a/libkaihen/include/kaihen/plugin.h b/libkaihen/include/kaihen/plugin
  /**
   * @brief A simple scalar-command server.
   * @note Two threads serve it. The control thread answers HEN's requests to
-@@ -118,17 +126,31 @@
+@@ -118,17 +127,42 @@ typedef struct {
      Result worker_result;
      Result control_result;
      bool started;
@@ -3411,6 +5623,8 @@ diff --git a/libkaihen/include/kaihen/plugin.h b/libkaihen/include/kaihen/plugin
 +    PluginServiceThreadState control_thread_state;
 +    PluginServiceThreadState worker_thread_state;
 +    bool stopping;
++    PluginServiceHandler diagnostics_handler;
++    void* diagnostics_context;
  } PluginService;
  
  /// Starts the threads that create client sessions through the control session and serve them.
@@ -3422,6 +5636,15 @@ diff --git a/libkaihen/include/kaihen/plugin.h b/libkaihen/include/kaihen/plugin
 +Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
 +                          PluginServiceHandler handler, void* context,
 +                          PluginLifecycleHandler lifecycle, void* lifecycle_context);
++
++/** Optional memory-only census receiver on the existing control thread.
++ * The callback receives one validated 64-byte header or record and returns
++ * KaihenCensusAck. It must not allocate, acquire services, issue IPC, or use
++ * the foreground command context. Its storage must outlive both threads. */
++Result pluginServiceStartWithLifecycleAndDiagnostics(PluginService* service, Handle control_session,
++                          PluginServiceHandler handler, void* context,
++                          PluginLifecycleHandler lifecycle, void* lifecycle_context,
++                          PluginServiceHandler diagnostics, void* diagnostics_context);
 +
  /**
   * @brief Stops the threads and closes the client sessions. The borrowed
@@ -3435,6 +5658,7 @@ diff --git a/libkaihen/include/kaihen/plugin.h b/libkaihen/include/kaihen/plugin
  Result pluginServiceStop(PluginService* service);
  
 diff --git a/libkaihen/include/kaihen/protocol.h b/libkaihen/include/kaihen/protocol.h
+index b32fd22..065fb04 100644
 --- a/libkaihen/include/kaihen/protocol.h
 +++ b/libkaihen/include/kaihen/protocol.h
 @@ -10,7 +10,7 @@
@@ -3446,7 +5670,7 @@ diff --git a/libkaihen/include/kaihen/protocol.h b/libkaihen/include/kaihen/prot
  
  #define HEN_PLUGIN_NAME_SIZE 64
  #define HEN_MAX_PLUGINS 16
-@@ -86,6 +86,11 @@
+@@ -86,6 +86,11 @@ typedef enum {
      HenHomebrewCommand_GetPluginName = 21,
      /// Takes HenPluginName and returns a new plugin session by COPY.
      HenHomebrewCommand_OpenPlugin = 22,
@@ -3460,6 +5684,7 @@ diff --git a/libkaihen/include/kaihen/protocol.h b/libkaihen/include/kaihen/prot
  /// The reply of HenHomebrewCommand_GetStatus.
 diff --git a/libkaihen/include/kaihen/reload.h b/libkaihen/include/kaihen/reload.h
 new file mode 100644
+index 0000000..f603791
 --- /dev/null
 +++ b/libkaihen/include/kaihen/reload.h
 @@ -0,0 +1,185 @@
@@ -3649,9 +5874,10 @@ new file mode 100644
 +static_assert(sizeof(HenPluginReloadDiagnostics) == 64);
 +#endif
 diff --git a/libkaihen/source/plugin_runtime.cpp b/libkaihen/source/plugin_runtime.cpp
+index 6d31d83..98d28cd 100644
 --- a/libkaihen/source/plugin_runtime.cpp
 +++ b/libkaihen/source/plugin_runtime.cpp
-@@ -135,6 +135,11 @@
+@@ -135,6 +135,11 @@ Result serveBootstrapRequest(Handle session, Handle* release_event, bool* adopte
      if (ounce::isQueryPointerBufferSize(request)) {
          ounce::writePointerBufferSizeReply(message);
          rc = 0;
@@ -3664,9 +5890,30 @@ diff --git a/libkaihen/source/plugin_runtime.cpp b/libkaihen/source/plugin_runti
          rc = adoptHandles(message, request, &reply, release_event);
          *adopted = R_SUCCEEDED(rc);
 diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server.cpp
+index d7597e3..aeecbee 100644
 --- a/libkaihen/source/plugin_server.cpp
 +++ b/libkaihen/source/plugin_server.cpp
-@@ -49,6 +49,10 @@
+@@ -44,11 +44,30 @@ bool isCreateSession(const ounce::CmifRequest& request) {
+         ounce::hasOnlyInlineData(request);
+ }
+ 
++// CMIF includes up to fifteen alignment bytes in data_size. Meaningful
++// census data is exactly one frame; any wire padding must be zero.
++bool isCensusFrame(const ounce::CmifRequest& request) {
++    constexpr u32 FrameWords = (0x10 + sizeof(CmifInHeader) + 64 + 3) / 4;
++    if (!request.valid || request.hipc.meta.type != CmifCommandType_Request ||
++        !ounce::hasOnlyInlineData(request) || request.hipc.meta.send_pid ||
++        request.hipc.meta.num_data_words != FrameWords ||
++        (request.command_id != KAIHEN_CENSUS_HEADER_COMMAND &&
++         request.command_id != KAIHEN_CENSUS_RECORD_COMMAND) ||
++        request.data_size < 64 || request.data_size > 79) return false;
++    for (size_t i = 64; i < request.data_size; ++i)
++        if (request.data[i]) return false;
++    return true;
++}
++
+ /// Creates a session pair in a free slot of the table, wakes the worker and
+ /// returns the client end.
  Result createClientSession(PluginService* service, Handle* out_client) {
      Result rc = MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
      mutexLock(&service->sessions_lock);
@@ -3677,7 +5924,7 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
      for (u32 slot = 0; slot < MaxSessions; slot++) {
          if (service->sessions[slot] == INVALID_HANDLE) {
              rc = svcCreateSession(&service->sessions[slot], out_client, false, 0);
-@@ -71,6 +75,26 @@
+@@ -71,6 +90,45 @@ Result serveControlRequest(PluginService* service) {
      Result rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
      if (isCreateSession(request))
          rc = createClientSession(service, &client);
@@ -3700,11 +5947,30 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
 +            service->lifecycle_handler(&input, &reply, service->lifecycle_context);
 +        }
 +        return sent;
++    } else if (isCensusFrame(request) && service->diagnostics_handler) {
++        // The input lives in TLS; copy it before invoking an extension.
++        alignas(8) u8 input[64];
++        u8 output[KAIHEN_PLUGIN_MESSAGE_SIZE] = {};
++        std::memcpy(input, request.data, sizeof(input));
++        size_t output_size = 0;
++        rc = service->diagnostics_handler(request.command_id, input, sizeof(input),
++            output, &output_size, service->diagnostics_context);
++        if ((R_SUCCEEDED(rc) && output_size != sizeof(KaihenCensusAck)) ||
++            rc == MAKERESULT(Module_Libnx, LibnxError_BadInput))
++            rc = KAIHEN_CENSUS_RECEIVER_REJECTED;
++        ounce::closeRequestHandles(request);
++        ounce::writeReply(message, rc, R_SUCCEEDED(rc) ? output : nullptr,
++                          R_SUCCEEDED(rc) ? sizeof(KaihenCensusAck) : 0);
++        return ounce::sendReply(service->control_session);
++    } else if (request.valid && service->diagnostics_handler &&
++               (request.command_id == KAIHEN_CENSUS_HEADER_COMMAND ||
++                request.command_id == KAIHEN_CENSUS_RECORD_COMMAND)) {
++        rc = KAIHEN_CENSUS_RECEIVER_REJECTED;
 +    }
      ounce::closeRequestHandles(request);
  
      if (R_SUCCEEDED(rc))
-@@ -263,20 +287,27 @@
+@@ -263,20 +321,27 @@ void workerThread(void* argument) {
      closeAllClientSessions(service);
  }
  
@@ -3718,16 +5984,13 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
      rc = threadStart(thread);
 -    if (R_FAILED(rc))
 -        threadClose(thread);
--    return rc;
--}
--
++    if (R_SUCCEEDED(rc)) state.started = true;
+     return rc;
+ }
+ 
 -void stopThread(Thread* thread) {
 -    threadWaitForExit(thread);
 -    threadClose(thread);
-+    if (R_SUCCEEDED(rc)) state.started = true;
-+    return rc;
-+}
-+
 +Result stopThread(Thread* thread, PluginServiceThreadState& state) {
 +    if (!state.created || state.closed) return 0;
 +    if (state.started && !state.exited) {
@@ -3742,7 +6005,7 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
  }
  
  void closeEvents(PluginService* service) {
-@@ -290,6 +321,12 @@
+@@ -290,6 +355,20 @@ void closeEvents(PluginService* service) {
  
  Result pluginServiceStart(PluginService* service, Handle control_session,
                            PluginServiceHandler handler, void* context) {
@@ -3752,19 +6015,29 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
 +Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
 +                          PluginServiceHandler handler, void* context,
 +                          PluginLifecycleHandler lifecycle, void* lifecycle_context) {
++    return pluginServiceStartWithLifecycleAndDiagnostics(service, control_session, handler, context,
++        lifecycle, lifecycle_context, nullptr, nullptr);
++}
++
++Result pluginServiceStartWithLifecycleAndDiagnostics(PluginService* service, Handle control_session,
++                          PluginServiceHandler handler, void* context,
++                          PluginLifecycleHandler lifecycle, void* lifecycle_context,
++                          PluginServiceHandler diagnostics, void* diagnostics_context) {
      if (!service || !handler || control_session == INVALID_HANDLE)
          return MAKERESULT(Module_Libnx, LibnxError_BadInput);
  
-@@ -297,6 +334,8 @@
+@@ -297,6 +376,10 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
      service->control_session = control_session;
      service->handler = handler;
      service->context = context;
 +    service->lifecycle_handler = lifecycle;
 +    service->lifecycle_context = lifecycle_context;
++    service->diagnostics_handler = diagnostics;
++    service->diagnostics_context = diagnostics_context;
      mutexInit(&service->sessions_lock);
  
      Result rc = svcCreateEvent(&service->stop_write, &service->stop_read);
-@@ -307,21 +346,23 @@
+@@ -307,21 +390,23 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
      if (R_FAILED(rc))
          goto fail_events;
  
@@ -3774,10 +6047,9 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
          goto fail_events;
  
 -    rc = startThread(service, &service->control_thread, controlThread);
--    if (R_FAILED(rc))
--        goto fail_worker;
 +    rc = startThread(service, &service->control_thread, controlThread, service->control_thread_state);
-+    if (R_FAILED(rc))
+     if (R_FAILED(rc))
+-        goto fail_worker;
 +        goto fail_events;
  
      service->started = true;
@@ -3795,7 +6067,7 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
      closeEvents(service);
      return rc;
  }
-@@ -330,14 +371,17 @@
+@@ -330,14 +415,17 @@ Result pluginServiceStop(PluginService* service) {
      if (!service || !service->started)
          return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
  
@@ -3816,6 +6088,7 @@ diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server
      service->started = false;
  
 diff --git a/libkaihen/source/plugin_startup.h b/libkaihen/source/plugin_startup.h
+index d8fdcf9..0b8d22d 100644
 --- a/libkaihen/source/plugin_startup.h
 +++ b/libkaihen/source/plugin_startup.h
 @@ -7,6 +7,7 @@
@@ -3826,7 +6099,7 @@ diff --git a/libkaihen/source/plugin_startup.h b/libkaihen/source/plugin_startup
  };
  
  /// The version of the plugin runtime's AdoptHandles reply. A later version
-@@ -14,7 +15,8 @@
+@@ -14,7 +15,8 @@ enum PluginStartupCommand : u32 {
  /// Versions 0 and 1 did not exist as such: the first runtime replied with a
  /// "publishes a service" flag in this word, and sent the third handle only
  /// when the flag was 1.
@@ -3837,6 +6110,7 @@ diff --git a/libkaihen/source/plugin_startup.h b/libkaihen/source/plugin_startup
  /// Sends the plugin copies of the SM session and the FS root. The reply has
  /// the release event (writable), the ready event (readable) and the client
 diff --git a/ro/test.sh b/ro/test.sh
+index 3515454..09a396a 100644
 --- a/ro/test.sh
 +++ b/ro/test.sh
 @@ -3,19 +3,18 @@
@@ -3871,9 +6145,10 @@ diff --git a/ro/test.sh b/ro/test.sh
 +"$out/mapping"
  echo 'RO wire, image, session and mapping tests: PASS'
 diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
+index 874dd9e..533f8ef 100644
 --- a/ro/tests/session_test.cpp
 +++ b/ro/tests/session_test.cpp
-@@ -13,6 +13,7 @@
+@@ -13,6 +13,7 @@ extern "C" {
  
  static Handle g_closed[8];
  static u32 g_closeCount;
@@ -3881,7 +6156,7 @@ diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
  static u32 g_mapCount, g_unmapCount;
  static Result g_mapResult;
  static u32 g_jitMapCount, g_jitUnmapCount;
-@@ -39,7 +40,7 @@
+@@ -39,7 +40,7 @@ Result svcCloseHandle(Handle handle) {
  Result svcGetProcessId(u64* pid, Handle handle) {
      if (handle != 42 && handle != 43)
          return 0xd401;
@@ -3890,7 +6165,7 @@ diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
      return 0;
  }
  
-@@ -132,7 +133,7 @@
+@@ -132,7 +133,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special,
      words[0] = 6;
      words[1] = 0x80000000 | num_data_words;
      words[2] = special;
@@ -3899,7 +6174,7 @@ diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
      words[5] = handle;
      words[8] = 0x49434653;
      words[9] = 1;
-@@ -140,7 +141,7 @@
+@@ -140,7 +141,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special,
  }
  
  int main(void) {
@@ -3908,7 +6183,7 @@ diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
      u32 words[64];
  
      request(words, RoCmd_Initialize, 10, 3, 42);
-@@ -386,6 +387,27 @@
+@@ -386,6 +387,27 @@ int main(void) {
      request(words, RoCmd_Initialize, 10, 3, 42);
      roDispatch(sessions, 2, 0, words);
      assert(words[6] == 0 && sessions[0].process_handle == 42);

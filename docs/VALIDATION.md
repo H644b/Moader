@@ -1,5 +1,13 @@
 # What has been tested
 
+## Unreleased host-exit diagnostics
+
+The development branch adds a fixed HEN recorder, bounded atomic SM sampling, GameArm observations and a resident cache/export route. Host tests exercise the actual producer, SDK message packing, plugin dispatcher and receiver together, including ring wrap, in-flight producer changes, missing sequences, malformed responses, unexpected reply handles, receiver backpressure, poisoned-channel retention and worker-exit supervision. The complete `make check` regression suite passed on the development host. These are scripted kernel/transport seams, not measurements of the stock server allocator or proof of native peer reclamation.
+
+The matched 0.1.2-dev.0 HEN/bootstrap/app/resident compiled in an isolated AArch64 SDK build. Binary headers, NSO section hashes, NACP version, decompressed privacy checks and a complete upstream-patch replay passed; the [build proof](../software-builds/kaihen-mo.json) binds the HEN source and bytes. Both default and Civ7 host profiles prepared unique immutable local snapshots without opening a console connection. The native FS executable hook is unchanged. The final full regression run also includes the actual HEN scheduler/registry fixture and a deterministic resident callback-contention check.
+
+No new console test has been performed. The known crash remains unresolved, and neither a successful observer nor a regular GitHub release establishes a repair. The [capture guide](HOST_EXIT_DIAGNOSTICS.md) describes the observer's extra memory, timing overhead, deferred export and possible missing final records.
+
 ## v0.1.1 release
 
 v0.1.1 consolidates all changes since the first `v0.1.0-dev` tag and is published with the unresolved `2011-0102` host-exit/next-game failure disclosed. The new app/resident are rebuilt with `0.1.1` labels; their exact bytes have host validation only. The matched HEN/bootstrap and native FS executable hook are unchanged from the most recent installation/startup-tested candidate below. Installation/startup success does not establish game/reload lifecycle acceptance. `console_retest_passed` and `appAndResidentHardwareTested` remain false. See the [release notes](releases/v0.1.1.md) for the cumulative changes and download choices.

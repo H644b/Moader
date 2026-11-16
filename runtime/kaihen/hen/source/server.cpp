@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 #include <cstring>
+#include <new>
 #include "server.hpp"
 
 namespace {
@@ -40,13 +41,19 @@ HenServer::~HenServer() {
     }
     ounce::closeHandle(&port_);
     for (PluginRecord& plugin : plugins_) {
-        ounce::closeHandle(&plugin.control_session);
+        if (!censusControlBlocked(plugin)) ounce::closeHandle(&plugin.control_session);
     }
+    // A pending/failed join still borrows its heap state and control session.
+    // The kernel will reclaim them when HEN exits; do not free them early.
+    if (census_relay_ && census_relay_->ready()) delete census_relay_;
 }
 
 Result HenServer::initialize() {
     reload_instance_ = randomGet64();
     if (!reload_instance_) reload_instance_ = armGetSystemTick() | 1;
+    census_.initialize(reload_instance_, henCensusFrequency());
+    game_.setCensus(&census_);
+    sm_proxy_.setCensus(&census_);
     status_.protocol_version = HEN_PROTOCOL_VERSION;
     Result rc = svcGetProcessId(&status_.process_id, CUR_PROCESS_HANDLE);
     if (R_SUCCEEDED(rc)) {
@@ -58,6 +65,15 @@ Result HenServer::initialize() {
                                       false, MaxSessions);
     }
     status_.initialization_result = rc;
+    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_Boot,
+        HEN_PROTOCOL_VERSION, MaxSessions, 0, rc,
+        KaihenCensusFlag_ResultKnown | (status_.process_id ? KaihenCensusFlag_OwnerKnown : 0), status_.process_id);
+    censusCounts();
+    if (R_SUCCEEDED(rc)) {
+        census_relay_ = new (std::nothrow) CensusRelay;
+        if (!census_relay_) census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_RelayState,
+            0, CensusRelay::Failed, 0, MAKERESULT(Module_Libnx, LibnxError_OutOfMemory), KaihenCensusFlag_ResultKnown);
+    }
     return rc;
 }
 
@@ -80,11 +96,13 @@ Result HenServer::run() {
                 continue;
             }
             if (R_FAILED(rc)) {
+                census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_ServerFailure, 1, 0, 0, rc, KaihenCensusFlag_ResultKnown);
                 return rc;
             }
             continue;
         }
         if (R_FAILED(rc) && !(index != waits.port_index && rc == KERNELRESULT(ConnectionClosed))) {
+            census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_ServerFailure, 2, index, 0, rc, KaihenCensusFlag_ResultKnown);
             return rc;
         }
 
@@ -94,14 +112,18 @@ Result HenServer::run() {
         }
         const SessionRef session = waits.sessions[index];
         if (rc == KERNELRESULT(ConnectionClosed)) {
-            closeSession(session);
+            closeSession(session, 1);
             continue;
         }
         const Result serve_result = serveSession(session);
         if (R_FAILED(serve_result)) {
+            census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_ServerFailure, 3, index, 0,
+                serve_result, KaihenCensusFlag_ResultKnown);
             return serve_result;
         }
-        advanceReload();
+        // Census queries are scalar memory copies, including their dispatch
+        // tail. They must not advance a pending native reload operation.
+        if (!census_query_) advanceReload();
     }
 }
 
@@ -129,27 +151,107 @@ void HenServer::collectWaits(WaitList& waits) const {
 /// Advances game arming between incoming requests.
 void HenServer::stepBetweenRequests() {
     advanceReload();
-    game_.step();
+    sm_proxy_.sampleCensus();
+    advanceCensusRelay();
+    // A diagnostic batch starts only while the gate is idle. Keep it idle
+    // until the worker has returned and its join/close are confirmed.
+    if (!census_relay_ || census_relay_->ready()) game_.step();
     svcSleepThread(IdleSleepNs);
+}
+
+bool HenServer::censusControlBlocked(const PluginRecord& plugin) const {
+    return census_relay_ && census_relay_->blocksControl(plugin.control_session, plugin.process_id);
+}
+
+void HenServer::advanceCensusRelay() {
+    if (!census_relay_) return;
+    const u64 now = armGetSystemTick();
+    if (census_relay_->poll(now)) {
+        const auto& report = census_relay_->report();
+        if (report.process_id == census_target_pid_ && report.boot_id == reload_instance_) {
+            census_header_delivered_ |= report.header_acknowledged;
+            if (report.acknowledged > census_delivered_) census_delivered_ = report.acknowledged;
+        }
+        // Successful delivery must not create new records, or the exporter
+        // would continuously generate its own backlog.
+        if (report.state != CensusRelay::Complete) census_.emit(KaihenCensusSource_Hen,
+            KaihenCensusEvent_RelayState, report.process_id,
+            u64(report.state) | (u64(report.unexpected_handles) << 32) | (u64(report.retained_handles) << 48),
+            report.acknowledged, report.result,
+            KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After | KaihenCensusFlag_OwnerKnown,
+            report.process_id);
+    }
+    const u64 exited = game_.lastObservedExit();
+    if (exited && exited != census_exit_snapshot_) {
+        // A retained channel is one of the states under investigation. Take
+        // a local slot snapshot even when none of those channels has closed.
+        censusCounts();
+        census_exit_snapshot_ = exited;
+    }
+    if (!census_relay_->ready() || reload_journal_.active || !game_.diagnosticsIdle() ||
+        now - census_last_export_ < armNsToTicks(100000000)) return;
+    const u64 current = game_.status().process_id;
+    const bool observed_host_exit = exited && (!current || current == exited);
+    if (!observed_host_exit)
+        for (Handle session : homebrew_sessions_) if (session != INVALID_HANDLE) return;
+    auto* plugin = findPlugin("moader");
+    if (!plugin || !plugin->process_id || plugin->control_session == INVALID_HANDLE ||
+        census_relay_->disabledFor(plugin->process_id) || censusControlBlocked(*plugin)) return;
+    if (plugin->process_id != census_target_pid_) {
+        census_target_pid_ = plugin->process_id;
+        census_delivered_ = 0;
+        census_header_delivered_ = false;
+    }
+    const auto header = census_.header();
+    u64 next = census_delivered_ + 1;
+    if (next < header.first_sequence) next = header.first_sequence;
+    if (census_header_delivered_ && next >= header.next_sequence) return;
+    KaihenCensusRecord batch[CensusRelay::BatchCapacity]{};
+    u32 count = 0;
+    while (count < CensusRelay::BatchCapacity && next < header.next_sequence) {
+        if (!census_.read(next++, batch[count])) return;
+        ++count;
+    }
+    census_last_export_ = now;
+    const Result rc = census_relay_->start(plugin->control_session, plugin->process_id,
+        header, batch, count, now);
+    if (R_FAILED(rc)) census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_RelayState,
+        plugin->process_id, census_relay_->report().state, census_delivered_, rc,
+        KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
 }
 
 void HenServer::acceptSession() {
     Handle session = INVALID_HANDLE;
-    if (R_FAILED(svcAcceptSession(&session, port_))) {
+    const Result rc = svcAcceptSession(&session, port_);
+    if (R_FAILED(rc)) {
+        ++census_session_failures_;
+        census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated, UINT32_MAX, 0, 0,
+            rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+        censusCounts();
         return;
     }
-    for (Handle& available : sessions_) {
+    for (u32 index = 0; index < MaxSessions; index++) {
+        Handle& available = sessions_[index];
         if (available == INVALID_HANDLE) {
             available = session;
+            census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated,
+                (u64(1) << 32) | index, session, 0, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+            censusCounts();
             return;
         }
     }
-    svcCloseHandle(session);
+    ++census_session_failures_;
+    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated,
+        (u64(1) << 32) | UINT32_MAX, session, 0, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+    censusClose(session, 1, 5, UINT32_MAX);
+    censusCounts();
 }
 
 /// Answers the request that the session sent.
 Result HenServer::serveSession(SessionRef session) {
     const ReceivedRequest request = receiveRequest();
+    census_query_ = request.command_id == KAIHEN_CENSUS_HEADER_COMMAND ||
+                    request.command_id == KAIHEN_CENSUS_RECORD_COMMAND;
     if (request.type == CmifCommandType_Close) {
         closeSession(session);
         return 0;
@@ -168,10 +270,10 @@ Result HenServer::serveSession(SessionRef session) {
                       &reply.copy_handle, num_copy_handles);
     const Result rc = ounce::sendReply(sessionHandle(session));
     if (reply.close_copy_after_send) {
-        ounce::closeHandle(&reply.copy_handle);
+        censusClose(reply.copy_handle, 4, 3, session.index);
     }
     if (rc == KERNELRESULT(ConnectionClosed)) {
-        closeSession(session);
+        closeSession(session, 3);
         return 0;
     }
     return rc;
@@ -182,11 +284,41 @@ Handle& HenServer::sessionHandle(SessionRef session) {
                                                  : sessions_[session.index];
 }
 
-void HenServer::closeSession(SessionRef session) {
-    ounce::closeHandle(&sessionHandle(session));
-    if (session.kind == SessionKind::Homebrew) {
-        ounce::closeHandle(&homebrew_processes_[session.index]);
+void HenServer::censusClose(Handle& handle, u32 caller, u32 reason, u32 slot) {
+    if (handle == INVALID_HANDLE) return;
+    const Handle original = handle;
+    const Result rc = svcCloseHandle(handle);
+    handle = INVALID_HANDLE; // preserve the existing close policy
+    if (R_FAILED(rc)) ++census_close_failures_;
+    census_.emit(KaihenCensusSource_Hen,
+        R_SUCCEEDED(rc) ? KaihenCensusEvent_SessionClosed : KaihenCensusEvent_SessionCloseFailure,
+        original, slot, (static_cast<u64>(reason) << 32) | caller, rc,
+        KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+}
+
+void HenServer::censusCounts() {
+    u64 controls = 0, homebrew = 0, processes = 0;
+    for (u32 index = 0; index < MaxSessions; index++) {
+        controls += sessions_[index] != INVALID_HANDLE;
+        homebrew += homebrew_sessions_[index] != INVALID_HANDLE;
+        processes += homebrew_processes_[index] != INVALID_HANDLE;
     }
+    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_HenCounts,
+        (controls << 32) | homebrew, processes,
+        (census_close_failures_ << 32) | (census_session_failures_ & UINT32_MAX), 0, KaihenCensusFlag_Cached);
+}
+
+void HenServer::censusFsClone(u32 caller, Handle root, Handle clone, Result result) {
+    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_FsClone,
+        caller, root, clone, result, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+}
+
+void HenServer::closeSession(SessionRef session, u32 reason) {
+    censusClose(sessionHandle(session), session.kind == SessionKind::Homebrew ? 2 : 1, reason, session.index);
+    if (session.kind == SessionKind::Homebrew) {
+        censusClose(homebrew_processes_[session.index], 3, reason, session.index);
+    }
+    censusCounts();
 }
 
 //-----------------------------------------------------------------------------
@@ -202,6 +334,10 @@ HenServer::ReceivedRequest HenServer::receiveRequest() const {
 
     ReceivedRequest request = {};
     request.type = meta.type;
+    if (parsed.valid) request.command_id = parsed.command_id;
+    request.census_words = meta.num_data_words;
+    request.census_scalar = !hasBuffers(meta) && !meta.num_copy_handles &&
+        !meta.num_move_handles && !meta.send_pid && meta.type == CmifCommandType_Request;
     request.num_copy_handles = meta.num_copy_handles < MaxCopyHandles ? meta.num_copy_handles
                                                                       : MaxCopyHandles;
     for (u32 index = 0; index < request.num_copy_handles; index++) {
@@ -214,7 +350,6 @@ HenServer::ReceivedRequest HenServer::receiveRequest() const {
 
     request.accepted = parsed.valid && !hasBuffers(meta) && !meta.num_move_handles;
     if (request.accepted) {
-        request.command_id = parsed.command_id;
         request.data_size = parsed.data_size < sizeof(request.data) ? parsed.data_size
                                                                     : sizeof(request.data);
         std::memcpy(request.data, parsed.data, request.data_size);
@@ -243,6 +378,14 @@ HenServer::CommandReply HenServer::serveRequest(const ReceivedRequest& request,
     }
 
     switch (request.command_id) {
+    case KAIHEN_CENSUS_HEADER_COMMAND:
+    case KAIHEN_CENSUS_RECORD_COMMAND: {
+        const HenCensus::Query result = census_.query(request.command_id, request.census_scalar,
+            request.census_words, request.data, request.data_size, reply.data, reply.data_size);
+        reply.result = result == HenCensus::Query::Success ? 0 :
+            MAKERESULT(Module_Libnx, result == HenCensus::Query::Unavailable ? LibnxError_NotFound : LibnxError_BadInput);
+        return reply;
+    }
     case HenControlCommand_GetStatus:
         if (!request.num_copy_handles) {
             reply.result = 0;
@@ -359,6 +502,7 @@ void HenServer::serveControlCommand(const ReceivedRequest& request, CommandReply
         // A plugin's FS root: a session of its own, not HEN's root.
         if (!copies && fs_root_ != INVALID_HANDLE) {
             reply.result = cmifCloneCurrentObject(fs_root_, &reply.copy_handle);
+            censusFsClone(1, fs_root_, reply.copy_handle, reply.result);
             reply.close_copy_after_send = R_SUCCEEDED(reply.result);
         }
         break;
@@ -437,6 +581,7 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
             break;
         }
         reply.result = cmifCloneCurrentObject(fs_root_, &reply.copy_handle);
+        censusFsClone(2, fs_root_, reply.copy_handle, reply.result);
         reply.close_copy_after_send = R_SUCCEEDED(reply.result);
         break;
     case HenHomebrewCommand_GetSettingsSession:
@@ -500,6 +645,7 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
 Result HenServer::startGameArm(Handle bootstrap_process) {
     Handle root = INVALID_HANDLE;
     Result rc = cmifCloneCurrentObject(fs_root_, &root);
+    censusFsClone(3, fs_root_, root, rc);
     if (R_FAILED(rc)) {
         return rc;
     }
@@ -520,13 +666,21 @@ Result HenServer::createHomebrewSession(Handle copied_process, Handle* out_clien
         Handle server = INVALID_HANDLE;
         Handle client = INVALID_HANDLE;
         Result rc = svcCreateSession(&server, &client, 0, 0);
+        census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated,
+            (u64(2) << 32) | index, server, copied_process, rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+        if (R_FAILED(rc)) ++census_session_failures_;
         if (R_SUCCEEDED(rc)) {
             homebrew_sessions_[index] = server;
             homebrew_processes_[index] = copied_process;
             *out_client = client;
         }
+        censusCounts();
         return rc;
     }
+    ++census_session_failures_;
+    census_.emit(KaihenCensusSource_Hen, KaihenCensusEvent_SessionCreated, (u64(2) << 32) | UINT32_MAX, 0, copied_process,
+        MAKERESULT(Module_Libnx, LibnxError_OutOfMemory), KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+    censusCounts();
     return MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
 }
 
@@ -589,6 +743,7 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
         if (std::strcmp(plugins_[index].name.name, name.name)) {
             continue;
         }
+        if (censusControlBlocked(plugins_[index])) return reload::Busy;
         if (plugins_[index].operation_id) {
             const auto* operation = reload_journal_.find(plugins_[index].operation_id);
             if ((operation && (operation->status.flags & (HEN_PLUGIN_RELOAD_BUSY | HEN_PLUGIN_RELOAD_BLOCKED))) ||
@@ -617,6 +772,7 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
 }
 
 void HenServer::removePlugin(u32 index) {
+    if (censusControlBlocked(plugins_[index])) return;
     svcCloseHandle(plugins_[index].control_session);
     plugin_count_--;
     for (u32 next = index; next < plugin_count_; next++) {
@@ -630,7 +786,8 @@ void HenServer::removePlugin(u32 index) {
 /// the two can still name a plugin that exits in the meantime.
 void HenServer::removeExitedPlugins() {
     for (u32 index = plugin_count_; index > 0; index--) {
-        if (!plugins_[index - 1].operation_id && !game_.processExists(plugins_[index - 1].process_id)) {
+        if (!plugins_[index - 1].operation_id && !censusControlBlocked(plugins_[index - 1]) &&
+            !game_.processExists(plugins_[index - 1].process_id)) {
             removePlugin(index - 1);
         }
     }
@@ -669,16 +826,19 @@ Result HenServer::submitReload(u32 caller, const HenPluginReloadRequest& request
     reload::Journal::Entry* entry = nullptr;
     R_TRY(reload_journal_.lookup(caller_pid, request, &entry));
     if (entry) { out = entry->status; return 0; }
+    if (census_relay_ && !census_relay_->ready()) return reload::Busy;
     if (!reload_configured_) return reload::Capability;
     if (request.instance_id != reload_instance_) return reload::Stale;
     auto* plugin = findPlugin(request.name);
     if (!plugin || !plugin->process_id || plugin->process_id != request.expected_process_id ||
         plugin->generation != request.expected_generation || plugin->generation == UINT64_MAX ||
         plugin->control_session == INVALID_HANDLE) return reload::Stale;
+    if (censusControlBlocked(*plugin)) return reload::Busy;
     PluginLaunchContext context = {};
     if (!game_.acquireReloadLease(context)) return reload::Busy;
     Handle fs = INVALID_HANDLE, sm = INVALID_HANDLE;
     Result rc = cmifCloneCurrentObject(fs_root_, &fs);
+    censusFsClone(4, fs_root_, fs, rc);
     if (R_SUCCEEDED(rc)) rc = sm_proxy_.openSession(&sm);
     if (R_SUCCEEDED(rc)) rc = reload_journal_.begin(caller_pid, request, &entry);
     if (R_FAILED(rc)) {

@@ -1,6 +1,6 @@
 # How Moader modifies kaiHEN
 
-Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload alongside the earlier pending-launch fix and read-only game trace. The application, resident service and FS hook have separate roles and validation records.
+Moader publishes the full modified source and the complete patch against the pinned upstream revision. This development branch adds host-exit observation alongside cooperative plugin reload, the pending-launch fix and read-only game trace. The application, resident service and FS hook have separate roles and validation records.
 
 **v0.1.1 release:** two repaired reload transactions completed, but the subsequent normal Minecraft launch caused system error 2011-0102. The additional ownership changes described below passed installation/startup after the host restoration correction; a subsequent fresh-boot game-launch check failed with no Reload command invoked. The complete lifecycle is not accepted; publication does not establish a fix. See [Validation](VALIDATION.md).
 
@@ -12,7 +12,15 @@ Moader publishes the full modified source and the complete patch against the pin
 | Exact changes | [kaihen-mo.patch](../software-builds/kaihen-mo.patch) |
 | Full modified source | [runtime/kaihen](../runtime/kaihen/) |
 | Source, patch and HEN/bootstrap digests | [kaihen-mo.json](../software-builds/kaihen-mo.json) |
-| Shipping app/resident and HEN/bootstrap sizes and hashes | [release.json](../config/release.json) |
+| Configured app/resident and HEN/bootstrap sizes and hashes | [release.json](../config/release.json) |
+
+## Unreleased host-exit census
+
+The 0.1.2-dev.0 branch adds a fixed 64-record HEN ring, atomic mailboxes in existing SM proxy contexts and GameArm records at existing input/identity/process-exit boundaries. Cached scalar commands `0x4d4f0010` and `0x4d4f0011` return its header and individual records. These reads acquire no service and trigger no cleanup or reload. HEN protocol remains 7; the optional census has its own schema and exact layouts in [census.h](../runtime/kaihen/libkaihen/include/kaihen/census.h).
+
+An acknowledged exporter borrows the already-registered Moader control connection. It uses at most one transfer worker, pins the connection through confirmed worker exit/close, and retains ownership after uncertain outcomes. An optional `pluginServiceStartWithLifecycleAndDiagnostics` callback on the existing plugin CONTROL thread accepts fixed memory frames. Older plugins can return unsupported without receiving a shutdown command. The resident cache and authenticated browser route are separate Moader components.
+
+Export normally waits for homebrew channels to close. An existing PM observation of the selected host's exit permits capture of retained channels too; it introduces no new process query or claim about which unknown-PID slot owns a remote resource. Idle-gate, reload and worker-ownership guards still apply. This adds memory, CPU and scheduling overhead, but no additional FS/HEN service session or diagnostic SD writer. It changes neither the official RO/game/hbmenu binaries nor the native FS executable hook. The [capture guide](HOST_EXIT_DIAGNOSTICS.md) explains the delivery gaps and limits. This diagnostic candidate has not passed a console lifecycle test and is not a verified fix for `2011-0102`.
 
 ## Pending homebrew launch
 

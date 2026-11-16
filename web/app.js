@@ -171,7 +171,7 @@ async function saveSettings(event) {
 }
 function downloadLog() {
   const runtime = state.runtime || {};
-  const content = ["Moader 0.1.1 debug log",new Date().toISOString(),"Listener: " + location.host,
+  const content = ["Moader 0.1.2-dev.0 debug log",new Date().toISOString(),"Listener: " + location.host,
     "Library generation: " + state.generation,"Runtime: " + JSON.stringify(runtime),"",...events].join("\n");
   const url = URL.createObjectURL(new Blob([content],{type:"text/plain;charset=utf-8"}));
   const link = node("a",""); link.href = url; link.download = "moader-debug-" + new Date().toISOString().replace(/[:.]/g,"-") + ".txt";

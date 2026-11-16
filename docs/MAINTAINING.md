@@ -8,6 +8,8 @@ The public source includes Moader source, tests, scripts, documentation, licensi
 
 The current release tag is `v0.1.1`. PR #7 has been merged, with the unresolved zero-reload `2011-0102` lifecycle failure explicitly recorded. Publication is not hardware acceptance: keep `console_retest_passed` and `appAndResidentHardwareTested` false unless the exact claimed checks pass. GitHub's `releases/latest` endpoint can skip prereleases, so use explicit tag download links.
 
+The development branch's configured next version is **0.1.2-dev.0**, containing [unreleased host-exit diagnostics](HOST_EXIT_DIAGNOSTICS.md). Its configured binary descriptors and build proof belong to that diagnostic candidate, not the published v0.1.1 assets. Updating those inputs must not move the v0.1.1 tag or replace its downloads. No new release or console acceptance follows from a successful local build.
+
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |

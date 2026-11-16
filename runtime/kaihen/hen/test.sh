@@ -10,7 +10,7 @@ cxx=${CXX:-g++}
 # libnx's HIPC parser reads unaligned fields, as allowed on AArch64. Keep the
 # other ASan/UBSan checks.
 flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
-for test in mount_request sm_request reload lifecycle_server loader_gate session_lifetime; do
+for test in mount_request sm_request reload lifecycle_server loader_gate session_lifetime hen_census; do
     $cxx $flags -Itests/host -I"$nx/include" -I../libkaihen/include "tests/${test}_test.cpp" -o "$out/$test"
     "$out/$test"
 done

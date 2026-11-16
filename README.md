@@ -1,5 +1,7 @@
 # Moader
 
+This development branch contains **unreleased 0.1.2-dev.0 host-exit diagnostics**. They add observation, not a verified crash repair. The [diagnostic guide](docs/HOST_EXIT_DIAGNOSTICS.md) explains the capture workflow; published v0.1.1 assets remain unchanged.
+
 > **v0.1.1 is a release with a known system crash.** The game/host-exit lifecycle can produce `2011-0102` before invoking Reload. Installation/startup passed with the corrected installer, but full lifecycle acceptance has failed. Read the [release notes](docs/releases/v0.1.1.md) and [validation record](docs/VALIDATION.md) before testing.
 
 **Manage Switch 2 mods from your controller or a browser.**

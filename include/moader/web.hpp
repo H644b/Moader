@@ -4,12 +4,13 @@
 #include <memory>
 
 namespace moader {
+class HostCensus;
 struct WebAsset { std::string path, type, contents; };
 // No listener exists until start() succeeds. The console owns that switch.
 class WebServer {
 public:
     WebServer(Library& library, std::string root, std::string pairing_token,
-              std::vector<WebAsset> assets);
+              std::vector<WebAsset> assets, const HostCensus* host_census = nullptr);
     ~WebServer();
     WebServer(const WebServer&) = delete;
     WebServer& operator=(const WebServer&) = delete;

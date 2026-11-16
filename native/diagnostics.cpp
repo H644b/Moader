@@ -10,7 +10,7 @@ struct GameTrace { u32 sequence, point; Result result; u32 value, requests, step
 Service hen{};
 Result open_result = 0;
 void report(FILE* out) {
-    std::fprintf(out, "Moader Diagnostics 0.1.1\nNative Switch 2 build with ounce-devkit 20261114\n\n");
+    std::fprintf(out, "Moader Diagnostics 0.1.2-dev.0\nNative Switch 2 build with ounce-devkit 20261114\n\n");
     std::fprintf(out, "HEN session: 0x%08x\n", open_result);
     if (R_SUCCEEDED(open_result)) {
         HenStatus status{};

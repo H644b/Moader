@@ -64,6 +64,7 @@ jobs:
           python3 tools/test-core.py
           python3 tools/test-library-refresh.py
           python3 tools/test-web.py
+          python3 tools/test-host-census.py
       - name: Actual C producer and C++ runtime reader
         run: |
           python3 tools/test-runtime-logs.py
@@ -95,6 +96,10 @@ jobs:
           python3 tools/test-resident.py
           python3 tools/test-native-ui.py
           python3 tools/test-reload-client.py
+      - name: Actual census control, relay and HEN scheduler
+        run: |
+          python3 tools/test-host-census-control.py
+          python3 tools/test-host-census-scheduler.py
       - name: Actual HEN reload orchestration and lifecycle server
         run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/hen/test.sh
       - name: Actual RO wire, image, session and mapping lifecycle

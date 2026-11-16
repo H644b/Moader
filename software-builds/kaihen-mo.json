@@ -4,15 +4,15 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "161131cbdc7c90d2b83f2a769506bab5cec4463e7cc99613104d754d14ae55d3",
+  "patch_sha256": "83d6e5b50c99096ce802fd5ea23258d76f5b6c7c1ccf91aa00219fca28feca77",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "4a489bee87f3189dd5a367ec949bdb783952f29bffbcef46d32175282e6eca73",
+  "source_tree_sha256": "f8030cbd9e2811134ab5ece47e552c8ac6ccd87661c6912cc7e9c6e40558aec0",
   "protocol_version": 7,
-  "hen_sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86",
+  "hen_sha256": "0f49890dde8b185be993005511c66363d740e56a82f9c7f81fdc4c9da4331826",
   "components": {
     "hen/main": {
-      "bytes": 130961,
-      "sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86"
+      "bytes": 142920,
+      "sha256": "0f49890dde8b185be993005511c66363d740e56a82f9c7f81fdc4c9da4331826"
     },
     "bootstrap.bin": {
       "bytes": 30080,
@@ -21,6 +21,6 @@
   },
   "native_build_passed": true,
   "console_retest_passed": false,
-  "reason": "Cooperative reload with timed Loader polling, cached diagnostics, donor identity tracking through host exit, and retained SM-proxy thread ownership on failed cleanup; paired with guarded app exit and matching-card correction.",
-  "validation_scope": "v0.1.1 retains this exact HEN/bootstrap pair from the startup-tested ownership candidate; the version-labelled app/resident are rebuilt separately and have host validation only. The ownership-repair HEN/bootstrap pair passed the final SDK build, host sanitizer checks and a fresh console installation/startup using the aad061b host restoration adapter. Checked Loader receipt, bootstrap gate/channel restoration, protocol-7 HEN, resident/FS diagnostics and the authenticated 11-entry browser library passed. The subsequent Minecraft/hbmenu host-exit lifecycle failed with 2011-0102 before any service reload was invoked. The repeated-reload lifecycle and missing-card withdrawal remain unpassed. The older 9d9ab58 pair completed two reloads but its subsequent normal Minecraft launch also caused 2011-0102. The earlier 0xEA01/restoration 0x1759 failure remains separate. The allocating server and fatal cause are unconfirmed. Published in v0.1.1 with the unresolved lifecycle failure disclosed; full lifecycle acceptance remains false; see docs/VALIDATION.md."
+  "reason": "Unreleased host-exit census with cached ownership observations and acknowledged forwarding over the existing resident control connection.",
+  "validation_scope": "0.1.2-dev.0 diagnostic candidate: isolated AArch64 HEN/bootstrap/app/resident build with source snapshot and complete upstream patch replay. Host regressions and independent review are recorded separately. No console installation or lifecycle test of this candidate has occurred. No repair of 2011-0102, stock-server capacity, remote cleanup or cartridge-removal acceptance is claimed. Published v0.1.1 assets and prior failed-test evidence are unchanged."
 }

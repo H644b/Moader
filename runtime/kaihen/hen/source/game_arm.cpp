@@ -173,11 +173,44 @@ Result GameArm::start(Handle filesystem_root, Handle bootstrap_process) {
     started_ = true;
     state_ = State::OpenPackage;
     status_.phase = HenGamePhase_OpeningPackage;
+    recordState();
     return 0;
 }
 
 HenGameStatus GameArm::status() const {
     return status_;
+}
+
+void GameArm::recordCensus(u32 event, u64 a, u64 b, u64 c, Result result, u32 flags) {
+    if (census_) census_->emit(KaihenCensusSource_Game, event, a, b, c, result,
+        flags | (status_.process_id ? KaihenCensusFlag_OwnerKnown : 0), status_.process_id);
+}
+
+void GameArm::recordState() {
+    const u64 flags = (started_ ? 1 : 0) | (reload_leased_ ? 2 : 0) |
+        (bootstrap_restore_pending_ ? 4 : 0) | (step_started_ ? 8 : 0) |
+        (capture_pending_ ? 16 : 0) | (policy_ready_ ? 32 : 0);
+    const std::array<u64, 6> view = {static_cast<u64>(state_), status_.phase,
+        status_.result, (static_cast<u64>(status_.serial) << 32) | status_.mounts,
+        status_.process_id, flags};
+    if (!census_state_valid_ || view != census_state_) {
+        recordCensus(KaihenCensusEvent_GameState, view[0],
+            (static_cast<u64>(status_.serial) << 32) | status_.phase,
+            (flags << 32) | status_.mounts, status_.result,
+            KaihenCensusFlag_Cached | KaihenCensusFlag_ResultKnown);
+        census_state_ = view; census_state_valid_ = true;
+    }
+}
+
+bool GameArm::diagnosticsIdle() const {
+    return started_ && gate_ && !reload_leased_ && !step_started_ &&
+        !bootstrap_restore_pending_ && !gate_->pendingRestoreWithReceipt() &&
+        (state_ == State::WaitForInput || state_ == State::WaitExit);
+}
+
+void GameArm::releaseReloadLease() {
+    reload_leased_ = false;
+    recordState();
 }
 
 void GameArm::fault(Result result) {
@@ -189,6 +222,9 @@ void GameArm::fault(Result result) {
     status_.result = result;
     status_.phase = HenGamePhase_Fault;
     state_ = State::Fault;
+    recordCensus(KaihenCensusEvent_GameFault, cause, gate_failure_step_, status_.serial,
+                 result, KaihenCensusFlag_ResultKnown);
+    recordState();
 }
 
 void GameArm::step() {
@@ -243,6 +279,7 @@ void GameArm::step() {
     if (R_FAILED(rc)) {
         fault(rc);
     }
+    recordState();
 }
 
 bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
@@ -250,6 +287,7 @@ bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
         bootstrap_restore_pending_ || gate_->pendingRestoreWithReceipt() ||
         (state_ != State::WaitForInput && state_ != State::WaitExit)) return false;
     reload_leased_ = true;
+    recordState();
     out = {memory_config_, gate_config_, mount_config_, reader_session_,
            filesystem_process_, filesystem_root_, loader_root_, monitor_};
     return true;
@@ -283,6 +321,8 @@ Result GameArm::openPackage() {
     capture_pending_ = false;
     gate_failure_step_ = 0;
     step_started_ = false;
+    census_process_gone_ = false;
+    census_match_valid_ = false;
     before_step_count_ = 0;
     current_mount_ = mount_config_;
     gate_.emplace(*memory_, gate_config_);
@@ -426,6 +466,8 @@ GameArm::InputChoice GameArm::sampleR() {
         }
         fresh = true;
         if (state.buttons & HidNpadButton_R) {
+            recordCensus(KaihenCensusEvent_GameInput, static_cast<u64>(ids[index]),
+                state.buttons, state.sampling_number, 0, KaihenCensusFlag_Before);
             trace_.write(GameTracePoint_InputSample, 0, static_cast<u32>(index + 1));
             return InputChoice::Pressed;
         }
@@ -531,11 +573,19 @@ Result GameArm::receiveGameMount() {
 }
 
 Result GameArm::exchangeGameCode() {
+    const u64 original_code = code_.object;
     const Result rc = mount_->exchange(code_);
     // The entry now holds the package's donor, not the original stock
     // CodeFS object. Track that identity until host exit; an address alone
     // can be recycled by unrelated plugin/package allocations.
-    if (R_SUCCEEDED(rc)) code_.object = current_mount_.donor_object;
+    if (R_SUCCEEDED(rc)) {
+        code_.object = current_mount_.donor_object;
+        recordCensus(KaihenCensusEvent_GameCodeIdentity, code_.address, code_.object,
+            code_.metadata, rc, KaihenCensusFlag_After | KaihenCensusFlag_ResultKnown);
+        recordCensus(KaihenCensusEvent_GameDonorIdentity, current_mount_.donor_entry,
+            original_code, current_mount_.donor_metadata, rc,
+            KaihenCensusFlag_After | KaihenCensusFlag_ResultKnown);
+    }
     return rc;
 }
 
@@ -638,14 +688,37 @@ Result GameArm::pollProcessExit() {
         return rc;
     }
 
+    if (!census_process_gone_) {
+        census_last_exit_pid_ = status_.process_id;
+        recordCensus(KaihenCensusEvent_GameProcessGone, active_title_, status_.serial, 0,
+            rc, KaihenCensusFlag_ResultKnown | KaihenCensusFlag_After);
+        census_process_gone_ = true;
+    }
+
     if (!capture_pending_) {
         ounce::DomainEntry entries[ounce::MaxDomainEntries];
         u32 count = 0;
         GameMount final_mount(*memory_, mount_config_);
-        R_TRY(final_mount.snapshot(entries, count));
-        if (containsEntry(entries, count, code_)) return 0;
+        const Result snapshot_rc = final_mount.snapshot(entries, count);
+        const bool matched = R_SUCCEEDED(snapshot_rc) && containsEntry(entries, count, code_);
+        if (!census_match_valid_ || matched != census_matched_ || R_FAILED(snapshot_rc)) {
+            recordCensus(KaihenCensusEvent_GameDomainMatch,
+                R_SUCCEEDED(snapshot_rc) ? (matched ? 1 : 0) : 2, count, status_.serial,
+                snapshot_rc, KaihenCensusFlag_Cached | KaihenCensusFlag_ResultKnown);
+            census_matched_ = matched; census_match_valid_ = true;
+        }
+        R_TRY(snapshot_rc);
+        if (matched) return 0;
     }
-    if (package_) package_->close();
+    if (package_) {
+        recordCensus(KaihenCensusEvent_GamePackageClosed, current_mount_.donor_entry,
+            code_.object, status_.serial, 0, KaihenCensusFlag_Before);
+        package_->close();
+        // NativePackage::close/fsFsClose return void. Never invent a successful
+        // native close result; these records only prove the call returned.
+        recordCensus(KaihenCensusEvent_GamePackageClosed, current_mount_.donor_entry,
+            code_.object, status_.serial, 0, KaihenCensusFlag_After);
+    }
     package_.reset();
     mount_.reset();
     gate_.reset();

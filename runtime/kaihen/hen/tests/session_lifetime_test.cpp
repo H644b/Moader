@@ -329,6 +329,7 @@ Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKER
 struct GameArmLifetimeTest {
     static void run(Handle root) {
         using namespace kernel;
+        HenCensus diagnostics; diagnostics.initialize(888, 1000000000);
         realm = 1; memory.fill(0);
         const unsigned baseline = fs_live;
         GameArm game;
@@ -341,6 +342,7 @@ struct GameArmLifetimeTest {
             game.memory_config_.storage = service(Kind::Other, 1);
             game.monitor_ = service(Kind::Monitor, 1);
         }
+        game.setCensus(&diagnostics);
         serviceCreate(pmdmntGetServiceSession(), game.monitor_);
         game.memory_.emplace(game.memory_config_, game.reader_session_, game.filesystem_process_);
         assert(!game.memory_->begin());
@@ -359,11 +361,13 @@ struct GameArmLifetimeTest {
         put<u64>(game.code_.address + 0x18, Domain);
         game.gate_.emplace(*game.memory_, game.gate_config_);
         game.state_ = GameArm::State::WaitExit; game.started_ = true; game.status_.process_id = 800;
+        assert(game.diagnosticsIdle());
         assert(fs_live == baseline + 2); // GameArm root + active package session
         game.step(); // PID gone, but the actual installed CodeFS still exists
         assert(game.package_ && game.state_ == GameArm::State::WaitExit);
         PluginLaunchContext lease{};
         assert(game.acquireReloadLease(lease));
+        assert(!game.diagnosticsIdle());
         put<u64>(game.code_.address + 0x20, OtherObject); // same slot reused for another object
         game.step(); // reload lease keeps the original tracking/resources pinned
         assert(game.package_ && fs_live == baseline + 2);
@@ -371,6 +375,17 @@ struct GameArmLifetimeTest {
         assert(!game.package_ && game.state_ == GameArm::State::OpenPackage && game.status_.serial == 1);
         assert(fs_live == baseline + 1); // package session really closed in the counted kernel
         game.step(); assert(game.state_ == GameArm::State::WaitForInput);
+        assert(game.diagnosticsIdle());
+        bool code_seen = false, donor_seen = false, gone_seen = false, match_seen = false, close_seen = false;
+        for (u64 sequence = diagnostics.header().first_sequence; sequence < diagnostics.header().next_sequence; sequence++) {
+            KaihenCensusRecord event; assert(diagnostics.read(sequence, event));
+            if (event.event == KaihenCensusEvent_GameCodeIdentity) { code_seen = true; assert(event.b == DonorObject); }
+            if (event.event == KaihenCensusEvent_GameDonorIdentity) { donor_seen = true; assert(event.b == StockObject); }
+            if (event.event == KaihenCensusEvent_GameProcessGone) gone_seen = true;
+            if (event.event == KaihenCensusEvent_GameDomainMatch && event.a == 0) match_seen = true;
+            if (event.event == KaihenCensusEvent_GamePackageClosed) { close_seen = true; assert(!(event.flags & KaihenCensusFlag_ResultKnown)); }
+        }
+        assert(code_seen && donor_seen && gone_seen && match_seen && close_seen);
         ounce::DomainEntry recycled[] = {{0x100, 0x200, 1}};
         assert(!containsEntry(recycled, 1, {0x100, 0x300, 1}));
     }
@@ -449,6 +464,7 @@ void waitForEnded() {
 
 int main() {
     using namespace kernel;
+    HenCensus diagnostics; diagnostics.initialize(777, 1000000000); proxy.setCensus(&diagnostics);
     { std::lock_guard guard(lock); root = service(Kind::Fs, 1); master = service(Kind::Master, 1); }
     proxy.setMaster(master);
     Handle sm_client = 0; assert(!proxy.openSession(&sm_client));
@@ -481,6 +497,13 @@ int main() {
         assert(fs_live == steady_fs && fs_peak <= FsBudget);
     }
     stop(resident); finishProxies(proxy); assert(fs_live == 1);
+    proxy.sampleCensus();
+    bool census_reaped = false;
+    for (u64 sequence = diagnostics.header().first_sequence; sequence < diagnostics.header().next_sequence; sequence++) {
+        KaihenCensusRecord event; assert(diagnostics.read(sequence, event));
+        census_reaped |= event.event == KaihenCensusEvent_SmReaped;
+    }
+    assert(census_reaped && diagnostics.header().overwritten > 0);
     GameArmLifetimeTest::run(root); assert(fs_live == 1);
     // HOME/process exit while a service lookup is outstanding: execute the
     // real proxy reply path and kernel-model move cleanup, not just encoding.
@@ -506,6 +529,35 @@ int main() {
     fail_start = fail_close = 1;
     assert(proxy.openSession(&sm_client) == StartFailure && tasks.size() == 1);
     assert(!proxy.collectFinishedSessions() && tasks.empty()); // unstarted: no wait
+    // More than one bounded sampler slice. Sampling alone must never join or
+    // reclaim these ended contexts; a later explicit collector still owns it.
+    std::array<Handle, 20> census_clients{};
+    for (Handle& handle : census_clients) assert(!proxy.openSession(&handle));
+    for (Handle handle : census_clients) svcCloseHandle(handle);
+    waitForEnded();
+    const unsigned sample_waits = wait_calls, sample_closes = close_calls;
+    for (unsigned slice = 0; slice < 4; slice++) {
+        const auto first = diagnostics.header().next_sequence;
+        proxy.sampleCensus();
+        unsigned terminal_events = 0;
+        for (u64 seq = first; seq < diagnostics.header().next_sequence; seq++) {
+            KaihenCensusRecord event; assert(diagnostics.read(seq, event));
+            terminal_events += event.event == KaihenCensusEvent_SmEnded;
+        }
+        assert(terminal_events <= 16);
+    }
+    assert(wait_calls == sample_waits && close_calls == sample_closes && tasks.size() == 20);
+    KaihenCensusRecord counts = {};
+    for (u64 seq = diagnostics.header().first_sequence; seq < diagnostics.header().next_sequence; seq++) {
+        KaihenCensusRecord event; assert(diagnostics.read(seq, event));
+        if (event.event == KaihenCensusEvent_SmCounts) counts = event;
+    }
+    assert(counts.a == 0 && counts.b == 20 && counts.c == 0);
+    const u64 steady_sequence = diagnostics.header().next_sequence;
+    for (unsigned slice = 0; slice < 4; slice++) proxy.sampleCensus();
+    assert(diagnostics.header().next_sequence == steady_sequence); // no idle count flood
+    finishProxies(proxy);
+    assert(tasks.empty());
     svcCloseHandle(root); svcCloseHandle(master);
     assert(!fs_live && handles.empty());
     std::puts("actual plugin runtime/SM proxy: 40 reloads, host exits, next-game service admission, bounded clone/handle counts and retained failed joins passed");

@@ -8,6 +8,7 @@
 #include "../../common/loader_gate.hpp"
 #include "game_trace.hpp"
 #include "../../common/plugin_launch.hpp"
+#include "census.hpp"
 
 using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
 #ifdef KAIHEN_GAME_ARM_TEST_CLOCK
@@ -38,7 +39,12 @@ class GameArm {
     HenGameStatus status() const;
     GameTraceSnapshot trace() const { return trace_.snapshot(); }
     bool acquireReloadLease(PluginLaunchContext& out);
-    void releaseReloadLease() { reload_leased_ = false; }
+    void releaseReloadLease();
+    void setCensus(HenCensus* census) { census_ = census; recordState(); }
+    // Cached state only. No probe, PM/FS/RO call, cleanup, or lease acquisition.
+    bool diagnosticsIdle() const;
+    // Cached existing PM observation; no new process query for diagnostics.
+    u64 lastObservedExit() const { return census_last_exit_pid_; }
 
   private:
     enum class InputChoice {
@@ -75,6 +81,9 @@ class GameArm {
     Result initializeInput();
     InputChoice sampleR();
     void fault(Result result);
+    void recordState();
+    void recordCensus(u32 event, u64 a = 0, u64 b = 0, u64 c = 0,
+                      Result result = 0, u32 flags = 0);
 
     HenGameConfig configuration_ = {};
     ounce::RetainedMemoryConfig memory_config_ = {};
@@ -119,4 +128,9 @@ class GameArm {
     State recovery_target_ = State::Fault;
     Result last_restore_result_ = 0;
     u32 gate_failure_step_ = 0;
+    HenCensus* census_ = nullptr;
+    std::array<u64, 6> census_state_ = {};
+    bool census_state_valid_ = false, census_process_gone_ = false, census_match_valid_ = false;
+    bool census_matched_ = false;
+    u64 census_last_exit_pid_ = 0;
 };

@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-This source builds the **v0.1.1 release**. It includes protocol-7 service reload, the cartridge correction and the checked host installer. A fresh-boot Minecraft/hbmenu exit test still produced `2011-0102` before invoking Reload; the cause is unresolved. The v0.1.1 app/resident carry matching version labels and have host validation only. The HEN/bootstrap pair and native FS executable hook match the most recent startup-tested candidate. See [Validation](VALIDATION.md) and the [release notes](releases/v0.1.1.md) for the exact limits.
+This branch builds **unreleased 0.1.2-dev.0 diagnostics** for the unresolved host-exit crash. It adds a cached HEN event recorder and resident capture route alongside protocol-7 reload and the cartridge correction. These changes have no console validation and do not establish a repair. The native FS executable hook is unchanged. See the [diagnostic guide](HOST_EXIT_DIAGNOSTICS.md) and [validation record](VALIDATION.md). For the published v0.1.1 source, use its [tagged build guide](https://github.com/H644b/Moader/blob/v0.1.1/docs/BUILDING.md).
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
