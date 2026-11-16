@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-This branch builds an **unreleased v0.1.0-dev.5 candidate**. The first plugin reload failed on device; the subsequent repair has offline validation only. Do not run its device installation commands. Use [v0.1.0-dev.4's guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md) for the published release. The candidate rebuilds the app, resident, HEN and bootstrap; the native filesystem hook is unchanged. The app still displays `0.1.0-dev`; see [Validation](VALIDATION.md) for exact evidence. The workflow below documents the intended matching backend kit.
+This branch builds an **unreleased v0.1.0-dev.5 candidate**. The repaired build completed two reloads on device but failed the subsequent normal-game launch with system error 2011-0102. Do not run its device installation commands. Use [v0.1.0-dev.4's guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md) for the published release. The candidate rebuilds the app, resident, HEN and bootstrap; the native filesystem hook is unchanged. The app still displays `0.1.0-dev`; see [Validation](VALIDATION.md) for exact evidence. The workflow below documents the intended matching backend kit.
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
@@ -72,7 +72,7 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Selected Civ7 source tree SHA-256 | `d83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75` |
 | Official kaiHEN release | `20261114c` |
 | Official kaiHEN ZIP SHA-256 | `63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967` |
-| Patched HEN SHA-256 | `4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02` |
+| Patched HEN SHA-256 | `edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86` |
 | Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 

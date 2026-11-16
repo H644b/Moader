@@ -10,11 +10,19 @@
 #include "../../common/plugin_launch.hpp"
 
 using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
-using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
+#ifdef KAIHEN_GAME_ARM_TEST_CLOCK
+using GameClock = KAIHEN_GAME_ARM_TEST_CLOCK;
+#else
+using GameClock = ounce::LoaderGateClock;
+#endif
+using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess, GameClock>;
 using GamePackage = ounce::NativePackage<ounce::MemoryWriter::RoProcess>;
 using GameMount = ounce::DomainMount<ounce::MemoryWriter::RoProcess>;
 
 class GameArm {
+#ifdef KAIHEN_GAME_ARM_TEST_CLOCK
+    friend struct GameArmLifetimeTest;
+#endif
   public:
     ~GameArm();
 
@@ -56,6 +64,7 @@ class GameArm {
     Result waitForInput();
     Result parkGate();
     Result receiveGameMount();
+    Result exchangeGameCode();
     Result waitForProcess();
     Result capturePolicy();
     Result pollProcessExit();

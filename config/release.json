@@ -18,8 +18,8 @@
   },
   "patched_hen": {
     "source": "vendor/kaihen-mo/hen/main",
-    "bytes": 130764,
-    "sha256": "4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02"
+    "bytes": 130961,
+    "sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86"
   },
   "validation": "docs/VALIDATION.md",
   "appAndResidentHardwareTested": false,

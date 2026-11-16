@@ -97,6 +97,8 @@ jobs:
           python3 tools/test-reload-client.py
       - name: Actual HEN reload orchestration and lifecycle server
         run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/hen/test.sh
+      - name: Actual RO wire, image, session and mapping lifecycle
+        run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/ro/test.sh
 
   installer-runtime:
     name: Installer and runtime

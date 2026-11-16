@@ -1,6 +1,6 @@
 # Moader
 
-> Unreleased development branch: the cartridge correction passed a device check, but the new plugin reload timed out, failed Loader restoration and left the console unresponsive after app exit. The console recovered after a forced power cycle. Do not install this branch for reload; [PR #7](https://github.com/H644b/Moader/pull/7) remains a draft while the failure is investigated. Published releases do not contain this reload implementation.
+> Unreleased development branch: the cartridge correction passed a device check and the repaired plugin reload completed twice, but the next normal Minecraft launch caused system error 2011-0102. HOME recovered after restarting. Do not install this branch for reload; [PR #7](https://github.com/H644b/Moader/pull/7) remains a draft while the failed lifecycle check is investigated. Published releases do not contain this reload implementation.
 
 **Manage Switch 2 mods from your controller or a browser.**
 

@@ -14,4 +14,7 @@ extern "C" {
 #include <switch/sf/hipc.h>
 #include <switch/sf/cmif.h>
 #include <switch/sf/service.h>
+#include <switch/services/sm.h>
+#include <switch/services/hid.h>
+#include <switch/services/pm.h>
 }

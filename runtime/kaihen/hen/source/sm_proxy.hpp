@@ -43,6 +43,9 @@ class SmProxy {
     /// There is no fixed number of sessions: it fails only when HEN cannot
     /// allocate the session or create its thread.
     Result openSession(Handle* out_client);
+    /// Reclaims ended proxy threads. Failure retains the context and partial
+    /// join state; it is never permission to free an unclosed thread object.
+    Result collectFinishedSessions();
 
   private:
     static constexpr size_t ThreadStackSize = 0x4000;
@@ -57,6 +60,8 @@ class SmProxy {
         Thread thread = {};
         Handle server = INVALID_HANDLE;
         std::atomic<bool> running{false};
+        bool thread_started = false;
+        bool thread_exited = false;
     };
 
     static void sessionMain(void* argument);
@@ -67,7 +72,7 @@ class SmProxy {
     /// Asks SM for the service on the master session. The session SM returns
     /// is in *out_handle.
     Result lookUpService(const SmServiceName& name, Handle* out_handle);
-    void reapFinishedSessions();
+    Result reapFinishedSessions();
 
     Handle master_ = INVALID_HANDLE;
     Mutex lock_ = {};

@@ -4,15 +4,15 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "dcc41b0720955b49a9c8461d4a054b4012d22d5c6021e748ef049f992a0635d2",
+  "patch_sha256": "161131cbdc7c90d2b83f2a769506bab5cec4463e7cc99613104d754d14ae55d3",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "f4a91eae6a41748b5307833560dff081d6def465f69fb5ec68e5c7ccf80f0078",
+  "source_tree_sha256": "4a489bee87f3189dd5a367ec949bdb783952f29bffbcef46d32175282e6eca73",
   "protocol_version": 7,
-  "hen_sha256": "4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02",
+  "hen_sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86",
   "components": {
     "hen/main": {
-      "bytes": 130764,
-      "sha256": "4971fb8356077a419456f1123c46d19e294ad62dd7f65d5bdf519f95fdd32c02"
+      "bytes": 130961,
+      "sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86"
     },
     "bootstrap.bin": {
       "bytes": 30080,
@@ -21,6 +21,6 @@
   },
   "native_build_passed": true,
   "console_retest_passed": false,
-  "reason": "Cooperative plugin reload with timed Loader polling, cached diagnostics and preserved primary/restoration outcomes; paired with guarded app exit and matching-card correction.",
-  "validation_scope": "This repaired HEN/bootstrap pair has final SDK build and host sanitizer validation only; it has not been installed or device-tested. An earlier protocol-7 candidate passed installation and matching Z-A cartridge routing, then reload failed with 0xEA01/restoration 0x1759 and app exit required a forced power cycle. Reload remains unreleased and not accepted. See docs/VALIDATION.md."
+  "reason": "Cooperative reload with timed Loader polling, cached diagnostics, donor identity tracking through host exit, and retained SM-proxy thread ownership on failed cleanup; paired with guarded app exit and matching-card correction.",
+  "validation_scope": "This ownership-repair HEN/bootstrap pair has final SDK build and host sanitizer validation only; it has not been installed or device-tested. The installed 9d9ab58 pair completed two reloads but the subsequent normal Minecraft launch caused system fatal 2011-0102. The earlier 0xEA01/restoration 0x1759 failure remains separate. The allocating server and fatal cause are unconfirmed. Unreleased and not accepted; see docs/VALIDATION.md."
 }

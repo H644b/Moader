@@ -227,6 +227,26 @@ diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
  };
  
  } // namespace ounce
+diff --git a/common/package.hpp b/common/package.hpp
+--- a/common/package.hpp
++++ b/common/package.hpp
+@@ -29,11 +29,15 @@
+             u64 program_id;
+         } request = {FsContentAttributes_None, FsFileSystemType_ApplicationPackage, 0};
+ 
++        // SDK's response parser forms all raw output-handle addresses even
++        // for None attributes; object replies still need non-null storage.
++        Handle unused_handles[8] = {};
+         Result rc = serviceDispatchIn(&root_, 10, request,
+             .buffer_attrs = {SfBufferAttr_HipcPointer | SfBufferAttr_In},
+             .buffers = {{package_path, sizeof(package_path)}},
+             .out_num_objects = 1,
+-            .out_objects = &filesystem_.s);
++            .out_objects = &filesystem_.s,
++            .out_handles = unused_handles);
+         if (R_FAILED(rc)) return rc;
+         opened_ = true;
+ 
 diff --git a/common/plugin_launch.hpp b/common/plugin_launch.hpp
 new file mode 100644
 --- /dev/null
@@ -364,7 +384,20 @@ diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
 diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
 --- a/hen/source/game_arm.cpp
 +++ b/hen/source/game_arm.cpp
-@@ -191,6 +191,7 @@
+@@ -46,9 +46,10 @@
+ }
+ 
+ bool containsEntry(const ounce::DomainEntry entries[ounce::MaxDomainEntries], u32 count,
+-                   u64 address) {
++                   const ounce::DomainEntry& expected) {
+     for (u32 index = 0; index < count; index++) {
+-        if (entries[index].address == address) {
++        if (entries[index].address == expected.address && entries[index].object == expected.object &&
++            entries[index].metadata == expected.metadata) {
+             return true;
+         }
+     }
+@@ -191,6 +192,7 @@
  }
  
  void GameArm::step() {
@@ -372,7 +405,7 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
      Result rc = 0;
      switch (state_) {
      case State::Inactive:
-@@ -241,6 +242,16 @@
+@@ -241,6 +243,16 @@
      if (R_FAILED(rc)) {
          fault(rc);
      }
@@ -389,7 +422,35 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
  }
  
  Result GameArm::openPackage() {
-@@ -538,7 +549,10 @@
+@@ -468,7 +480,7 @@
+     trace_.write(GameTracePoint_SecondSnapshotDone, rc, after_count);
+     if (R_FAILED(rc)) return restoreGate(rc);
+ 
+-    if (status_.mounts == 1 && !containsEntry(after, after_count, first_.address)) {
++    if (status_.mounts == 1 && !containsEntry(after, after_count, first_)) {
+         first_closed_ = true;
+     }
+     bool matching = false;
+@@ -514,8 +526,17 @@
+         // restored, the pending title can continue on its stock CodeFS.
+         return restoreGate(rc, State::WaitProcess);
+     }
+-    rc = mount_->exchange(code_);
++    rc = exchangeGameCode();
+     return restoreGate(rc, R_SUCCEEDED(rc) ? State::WaitProcess : State::Fault);
++}
++
++Result GameArm::exchangeGameCode() {
++    const Result rc = mount_->exchange(code_);
++    // The entry now holds the package's donor, not the original stock
++    // CodeFS object. Track that identity until host exit; an address alone
++    // can be recycled by unrelated plugin/package allocations.
++    if (R_SUCCEEDED(rc)) code_.object = current_mount_.donor_object;
++    return rc;
+ }
+ 
+ Result GameArm::waitForProcess() {
+@@ -538,7 +559,10 @@
              return rc;
          }
          if (!allow_bridge_process_ && !isApplicationProgram(title)) {
@@ -401,18 +462,55 @@ diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
          }
          active_title_ = title;
      }
+@@ -563,9 +587,9 @@
+     if (R_FAILED(rc)) return rc;
+     if (program_id != active_title_) return UnexpectedState;
+ 
+-    const u64 now = armGetSystemTick();
++    const u64 now = GameClock::now();
+     if (capture_next_tick_ && now < capture_next_tick_) return 0;
+-    capture_next_tick_ = now + armNsToTicks(CaptureIntervalNs);
++    capture_next_tick_ = now + GameClock::toTicks(CaptureIntervalNs);
+     capture_attempts_++;
+     trace_.write(GameTracePoint_PolicyCaptureAttempt, 0, capture_attempts_);
+ 
+@@ -619,7 +643,7 @@
+         u32 count = 0;
+         GameMount final_mount(*memory_, mount_config_);
+         R_TRY(final_mount.snapshot(entries, count));
+-        if (containsEntry(entries, count, code_.address)) return 0;
++        if (containsEntry(entries, count, code_)) return 0;
+     }
+     if (package_) package_->close();
+     package_.reset();
 diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
 --- a/hen/source/game_arm.hpp
 +++ b/hen/source/game_arm.hpp
-@@ -7,6 +7,7 @@
+@@ -7,13 +7,22 @@
  #include "../../common/package.hpp"
  #include "../../common/loader_gate.hpp"
  #include "game_trace.hpp"
 +#include "../../common/plugin_launch.hpp"
  
  using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
- using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
-@@ -27,6 +28,9 @@
+-using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
++#ifdef KAIHEN_GAME_ARM_TEST_CLOCK
++using GameClock = KAIHEN_GAME_ARM_TEST_CLOCK;
++#else
++using GameClock = ounce::LoaderGateClock;
++#endif
++using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess, GameClock>;
+ using GamePackage = ounce::NativePackage<ounce::MemoryWriter::RoProcess>;
+ using GameMount = ounce::DomainMount<ounce::MemoryWriter::RoProcess>;
+ 
+ class GameArm {
++#ifdef KAIHEN_GAME_ARM_TEST_CLOCK
++    friend struct GameArmLifetimeTest;
++#endif
+   public:
+     ~GameArm();
+ 
+@@ -27,6 +36,9 @@
      Result start(Handle filesystem_root, Handle bootstrap_process);
      void step();
      HenGameStatus status() const;
@@ -422,7 +520,15 @@ diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
  
    private:
      enum class InputChoice {
-@@ -98,6 +102,7 @@
+@@ -52,6 +64,7 @@
+     Result waitForInput();
+     Result parkGate();
+     Result receiveGameMount();
++    Result exchangeGameCode();
+     Result waitForProcess();
+     Result capturePolicy();
+     Result pollProcessExit();
+@@ -98,6 +111,7 @@
      bool handles1_ = false;
      bool started_ = false;
      bool policy_ready_ = false;
@@ -1670,6 +1776,108 @@ diff --git a/hen/source/server.hpp b/hen/source/server.hpp
 +    bool reload_configured_ = false;
 +    u64 reload_instance_ = 0;
  };
+diff --git a/hen/source/sm_proxy.cpp b/hen/source/sm_proxy.cpp
+--- a/hen/source/sm_proxy.cpp
++++ b/hen/source/sm_proxy.cpp
+@@ -44,25 +44,37 @@
+ }
+ 
+ /// Joins and frees the sessions whose thread has ended. Under lock_.
+-void SmProxy::reapFinishedSessions() {
++Result SmProxy::reapFinishedSessions() {
+     Session** link = &sessions_;
+     while (Session* session = *link) {
+         if (session->running.load(std::memory_order_acquire)) {
+             link = &session->next;
+             continue;
+         }
+-        threadWaitForExit(&session->thread);
+-        threadClose(&session->thread);
++        if (session->thread_started && !session->thread_exited) {
++            const Result rc = threadWaitForExit(&session->thread);
++            if (R_FAILED(rc)) return rc;
++            session->thread_exited = true;
++        }
++        const Result rc = threadClose(&session->thread);
++        if (R_FAILED(rc)) return rc;
+         *link = session->next;
+         delete session;
+     }
++    return 0;
++}
++
++Result SmProxy::collectFinishedSessions() {
++    LockGuard guard(&lock_);
++    return reapFinishedSessions();
+ }
+ 
+ Result SmProxy::openSession(Handle* out_client) {
+     LockGuard guard(&lock_);
+     if (master_ == INVALID_HANDLE)
+         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+-    reapFinishedSessions();
++    const Result reap = reapFinishedSessions();
++    if (R_FAILED(reap)) return reap;
+ 
+     Session* session = new (std::nothrow) Session;
+     if (!session)
+@@ -79,14 +91,23 @@
+     session->running.store(true, std::memory_order_release);
+     rc = threadCreate(&session->thread, sessionMain, session, nullptr,
+                       ThreadStackSize, ThreadPriority, -2);
++    bool thread_created = R_SUCCEEDED(rc);
+     if (R_SUCCEEDED(rc)) {
+         rc = threadStart(&session->thread);
+-        if (R_FAILED(rc))
+-            threadClose(&session->thread);
++        session->thread_started = R_SUCCEEDED(rc);
+     }
+     if (R_FAILED(rc)) {
+         svcCloseHandle(session->server);
+         svcCloseHandle(client);
++        session->server = INVALID_HANDLE;
++        session->running.store(false, std::memory_order_release);
++        if (thread_created && R_FAILED(threadClose(&session->thread))) {
++            // Keep the descriptor's backing context after an unstarted
++            // thread could not be closed. A later collection resumes it.
++            session->next = sessions_;
++            sessions_ = session;
++            return rc;
++        }
+         delete session;
+         return rc;
+     }
+diff --git a/hen/source/sm_proxy.hpp b/hen/source/sm_proxy.hpp
+--- a/hen/source/sm_proxy.hpp
++++ b/hen/source/sm_proxy.hpp
+@@ -43,6 +43,9 @@
+     /// There is no fixed number of sessions: it fails only when HEN cannot
+     /// allocate the session or create its thread.
+     Result openSession(Handle* out_client);
++    /// Reclaims ended proxy threads. Failure retains the context and partial
++    /// join state; it is never permission to free an unclosed thread object.
++    Result collectFinishedSessions();
+ 
+   private:
+     static constexpr size_t ThreadStackSize = 0x4000;
+@@ -57,6 +60,8 @@
+         Thread thread = {};
+         Handle server = INVALID_HANDLE;
+         std::atomic<bool> running{false};
++        bool thread_started = false;
++        bool thread_exited = false;
+     };
+ 
+     static void sessionMain(void* argument);
+@@ -67,7 +72,7 @@
+     /// Asks SM for the service on the master session. The session SM returns
+     /// is in *out_handle.
+     Result lookUpService(const SmServiceName& name, Handle* out_handle);
+-    void reapFinishedSessions();
++    Result reapFinishedSessions();
+ 
+     Handle master_ = INVALID_HANDLE;
+     Mutex lock_ = {};
 diff --git a/hen/test.sh b/hen/test.sh
 --- a/hen/test.sh
 +++ b/hen/test.sh
@@ -1689,7 +1897,7 @@ diff --git a/hen/test.sh b/hen/test.sh
 -$cxx $flags -I"$nx/include" -I../libkaihen/include tests/sm_request_test.cpp -o build/tests/sm_request
 -build/tests/sm_request
 +flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
-+for test in mount_request sm_request reload lifecycle_server loader_gate; do
++for test in mount_request sm_request reload lifecycle_server loader_gate session_lifetime; do
 +    $cxx $flags -Itests/host -I"$nx/include" -I../libkaihen/include "tests/${test}_test.cpp" -o "$out/$test"
 +    "$out/$test"
 +done
@@ -1697,7 +1905,7 @@ diff --git a/hen/tests/host/switch.h b/hen/tests/host/switch.h
 new file mode 100644
 --- /dev/null
 +++ b/hen/tests/host/switch.h
-@@ -0,0 +1,17 @@
+@@ -0,0 +1,20 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +#pragma once
 +
@@ -1714,6 +1922,9 @@ new file mode 100644
 +#include <switch/sf/hipc.h>
 +#include <switch/sf/cmif.h>
 +#include <switch/sf/service.h>
++#include <switch/services/sm.h>
++#include <switch/services/hid.h>
++#include <switch/services/pm.h>
 +}
 diff --git a/hen/tests/host/sys/lock.h b/hen/tests/host/sys/lock.h
 new file mode 100644
@@ -2617,6 +2828,523 @@ new file mode 100644
 +    journal(); flow(); lifecycleContract(); publicationRaces(); wire();
 +    std::puts("reload: real orchestration failure matrix, idempotency/expiry/quarantine and ABI envelopes passed");
 +}
+diff --git a/hen/tests/session_lifetime_test.cpp b/hen/tests/session_lifetime_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/session_lifetime_test.cpp
+@@ -0,0 +1,512 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Actual plugin runtime and SM proxy loops, real SDK clone/close/IPC packing,
++// counted fake kernel. FS's quota/peer teardown are a MODEL, not device proof.
++#include <array>
++#include <cassert>
++#include <chrono>
++#include <condition_variable>
++#include <cstdio>
++#include <cstring>
++#include <map>
++#include <memory>
++#include <mutex>
++#include <thread>
++#include <vector>
++#include "../source/sm_proxy.cpp"
++#include "../../libkaihen/source/plugin_runtime.cpp"
++struct LifetimeClock {
++    static u64 now() { return 0; }
++    static u64 toNs(u64 value) { return value * 32; }
++    static u64 toTicks(u64 value) { return value / 32 + (value % 32 != 0); }
++};
++#define KAIHEN_GAME_ARM_TEST_CLOCK LifetimeClock
++#include "../source/game_arm.cpp"
++#undef KAIHEN_GAME_ARM_TEST_CLOCK
++
++namespace kernel {
++using Wire = std::array<u8, 0x100>;
++thread_local Wire tls;
++thread_local unsigned realm = 1;
++enum class Kind { Session, Event, Port, Master, Fs, Other, Process, Reader, Monitor };
++struct Request { Wire input{}, output{}; unsigned caller = 0; bool replied = false; Result result = 0; };
++struct Object {
++    Kind kind;
++    unsigned owner = 0, clients = 0, servers = 0;
++    bool closed = false, signalled = false;
++    std::vector<std::shared_ptr<Request>> requests;
++    std::shared_ptr<Request> current;
++    std::vector<Handle> accepts;
++};
++struct Entry { std::shared_ptr<Object> object; unsigned owner; bool server; };
++struct Task { ThreadFunc entry; void* arg; unsigned owner; bool started = false; std::thread thread; };
++struct SmState { Service service{}; unsigned refs = 0; std::map<u64, Handle> overrides; };
++std::mutex lock;
++std::condition_variable changed;
++std::map<Handle, Entry> handles;
++std::map<Thread*, std::shared_ptr<Task>> tasks;
++std::map<Mutex*, std::unique_ptr<std::mutex>> mutexes;
++std::map<unsigned, SmState> sm;
++Handle next_handle = 10, migration_port = 0;
++unsigned fs_live = 0, fs_peak = 0;
++constexpr unsigned FsBudget = 16;
++unsigned fail_wait = 0, fail_close = 0, fail_start = 0, wait_calls = 0, close_calls = 0;
++constexpr Result WaitFailure = MAKERESULT(345, 221), CloseFailure = MAKERESULT(345, 222), StartFailure = MAKERESULT(345, 223);
++unsigned abandon_lookup = 0;
++thread_local std::shared_ptr<Request> active_request;
++constexpr u64 MemoryBase = 0x200000, Domain = MemoryBase + 0x80, Table = MemoryBase + 0x1000;
++constexpr u64 DonorObject = MemoryBase + 0x4100, StockObject = MemoryBase + 0x4200, OtherObject = MemoryBase + 0x4300;
++std::array<u8, 0x8000> memory;
++Service monitor_service{};
++template <typename T> void put(u64 address, const T& value) {
++    assert(address >= MemoryBase && address + sizeof(T) <= MemoryBase + memory.size());
++    std::memcpy(memory.data() + address - MemoryBase, &value, sizeof(value));
++}
++
++Handle add(const std::shared_ptr<Object>& object, unsigned owner, bool server = false) {
++    const Handle handle = next_handle++;
++    handles.emplace(handle, Entry{object, owner, server});
++    if (server) ++object->servers; else ++object->clients;
++    return handle;
++}
++void close(Handle handle) {
++    auto it = handles.find(handle);
++    assert(it != handles.end());
++    auto entry = it->second;
++    handles.erase(it);
++    if (entry.server) --entry.object->servers; else --entry.object->clients;
++    if (entry.object->kind == Kind::Fs && !entry.object->clients && !entry.object->closed) {
++        entry.object->closed = true; --fs_live;
++    }
++    changed.notify_all();
++}
++void processExit(unsigned owner) {
++    std::vector<Handle> dying;
++    for (const auto& [handle, entry] : handles) if (entry.owner == owner) dying.push_back(handle);
++    for (Handle handle : dying) close(handle);
++}
++Handle service(Kind kind, unsigned owner) {
++    if (kind == Kind::Fs) {
++        if (fs_live == FsBudget) return 0;
++        fs_peak = std::max(fs_peak, ++fs_live);
++    }
++    auto object = std::make_shared<Object>(); object->kind = kind; object->owner = owner;
++    return add(object, owner);
++}
++std::pair<Handle, Handle> session(unsigned server_owner, unsigned client_owner) {
++    auto object = std::make_shared<Object>(); object->kind = Kind::Session; object->owner = server_owner;
++    return {add(object, server_owner, true), add(object, client_owner)};
++}
++void transfer(Wire& wire, unsigned destination, bool receive) {
++    auto message = hipcParseRequest(wire.data());
++    for (u32 i = 0; i < message.meta.num_copy_handles; ++i) {
++        if (message.data.copy_handles[i] == CUR_PROCESS_HANDLE) {
++            auto process = std::make_shared<Object>(); process->kind = Kind::Process; process->owner = realm;
++            if (receive) message.data.copy_handles[i] = add(process, destination);
++            continue;
++        }
++        auto found = handles.find(message.data.copy_handles[i]); assert(found != handles.end());
++        if (receive) message.data.copy_handles[i] = add(found->second.object, destination, found->second.server);
++    }
++    for (u32 i = 0; i < message.meta.num_move_handles; ++i) {
++        const Handle old = message.data.move_handles[i];
++        auto found = handles.find(old); assert(found != handles.end());
++        if (receive) message.data.move_handles[i] = add(found->second.object, destination, found->second.server);
++        // Reference model, not a native Switch 2 observation:
++        // Atmosphere's kern_k_server_session.cpp SendReply/CleanupServerHandles
++        // consumes moved handles even when the destination has closed.
++        // https://github.com/Atmosphere-NX/Atmosphere/blob/master/libraries/libmesosphere/source/kern_k_server_session.cpp
++        close(old);
++    }
++}
++void reply(const std::shared_ptr<Object>& object) {
++    auto request = object->current; assert(request);
++    request->output = tls;
++    bool alive = false;
++    for (const auto& [handle, entry] : handles) {
++        (void)handle;
++        if (entry.object == object && !entry.server && entry.owner == request->caller) alive = true;
++    }
++    transfer(request->output, request->caller, alive);
++    request->result = alive ? 0 : KERNELRESULT(ConnectionClosed);
++    request->replied = true;
++    object->current.reset();
++    changed.notify_all();
++}
++void boundedWait(std::unique_lock<std::mutex>& held, auto predicate) {
++    assert(changed.wait_for(held, std::chrono::seconds(5), predicate));
++}
++unsigned owned(unsigned owner) {
++    std::lock_guard guard(lock); unsigned count = 0;
++    for (const auto& [handle, entry] : handles) { (void)handle; count += entry.owner == owner; }
++    return count;
++}
++void finishProxies(SmProxy& proxy) {
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
++    while (std::chrono::steady_clock::now() < deadline) {
++        assert(!proxy.collectFinishedSessions());
++        { std::lock_guard guard(lock); if (tasks.empty()) return; }
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(false && "proxy threads did not finish");
++}
++} // namespace kernel
++
++extern "C" {
++void* armGetTls() { return kernel::tls.data(); }
++void mutexLock(Mutex* mutex) {
++    std::mutex* native;
++    { std::lock_guard guard(kernel::lock); auto& value = kernel::mutexes[mutex]; if (!value) value = std::make_unique<std::mutex>(); native = value.get(); }
++    native->lock();
++}
++void mutexUnlock(Mutex* mutex) {
++    std::mutex* native;
++    { std::lock_guard guard(kernel::lock); native = kernel::mutexes.at(mutex).get(); }
++    native->unlock();
++}
++Result svcCloseHandle(Handle handle) {
++    std::lock_guard guard(kernel::lock);
++    assert(kernel::handles.at(handle).owner == kernel::realm);
++    kernel::close(handle); return 0;
++}
++Result svcCreateSession(Handle* server, Handle* client, u32, u64) {
++    std::lock_guard guard(kernel::lock);
++    const auto pair = kernel::session(kernel::realm, kernel::realm); *server = pair.first; *client = pair.second; return 0;
++}
++Result svcCreateEvent(Handle* write, Handle* read) {
++    std::lock_guard guard(kernel::lock);
++    auto object = std::make_shared<kernel::Object>(); object->kind = kernel::Kind::Event;
++    *write = kernel::add(object, kernel::realm); *read = kernel::add(object, kernel::realm); return 0;
++}
++Result svcSignalEvent(Handle handle) {
++    std::lock_guard guard(kernel::lock); kernel::handles.at(handle).object->signalled = true; kernel::changed.notify_all(); return 0;
++}
++Result svcClearEvent(Handle handle) {
++    std::lock_guard guard(kernel::lock); kernel::handles.at(handle).object->signalled = false; return 0;
++}
++Result svcWaitSynchronization(s32* index, const Handle* handles, s32 count, u64) {
++    std::unique_lock held(kernel::lock); assert(count == 1);
++    auto object = kernel::handles.at(handles[0]).object;
++    kernel::boundedWait(held, [&] { return object->signalled; }); *index = 0; return 0;
++}
++Result svcAcceptSession(Handle* session, Handle port) {
++    std::lock_guard guard(kernel::lock); auto object = kernel::handles.at(port).object;
++    assert(!object->accepts.empty()); *session = object->accepts.front(); object->accepts.erase(object->accepts.begin()); return 0;
++}
++Result svcReplyAndReceive(s32* index, const Handle* list, s32 count, Handle target, u64) {
++    using namespace kernel;
++    std::unique_lock held(lock);
++    if (target) reply(handles.at(target).object);
++    if (!count) { *index = -1; return KERNELRESULT(TimedOut); }
++    const auto ready = [&]() -> int {
++        for (s32 i = 0; i < count; ++i) {
++            const auto object = handles.at(list[i]).object;
++            if (object->kind == Kind::Port && !object->accepts.empty()) return i;
++            if (object->kind == Kind::Session && (!object->requests.empty() || !object->clients)) return i;
++        }
++        return -1;
++    };
++    boundedWait(held, [&] { return ready() >= 0; });
++    *index = ready(); auto object = handles.at(list[*index]).object;
++    if (object->kind == Kind::Port) return 0;
++    if (object->requests.empty()) return KERNELRESULT(ConnectionClosed);
++    object->current = object->requests.front(); object->requests.erase(object->requests.begin());
++    active_request = object->current; tls = object->current->input; return 0;
++}
++Result svcSendSyncRequest(Handle handle) {
++    using namespace kernel;
++    std::unique_lock held(lock);
++    auto found = handles.find(handle); if (found == handles.end()) return KERNELRESULT(ConnectionClosed);
++    assert(found->second.owner == realm && !found->second.server);
++    auto object = found->second.object;
++    auto message = hipcParseRequest(tls.data());
++    if (object->kind == Kind::Session) {
++        if (!object->servers) return KERNELRESULT(ConnectionClosed);
++        auto request = std::make_shared<kernel::Request>(); request->input = tls; request->caller = realm;
++        transfer(request->input, object->owner, true);
++        object->requests.push_back(request); changed.notify_all();
++        boundedWait(held, [&] { return request->replied || !object->servers; });
++        if (!request->replied) return KERNELRESULT(ConnectionClosed);
++        tls = request->output; return request->result;
++    }
++    if (message.meta.type == CmifCommandType_Close) {
++        if (!object->closed && object->kind == Kind::Fs) --fs_live;
++        object->closed = true; return 0;
++    }
++    assert(!object->closed);
++    const auto* header = static_cast<const CmifInHeader*>(cmifGetAlignedDataStart(message.data.data_words, tls.data()));
++    assert(header->magic == CMIF_IN_HEADER_MAGIC);
++    if (message.meta.type == CmifCommandType_Control) {
++        if (header->command_id == 3) { ounce::writePointerBufferSizeReply(tls.data()); return 0; }
++        if (header->command_id == 0) { const u32 id = 1; ounce::writeReply(tls.data(), 0, &id, sizeof(id)); return 0; }
++        assert(header->command_id == 2 || header->command_id == 4);
++        const Handle clone = service(object->kind, realm);
++        ounce::sm::writeReply(tls.data(), ounce::sm::Protocol::Cmif,
++            clone ? 0 : MAKERESULT(345, 240), clone); return 0;
++    }
++    if (object->kind == Kind::Monitor) {
++        assert(header->command_id == 7); ounce::writeReply(tls.data(), MAKERESULT(15, 1), nullptr, 0); return 0;
++    }
++    if (object->kind == Kind::Reader) {
++        RoProcessMemoryRequest input; std::memcpy(&input, header + 1, sizeof(input));
++        assert(input.process_id == 8 && input.address >= MemoryBase && input.address + input.size <= MemoryBase + memory.size());
++        if (header->command_id == RoProcessReadCommand)
++            std::memcpy(hipcGetBufferAddress(message.data.recv_buffers), memory.data() + input.address - MemoryBase, input.size);
++        else {
++            assert(header->command_id == RoProcessWriteCommand);
++            std::memcpy(memory.data() + input.address - MemoryBase, hipcGetBufferAddress(message.data.send_buffers), input.size);
++        }
++        ounce::writeReply(tls.data(), 0, nullptr, 0); return 0;
++    }
++    if (object->kind == Kind::Fs) {
++        assert(header->command_id == 10);
++        const Handle child = service(Kind::Fs, realm);
++        ounce::sm::writeReply(tls.data(), ounce::sm::Protocol::Cmif, child ? 0 : MAKERESULT(345, 240), child); return 0;
++    }
++    assert(object->kind == Kind::Master && header->command_id == 1);
++    SmServiceName name; std::memcpy(&name, header + 1, sizeof(name));
++    if (abandon_lookup) { assert(active_request && active_request->caller == abandon_lookup); processExit(abandon_lookup); abandon_lookup = 0; }
++    const Handle service_handle = service(!std::strncmp(name.name, "fsp-srv", 8) ? Kind::Fs : Kind::Other, realm);
++    ounce::sm::writeReply(tls.data(), ounce::sm::Protocol::Cmif,
++        service_handle ? 0 : MAKERESULT(345, 240), service_handle); return 0;
++}
++Result threadCreate(Thread* thread, ThreadFunc entry, void* arg, void*, size_t, int, int) {
++    std::lock_guard guard(kernel::lock);
++    auto task = std::make_shared<kernel::Task>(); task->entry = entry; task->arg = arg; task->owner = kernel::realm;
++    assert(!kernel::tasks.count(thread)); kernel::tasks[thread] = task; return 0;
++}
++Result threadStart(Thread* thread) {
++    std::shared_ptr<kernel::Task> task;
++    { std::lock_guard guard(kernel::lock); if (kernel::fail_start) { --kernel::fail_start; return kernel::StartFailure; } task = kernel::tasks.at(thread); task->started = true; }
++    task->thread = std::thread([task] { kernel::realm = task->owner; task->entry(task->arg); }); return 0;
++}
++Result threadWaitForExit(Thread* thread) {
++    std::shared_ptr<kernel::Task> task;
++    { std::lock_guard guard(kernel::lock); ++kernel::wait_calls; if (kernel::fail_wait) { --kernel::fail_wait; return kernel::WaitFailure; } task = kernel::tasks.at(thread); assert(task->started); }
++    if (task->thread.joinable()) task->thread.join(); return 0;
++}
++Result threadClose(Thread* thread) {
++    std::lock_guard guard(kernel::lock); ++kernel::close_calls;
++    if (kernel::fail_close) { --kernel::fail_close; return kernel::CloseFailure; }
++    auto task = kernel::tasks.at(thread); assert(!task->thread.joinable()); kernel::tasks.erase(thread); return 0;
++}
++void smAddOverrideHandle(SmServiceName name, Handle handle) { kernel::sm[kernel::realm].overrides[smServiceNameToU64(name)] = handle; }
++Result smInitialize() {
++    auto& state = kernel::sm[kernel::realm]; if (state.refs++) return 0;
++    const auto found = state.overrides.find(smServiceNameToU64(smEncodeName("sm:")));
++    Handle handle;
++    if (found != state.overrides.end()) handle = found->second;
++    else { std::lock_guard guard(kernel::lock); handle = kernel::service(kernel::Kind::Other, kernel::realm); }
++    serviceCreate(&state.service, handle); state.service.own_handle = found == state.overrides.end(); return 0;
++}
++void smExit() { auto& state = kernel::sm[kernel::realm]; assert(state.refs); if (!--state.refs) serviceClose(&state.service); }
++Result smRegisterServiceInSpace(Handle* out, u32 space, SmServiceName, bool, s32) {
++    std::lock_guard guard(kernel::lock); assert(space == 1 && !kernel::migration_port);
++    auto object = std::make_shared<kernel::Object>(); object->kind = kernel::Kind::Port; object->owner = kernel::realm;
++    *out = kernel::migration_port = kernel::add(object, kernel::realm); kernel::changed.notify_all(); return 0;
++}
++Result smUnregisterServiceInSpace(u32 space, SmServiceName) { std::lock_guard guard(kernel::lock); assert(space == 1); kernel::migration_port = 0; return 0; }
++Result svcGetProcessId(u64* pid, Handle handle) { std::lock_guard guard(kernel::lock); auto object = kernel::handles.at(handle).object; assert(object->kind == kernel::Kind::Process); *pid = object->owner; return 0; }
++Result fsStorageRead(FsStorage*, s64, void* output, u64 size) { std::memset(output, 0, size); return 0; }
++void fsFsClose(FsFileSystem* fs) { serviceClose(&fs->s); }
++Result svcCancelSynchronization(Handle) { return 0; }
++void svcSleepThread(s64) { std::this_thread::yield(); }
++Service* pmdmntGetServiceSession() { return &kernel::monitor_service; }
++Result pmdmntGetProgramId(u64* program, u64 pid) { Handle ignored[8]{}; return serviceDispatchInOut(&kernel::monitor_service, 7, pid, *program, .out_handles = ignored); }
++Result pmdmntGetProcessId(u64*, u64) { return MAKERESULT(15, 1); }
++Result pmdmntGetApplicationProcessId(u64*) { return MAKERESULT(15, 1); }
++Result hidInitialize() { return 0; }
++void hidExit() {}
++Result hidActivateNpadWithRevision(u32) { return 0; }
++Result hidSetSupportedNpadStyleSet(u32) { return 0; }
++Result hidSetSupportedNpadIdType(const HidNpadIdType*, size_t) { return 0; }
++size_t hidGetNpadStatesSystemExt(HidNpadIdType, HidNpadSystemExtState*, size_t) { return 0; }
++}
++Result readSavedPolicy(Handle, const char*, SignedPolicy*) { return MAKERESULT(2, 1); }
++Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy&, u8*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++
++struct GameArmLifetimeTest {
++    static void run(Handle root) {
++        using namespace kernel;
++        realm = 1; memory.fill(0);
++        const unsigned baseline = fs_live;
++        GameArm game;
++        assert(!cmifCloneCurrentObject(root, &game.filesystem_root_));
++        {
++            std::lock_guard guard(lock);
++            game.reader_session_ = service(Kind::Reader, 1);
++            game.filesystem_process_ = service(Kind::Process, 1);
++            handles.at(game.filesystem_process_).object->owner = 8;
++            game.memory_config_.storage = service(Kind::Other, 1);
++            game.monitor_ = service(Kind::Monitor, 1);
++        }
++        serviceCreate(pmdmntGetServiceSession(), game.monitor_);
++        game.memory_.emplace(game.memory_config_, game.reader_session_, game.filesystem_process_);
++        assert(!game.memory_->begin());
++        game.mount_config_.domain = Domain; game.mount_config_.table = Table; game.mount_config_.root_id = 1;
++        game.current_mount_ = game.mount_config_;
++        put<u64>(Table + 0x20, DonorObject); put<u64>(Table + 0x28, 0x5678);
++        put<u64>(DonorObject, 0xa550); put<u64>(StockObject, 0xa550);
++        game.package_.emplace(*game.memory_, game.filesystem_root_);
++        assert(!game.package_->open("@Sdcard:/fixture.nsp", game.current_mount_));
++        game.mount_.emplace(*game.memory_, game.current_mount_);
++        game.code_ = {Table + 0x60, StockObject, 0x5678};
++        put<u64>(game.code_.address + 0x20, StockObject); put<u64>(game.code_.address + 0x28, 0x5678);
++        assert(!game.exchangeGameCode()); // actual exchange and installed-identity tracking
++        assert(game.code_.object == game.current_mount_.donor_object);
++        put<u64>(Domain + 0x20, game.code_.address); put<u64>(game.code_.address, Domain + 0x20);
++        put<u64>(game.code_.address + 0x18, Domain);
++        game.gate_.emplace(*game.memory_, game.gate_config_);
++        game.state_ = GameArm::State::WaitExit; game.started_ = true; game.status_.process_id = 800;
++        assert(fs_live == baseline + 2); // GameArm root + active package session
++        game.step(); // PID gone, but the actual installed CodeFS still exists
++        assert(game.package_ && game.state_ == GameArm::State::WaitExit);
++        PluginLaunchContext lease{};
++        assert(game.acquireReloadLease(lease));
++        put<u64>(game.code_.address + 0x20, OtherObject); // same slot reused for another object
++        game.step(); // reload lease keeps the original tracking/resources pinned
++        assert(game.package_ && fs_live == baseline + 2);
++        game.releaseReloadLease(); game.step(); // production host-exit path
++        assert(!game.package_ && game.state_ == GameArm::State::OpenPackage && game.status_.serial == 1);
++        assert(fs_live == baseline + 1); // package session really closed in the counted kernel
++        game.step(); assert(game.state_ == GameArm::State::WaitForInput);
++        ounce::DomainEntry recycled[] = {{0x100, 0x200, 1}};
++        assert(!containsEntry(recycled, 1, {0x100, 0x300, 1}));
++    }
++};
++
++namespace {
++using namespace kernel;
++struct Resident { unsigned pid; Handle control; std::array<Service, 3> fs; };
++Handle root, master;
++SmProxy proxy;
++Handle cloneRoot() { Handle handle = 0; assert(!cmifCloneCurrentObject(root, &handle)); return handle; }
++void openFsPool(std::array<Service, 3>& pool, Handle borrowed) {
++    serviceCreate(&pool[0], borrowed); pool[0].own_handle = false;
++    assert(!serviceConvertToDomain(&pool[0]));
++    for (unsigned i = 1; i != pool.size(); ++i) assert(!serviceClone(&pool[0], &pool[i]));
++}
++Resident start(unsigned pid, Handle fs, Handle sm_client) {
++    realm = 1; Resident resident{pid, 0, {}};
++    std::thread process([&] {
++        realm = pid; sm[pid] = {};
++        Handle ready = 0, control = 0;
++        assert(!pluginRuntimeInitializeWithService(&ready, &control));
++        assert(!svcSignalEvent(ready));
++    });
++    Handle startup;
++    {
++        std::unique_lock held(lock); boundedWait(held, [] { return migration_port != 0; });
++        auto port = handles.at(migration_port).object;
++        auto pair = session(pid, 1); startup = pair.second; port->accepts.push_back(pair.first); changed.notify_all();
++    }
++    Service service_object = {}; serviceCreate(&service_object, startup);
++    Handle identity[8]{};
++    assert(!serviceDispatch(&service_object, PluginStartupCommand_GetIdentity,
++        .out_handle_attrs = {SfOutHandleAttr_HipcCopy}, .out_handles = identity));
++    u64 peer_pid = 0; assert(!svcGetProcessId(&peer_pid, identity[0]) && peer_pid == pid); svcCloseHandle(identity[0]);
++    Handle release = 0, ready = 0;
++    assert(!pluginAdoptHandles(&service_object, sm_client, fs, &release, &ready, &resident.control));
++    assert(!svcSignalEvent(release));
++    assert(!svcWaitSynchronizationSingle(ready, 5000000000ull));
++    svcCloseHandle(release); svcCloseHandle(ready); svcCloseHandle(startup);
++    process.join();
++    // Exact bootstrap/reload ownership: handoff copies, then HEN closes its
++    // local references. PluginRuntimeExit owns the received copies.
++    svcCloseHandle(fs); svcCloseHandle(sm_client);
++    realm = pid; openFsPool(resident.fs, g_received.fs_root);
++    realm = 1; return resident;
++}
++void stop(Resident& resident) {
++    realm = resident.pid;
++    for (auto& service : resident.fs) serviceClose(&service);
++    pluginRuntimeExit(); // actual production closeReceivedHandles path
++    assert(!owned(resident.pid));
++    realm = 1; svcCloseHandle(resident.control);
++}
++void lookup(Handle sm_client, const char* name, unsigned pid) {
++    realm = pid;
++    Service sm_service = {}; serviceCreate(&sm_service, sm_client);
++    Handle output[8] = {};
++    const auto encoded = smEncodeName(name);
++    assert(!serviceDispatchIn(&sm_service, 1, encoded,
++        .out_handle_attrs = {SfOutHandleAttr_HipcMove}, .out_handles = output));
++    Service service_object = {}; serviceCreate(&service_object, output[0]); serviceClose(&service_object);
++    realm = 1;
++}
++void waitForEnded() {
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
++    while (std::chrono::steady_clock::now() < deadline) {
++        // Worker close of the server proves serve() passed its final use;
++        // collection's real threadWaitForExit then proves SDK thread exit.
++        { std::lock_guard guard(lock); bool servers = false; for (const auto& [h, entry] : handles) { (void)h; servers |= entry.server && entry.object->kind == Kind::Session; } if (!servers) return; }
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(false);
++}
++}
++
++int main() {
++    using namespace kernel;
++    { std::lock_guard guard(lock); root = service(Kind::Fs, 1); master = service(Kind::Master, 1); }
++    proxy.setMaster(master);
++    Handle sm_client = 0; assert(!proxy.openSession(&sm_client));
++    auto resident = start(212, cloneRoot(), sm_client);
++    const unsigned steady_fs = fs_live;
++    assert(steady_fs == 5); // retained HEN root + raw override + three SDK sessions
++    for (unsigned cycle = 0; cycle != 20; ++cycle) {
++        // hbmenu/NRO has its own borrowed root and SDK pool.
++        realm = 1; Handle host_root = cloneRoot(), host_sm = 0;
++        assert(!proxy.openSession(&host_sm));
++        { std::lock_guard guard(lock); handles.at(host_root).owner = 1000 + cycle; handles.at(host_sm).owner = 1000 + cycle; }
++        realm = 1000 + cycle; std::array<Service, 3> host_pool{}; openFsPool(host_pool, host_root); realm = 1;
++        lookup(host_sm, "fsp-srv", 1000 + cycle);
++        for (unsigned reload = 0; reload != 2; ++reload) {
++            const Handle staged_root = cloneRoot(); Handle staged_sm = 0;
++            assert(!proxy.openSession(&staged_sm)); // preflight before stopping old
++            stop(resident);
++            resident = start(213 + cycle * 2 + reload, staged_root, staged_sm);
++            assert(fs_live == steady_fs + 4);
++        }
++        realm = 1000 + cycle;
++        for (auto& service_object : host_pool) serviceClose(&service_object);
++        svcCloseHandle(host_root); svcCloseHandle(host_sm);
++        assert(!owned(1000 + cycle)); realm = 1;
++        // Normal next game's independent service connection, without HEN/R.
++        Handle game_root;
++        { std::lock_guard guard(lock); game_root = service(Kind::Fs, 3000 + cycle); }
++        realm = 3000 + cycle; Service game{}; serviceCreate(&game, game_root);
++        assert(!serviceConvertToDomain(&game)); serviceClose(&game); realm = 1;
++        assert(fs_live == steady_fs && fs_peak <= FsBudget);
++    }
++    stop(resident); finishProxies(proxy); assert(fs_live == 1);
++    GameArmLifetimeTest::run(root); assert(fs_live == 1);
++    // HOME/process exit while a service lookup is outstanding: execute the
++    // real proxy reply path and kernel-model move cleanup, not just encoding.
++    assert(!proxy.openSession(&sm_client));
++    { std::lock_guard guard(lock); handles.at(sm_client).owner = 9000; abandon_lookup = 9000; }
++    realm = 9000;
++    Service dying_sm = {}; serviceCreate(&dying_sm, sm_client);
++    const auto fs_name = smEncodeName("fsp-srv"); Handle abandoned_output[8] = {};
++    assert(serviceDispatchIn(&dying_sm, 1, fs_name,
++        .out_handle_attrs = {SfOutHandleAttr_HipcMove}, .out_handles = abandoned_output) == KERNELRESULT(ConnectionClosed));
++    assert(!owned(9000)); realm = 1; finishProxies(proxy); assert(fs_live == 1);
++    // Wait/close failures retain the real proxy context; no new allocation
++    // follows a failed reap, and a partial completed wait is not repeated.
++    assert(!proxy.openSession(&sm_client)); svcCloseHandle(sm_client); waitForEnded();
++    fail_wait = 1; const unsigned before_wait = wait_calls;
++    Handle rejected = INVALID_HANDLE;
++    assert(proxy.openSession(&rejected) == WaitFailure && tasks.size() == 1 && rejected == INVALID_HANDLE);
++    fail_close = 1;
++    assert(proxy.collectFinishedSessions() == CloseFailure && tasks.size() == 1);
++    const unsigned joined_waits = wait_calls;
++    assert(joined_waits == before_wait + 2);
++    assert(!proxy.collectFinishedSessions() && tasks.empty() && wait_calls == joined_waits);
++    fail_start = fail_close = 1;
++    assert(proxy.openSession(&sm_client) == StartFailure && tasks.size() == 1);
++    assert(!proxy.collectFinishedSessions() && tasks.empty()); // unstarted: no wait
++    svcCloseHandle(root); svcCloseHandle(master);
++    assert(!fs_live && handles.empty());
++    std::puts("actual plugin runtime/SM proxy: 40 reloads, host exits, next-game service admission, bounded clone/handle counts and retained failed joins passed");
++}
 diff --git a/libkaihen/include/kaihen.h b/libkaihen/include/kaihen.h
 --- a/libkaihen/include/kaihen.h
 +++ b/libkaihen/include/kaihen.h
@@ -3108,3 +3836,103 @@ diff --git a/libkaihen/source/plugin_startup.h b/libkaihen/source/plugin_startup
  
  /// Sends the plugin copies of the SM session and the FS root. The reply has
  /// the release event (writable), the ready event (readable) and the client
+diff --git a/ro/test.sh b/ro/test.sh
+--- a/ro/test.sh
++++ b/ro/test.sh
+@@ -3,19 +3,18 @@
+ set -eu
+ cd "$(dirname "$0")"
+ nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
+-mkdir -p build/tests
++out=${TEST_OUT:-build/tests}
++mkdir -p "$out"
+ cxx=${CXX:-g++}
+ # libnx's HIPC parser reads the kernel PID at an unaligned offset, as allowed
+ # on AArch64. Keep other ASan/UBSan checks enabled for the host fixtures.
+-flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o build/tests/wire
+-build/tests/wire
+-$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o build/tests/image
+-build/tests/image
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o build/tests/session
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
+-build/tests/mapping
+-build/tests/session
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
+-build/tests/mapping
++flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o "$out/wire"
++"$out/wire"
++$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o "$out/image"
++"$out/image"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o "$out/session"
++"$out/session"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o "$out/mapping"
++"$out/mapping"
+ echo 'RO wire, image, session and mapping tests: PASS'
+diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
+--- a/ro/tests/session_test.cpp
++++ b/ro/tests/session_test.cpp
+@@ -13,6 +13,7 @@
+ 
+ static Handle g_closed[8];
+ static u32 g_closeCount;
++static u64 g_clientPid = 213;
+ static u32 g_mapCount, g_unmapCount;
+ static Result g_mapResult;
+ static u32 g_jitMapCount, g_jitUnmapCount;
+@@ -39,7 +40,7 @@
+ Result svcGetProcessId(u64* pid, Handle handle) {
+     if (handle != 42 && handle != 43)
+         return 0xd401;
+-    *pid = 213;
++    *pid = g_clientPid;
+     return 0;
+ }
+ 
+@@ -132,7 +133,7 @@
+     words[0] = 6;
+     words[1] = 0x80000000 | num_data_words;
+     words[2] = special;
+-    words[3] = 213;
++    words[3] = static_cast<u32>(g_clientPid);
+     words[5] = handle;
+     words[8] = 0x49434653;
+     words[9] = 1;
+@@ -140,7 +141,7 @@
+ }
+ 
+ int main(void) {
+-    RoSession sessions[2] = {0};
++    RoSession sessions[2] = {};
+     u32 words[64];
+ 
+     request(words, RoCmd_Initialize, 10, 3, 42);
+@@ -386,6 +387,27 @@
+     request(words, RoCmd_Initialize, 10, 3, 42);
+     roDispatch(sessions, 2, 0, words);
+     assert(words[6] == 0 && sessions[0].process_handle == 42);
++    // Repeated host shutdown and next-process admission: execute the actual
++    // dispatcher/courier/close paths, retaining no old process or image/JIT
++    // records. Fixed logging storage is reset per cycle, not a pool increase.
++    assert(!roSessionClose(&sessions[0]));
++    g_aliasUnmapResult = 0;
++    for (u64 next_pid = 1000; next_pid != 1040; ++next_pid) {
++        g_closeCount = 0;
++        g_clientPid = next_pid;
++        request(words, RoCmd_Initialize, 10, 3, 42);
++        roDispatch(sessions, 2, 0, words);
++        assert(!words[6] && sessions[0].process_id == next_pid);
++        request(words, RoCmd_GetHomebrewSession, 10, 1, 0);
++        const Handle courier = roDispatch(sessions, 2, 0, words);
++        assert(courier == 77);
++        svcCloseHandle(courier); // same reply-side ownership as RoServer
++        assert(!roSessionClose(&sessions[0]));
++        assert(g_closeCount == 2 && g_closed[0] == 77 && g_closed[1] == 42);
++        assert(!sessions[0].process_handle && !sessions[0].process_id);
++        for (const auto& mapping : sessions[0].jit) assert(!mapping.size && !mapping.alias);
++        for (const auto& image : sessions[0].nro) assert(!image.mapped);
++    }
+     return 0;
+ }
+ 

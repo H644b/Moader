@@ -1,6 +1,6 @@
 # Reload the resident plugin
 
-**Unreleased and not accepted on hardware.** The first device reload returned `0x0000EA01` with restoration `0x00001759`; returning to hbmenu then left the console unresponsive. It recovered after a forced power cycle. The instructions below describe the implementation under investigation, not an approved update workflow. Keep this branch uninstalled until the failure is resolved and retested.
+**Unreleased and not accepted on hardware.** The first candidate failed during reload. The repaired candidate completed two reloads and returned to hbmenu, but a subsequent normal Minecraft launch caused system error `2011-0102`. HOME recovered after restarting. The instructions below describe the implementation under investigation, not an approved update workflow. Keep this branch uninstalled until the complete lifecycle check passes. [Detailed evidence](VALIDATION.md).
 
 The patched kaiHEN provides **ReloadPlugin**, an asynchronous command that restarts one registered, cooperative plugin. Moader exposes it in **Settings → Advanced → Reload Moader service**. It uses ordinary homebrew IPC after installation; a new FS acquisition is not part of each reload.
 

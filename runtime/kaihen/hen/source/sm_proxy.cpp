@@ -44,25 +44,37 @@ void SmProxy::setMaster(Handle master) {
 }
 
 /// Joins and frees the sessions whose thread has ended. Under lock_.
-void SmProxy::reapFinishedSessions() {
+Result SmProxy::reapFinishedSessions() {
     Session** link = &sessions_;
     while (Session* session = *link) {
         if (session->running.load(std::memory_order_acquire)) {
             link = &session->next;
             continue;
         }
-        threadWaitForExit(&session->thread);
-        threadClose(&session->thread);
+        if (session->thread_started && !session->thread_exited) {
+            const Result rc = threadWaitForExit(&session->thread);
+            if (R_FAILED(rc)) return rc;
+            session->thread_exited = true;
+        }
+        const Result rc = threadClose(&session->thread);
+        if (R_FAILED(rc)) return rc;
         *link = session->next;
         delete session;
     }
+    return 0;
+}
+
+Result SmProxy::collectFinishedSessions() {
+    LockGuard guard(&lock_);
+    return reapFinishedSessions();
 }
 
 Result SmProxy::openSession(Handle* out_client) {
     LockGuard guard(&lock_);
     if (master_ == INVALID_HANDLE)
         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
-    reapFinishedSessions();
+    const Result reap = reapFinishedSessions();
+    if (R_FAILED(reap)) return reap;
 
     Session* session = new (std::nothrow) Session;
     if (!session)
@@ -79,14 +91,23 @@ Result SmProxy::openSession(Handle* out_client) {
     session->running.store(true, std::memory_order_release);
     rc = threadCreate(&session->thread, sessionMain, session, nullptr,
                       ThreadStackSize, ThreadPriority, -2);
+    bool thread_created = R_SUCCEEDED(rc);
     if (R_SUCCEEDED(rc)) {
         rc = threadStart(&session->thread);
-        if (R_FAILED(rc))
-            threadClose(&session->thread);
+        session->thread_started = R_SUCCEEDED(rc);
     }
     if (R_FAILED(rc)) {
         svcCloseHandle(session->server);
         svcCloseHandle(client);
+        session->server = INVALID_HANDLE;
+        session->running.store(false, std::memory_order_release);
+        if (thread_created && R_FAILED(threadClose(&session->thread))) {
+            // Keep the descriptor's backing context after an unstarted
+            // thread could not be closed. A later collection resumes it.
+            session->next = sessions_;
+            sessions_ = session;
+            return rc;
+        }
         delete session;
         return rc;
     }

@@ -1,6 +1,6 @@
 # Install Moader
 
-**Unreleased candidate:** v0.1.0-dev.5 has not been published. Its first plugin-reload attempt failed on the console; the offline repair still needs device testing. Do not install this branch or run its device commands. The instructions below describe the intended matched kit. For the published v0.1.0-dev.4 release, use [that tag's installation guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md). Read the current [validation scope](VALIDATION.md).
+**Unreleased candidate:** v0.1.0-dev.5 has not been published. The repaired build completed two plugin reloads, but the subsequent normal-game launch caused system error 2011-0102. Do not install this branch or run its device commands. The instructions below describe the intended matched kit. For the published v0.1.0-dev.4 release, use [that tag's installation guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md). Read the current [validation scope](VALIDATION.md).
 
 | Situation | What to do |
 | --- | --- |

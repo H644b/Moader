@@ -86,6 +86,7 @@ check: build/generated/web_assets.hpp
 	python3 tools/test-resident.py
 	python3 tools/test-reload-client.py
 	LIBOUNCE=$(DEVKITPRO)/libounce CXX=clang++ sh runtime/kaihen/hen/test.sh
+	LIBOUNCE=$(DEVKITPRO)/libounce CXX=clang++ sh runtime/kaihen/ro/test.sh
 	python3 tools/test-native-ui.py
 
 -include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/ui.d build/native/service.d

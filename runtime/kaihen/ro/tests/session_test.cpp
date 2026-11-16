@@ -13,6 +13,7 @@ extern "C" {
 
 static Handle g_closed[8];
 static u32 g_closeCount;
+static u64 g_clientPid = 213;
 static u32 g_mapCount, g_unmapCount;
 static Result g_mapResult;
 static u32 g_jitMapCount, g_jitUnmapCount;
@@ -39,7 +40,7 @@ Result svcCloseHandle(Handle handle) {
 Result svcGetProcessId(u64* pid, Handle handle) {
     if (handle != 42 && handle != 43)
         return 0xd401;
-    *pid = 213;
+    *pid = g_clientPid;
     return 0;
 }
 
@@ -132,7 +133,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special, 
     words[0] = 6;
     words[1] = 0x80000000 | num_data_words;
     words[2] = special;
-    words[3] = 213;
+    words[3] = static_cast<u32>(g_clientPid);
     words[5] = handle;
     words[8] = 0x49434653;
     words[9] = 1;
@@ -140,7 +141,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special, 
 }
 
 int main(void) {
-    RoSession sessions[2] = {0};
+    RoSession sessions[2] = {};
     u32 words[64];
 
     request(words, RoCmd_Initialize, 10, 3, 42);
@@ -386,6 +387,27 @@ int main(void) {
     request(words, RoCmd_Initialize, 10, 3, 42);
     roDispatch(sessions, 2, 0, words);
     assert(words[6] == 0 && sessions[0].process_handle == 42);
+    // Repeated host shutdown and next-process admission: execute the actual
+    // dispatcher/courier/close paths, retaining no old process or image/JIT
+    // records. Fixed logging storage is reset per cycle, not a pool increase.
+    assert(!roSessionClose(&sessions[0]));
+    g_aliasUnmapResult = 0;
+    for (u64 next_pid = 1000; next_pid != 1040; ++next_pid) {
+        g_closeCount = 0;
+        g_clientPid = next_pid;
+        request(words, RoCmd_Initialize, 10, 3, 42);
+        roDispatch(sessions, 2, 0, words);
+        assert(!words[6] && sessions[0].process_id == next_pid);
+        request(words, RoCmd_GetHomebrewSession, 10, 1, 0);
+        const Handle courier = roDispatch(sessions, 2, 0, words);
+        assert(courier == 77);
+        svcCloseHandle(courier); // same reply-side ownership as RoServer
+        assert(!roSessionClose(&sessions[0]));
+        assert(g_closeCount == 2 && g_closed[0] == 77 && g_closed[1] == 42);
+        assert(!sessions[0].process_handle && !sessions[0].process_id);
+        for (const auto& mapping : sessions[0].jit) assert(!mapping.size && !mapping.alias);
+        for (const auto& image : sessions[0].nro) assert(!image.mapped);
+    }
     return 0;
 }
 

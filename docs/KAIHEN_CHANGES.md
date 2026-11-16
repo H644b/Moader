@@ -2,7 +2,7 @@
 
 Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload alongside the earlier pending-launch fix and read-only game trace. The application, resident service and FS hook have separate roles and validation records.
 
-**Development branch:** the first device reload failed and required a power cycle after app exit. The subsequent repair has offline validation only and remains unreleased. See [Validation](VALIDATION.md).
+**Development branch:** two repaired reload transactions completed, but the subsequent normal Minecraft launch caused system error 2011-0102. The additional ownership changes described below have host validation only and remain uninstalled and unreleased. See [Validation](VALIDATION.md).
 
 | Record | Value |
 | --- | --- |
@@ -34,6 +34,8 @@ Deadlines record uncertainty; they do not cancel native IPC or prove a process e
 
 The offline repair uses elapsed-time polling for reload's initial empty park and subsequent real Loader requests. It preserves the established synchronous Bootstrap/GameArm parking entry points and all gate invariant/receipt checks. Progress reporting uses a lock-free atomic store; it adds no service call between waiter selection and cancellation. Diagnostics retain primary gate steps before restoration changes them, and command 27 returns cached state without probing Loader. RO memory requests also provide valid output-handle storage to the SDK response parser. These changes address weaknesses reproduced in host fixtures; they do not establish the exact cause of the earlier device failure.
 
+The subsequent, uninstalled ownership repair tracks the donor object actually installed in a game's CodeFS entry and compares its address, object and metadata during host-exit cleanup. An entry address reused for another object no longer keeps the old package pinned. The SM proxy also retains session context and partial join state when a thread wait or close fails, including an unstarted thread that could not be closed. Package-open replies now supply the SDK's required output-handle storage. None of these changes is established as the cause or complete fix for the later `2011-0102` fatal. Full address/object/metadata reuse and the stock server's actual allocation budget remain outside the host fixture's proof.
+
 The bootstrap now transfers a retained PM launch capability and the donor launch specification to HEN through an additive control command. Its host input layout stays unchanged. This needs a **matching modified HEN and bootstrap pair**, plus the rebuilt plugin runtime and cooperative resident. Updating a file cannot add commands to an older running HEN.
 
 ## Source changes
@@ -43,13 +45,14 @@ The complete patch includes the following areas; its individual file diffs are a
 | Area | Files and purpose |
 | --- | --- |
 | Bootstrap and shared launch metadata | `bootstrap/source/main.cpp`, `common/control.h`, new `common/plugin_launch.hpp`: retained launch session/specification handoff. |
-| Package and mount handling | `common/code_mount_request.hpp`, `common/domain_mount.hpp`, `common/policy_package.cpp/.hpp`: exact target matching and checked package digest generation. |
+| Package and mount handling | `common/code_mount_request.hpp`, `common/domain_mount.hpp`, `common/package.hpp`, `common/policy_package.cpp/.hpp`: exact target matching, SDK reply storage and checked package digest generation. |
 | Gate and memory transport | `common/loader_gate.hpp`, `common/retained_memory.hpp`: timed reload parking/request polling, cached observations and valid SDK response storage. |
 | HEN owner and server | `hen/source/game_arm.cpp/.hpp`, `hen/source/server.cpp/.hpp`: serialized Loader lease, managed records, submission/status and publication. |
+| Service-manager proxy | `hen/source/sm_proxy.cpp/.hpp`: retain owned session/thread context on failed cleanup and resume partial joins safely. |
 | Reload worker | New `hen/source/plugin_reload.cpp/.hpp`, `reload_state.hpp`, `reload_diagnostics.hpp` and `lifecycle_client.hpp`: staging, lifecycle, PM/Loader startup, cached diagnostics, health, cleanup and bounded retry contracts. |
 | Public and plugin APIs | `libkaihen/include/kaihen.h`, `kaihen/protocol.h`, `kaihen/plugin.h`, new `kaihen/reload.h`: additive commands, source-compatible start API and opt-in lifecycle. |
 | Plugin runtime/server | `libkaihen/source/plugin_runtime.cpp`, `plugin_server.cpp`, `plugin_startup.h`: startup identity, lifecycle dispatch, guaranteed post-reply notification and retained ownership on failed thread joins. |
-| Host regressions | `hen/test.sh`, `hen/tests/reload_test.cpp`, `lifecycle_server_test.cpp`, `loader_gate_test.cpp` and host declarations: actual protocol/orchestration/server/gate tests with controlled transports. |
+| Host regressions | `hen/test.sh`, `hen/tests/reload_test.cpp`, `lifecycle_server_test.cpp`, `loader_gate_test.cpp`, `session_lifetime_test.cpp` and host declarations: production protocol/orchestration/server/gate/lifetime paths with controlled transports. `ro/test.sh` also checks repeated RO client admission and teardown. |
 
 The `PluginService` source structure gains lifecycle and thread ownership fields. Rebuild plugins against the matching headers and library; mixing the new headers with a stock precompiled plugin library is unsupported. Already-built legacy plugins carry their own runtime and retain their existing enumeration/open behavior.
 
