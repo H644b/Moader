@@ -66,7 +66,7 @@ function mainWith(overrides){const file=path.join(ROOT,'tools/control-resident.c
  loaded.filename=file;loaded.paths=Module._nodeModulePaths(path.dirname(file));loaded.require=name=>Object.hasOwn(overrides,name)?overrides[name]:original(name);loaded._compile(fs.readFileSync(file,'utf8'),file);return loaded.exports.main;}
 (async()=>{
  const p=await api.controlProtocol();
- test('retained WebEnabled command and exact four-byte input ABI are qualified locally',()=>{assert.equal(p.webEnabled,1);assert.equal(p.webInputBytes,4);assert.equal(p.summaryVersion,1);assert.equal(p.henVersion,6);});
+ test('retained WebEnabled command and exact four-byte input ABI are qualified locally',()=>{assert.equal(p.webEnabled,1);assert.equal(p.webInputBytes,4);assert.equal(p.summaryVersion,1);assert.equal(p.henVersion,7);});
  test('CLI accepts explicit web on/off and bounded sequential sessions only',()=>{
   assert.deepEqual(api.options([RUN,'web','off']),{run:RUN,action:'web',enabled:false});assert.equal(api.options([RUN,'sessions','32']).count,32);
   assert.deepEqual(api.options([RUN,'error']),{run:RUN,action:'error'});assert.throws(()=>api.options([RUN,'error','extra']),/Usage/);

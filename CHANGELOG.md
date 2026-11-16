@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.0-dev.5 — cartridge correction and plugin reload
+
+- Matching inserted cartridges use repeated consistent card observations, without requiring an installed-content Application row. Digital still verifies installed noncard base Program content. Wrong, absent, changing and unverified cards stay blocked.
+- Patched kaiHEN protocol 7 adds `ReloadPlugin` and authoritative identity/status/capability queries. A cooperative plugin is staged, drained, stopped and replaced once under a serialized Loader lease. Existing FS routing remains in FS.
+- **Settings → Advanced → Reload Moader service** shows progress and reconnects after fresh process/runtime health. Lost replies query the existing operation; uncertain cleanup blocks another attempt. Imports and library writes deny unsafe shutdown.
+- HEN and bootstrap now ship as a source/patch-bound pair, with strict setup/snapshot qualification and a complete modification disclosure. Old running HEN requires one matching per-boot installation before reload becomes available.
+- Adds host regressions for restart receipts, retained file reads, lifecycle failures, shutdown acknowledgement, client recovery and paired installer/package validation. See [Validation](docs/VALIDATION.md) for the exact console boundary; this is not a claim to repair the earlier system fatal.
+
 ## v0.1.0-dev.4 — library recovery and game-card checks
 
 - Library reads use the last complete cached inventory while ZIP extraction runs. Competing library writes report that the operation is busy instead of waiting on the import lock. Ordinary app/browser polls no longer walk every disabled payload. Availability withdrawal can continue while ZIP extraction is paused.

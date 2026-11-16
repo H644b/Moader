@@ -1,6 +1,456 @@
---- research/sources/kaihen/hen/source/game_arm.cpp	2026-11-13 21:18:44
-+++ runtime/kaihen/hen/source/game_arm.cpp	2026-11-13 22:06:55
-@@ -538,7 +538,10 @@
+diff --git a/bootstrap/source/main.cpp b/bootstrap/source/main.cpp
+--- a/bootstrap/source/main.cpp
++++ b/bootstrap/source/main.cpp
+@@ -395,6 +395,17 @@
+         args->result = henAdoptServiceManager(&hen, args->input.sm_session);
+     }
+     if (R_SUCCEEDED(args->result)) {
++        const HenPluginLaunchConfig config = {args->pm.program_id, args->pm.flags,
++                                             args->pm.storage_id, {0, 0, 0}};
++        // Independent protocol session: the acquisition process may close
++        // its original CMIF client during teardown. A COPY alone is not a
++        // guarantee that its later CMIF Close leaves HEN's connection alive.
++        Handle shell = INVALID_HANDLE;
++        args->result = cmifCloneCurrentObject(args->input.shell_session, &shell);
++        if (R_SUCCEEDED(args->result)) args->result = henConfigurePluginReload(&hen, &config, shell);
++        if (shell != INVALID_HANDLE) svcCloseHandle(shell);
++    }
++    if (R_SUCCEEDED(args->result)) {
+         args->result = henReleaseControlPort(&hen);
+     }
+ }
+diff --git a/common/code_mount_request.hpp b/common/code_mount_request.hpp
+--- a/common/code_mount_request.hpp
++++ b/common/code_mount_request.hpp
+@@ -33,6 +33,11 @@
+     bool open_code;
+     CodeMountArguments arguments;
+ };
++
++inline bool matchesCodeMount(const CodeMountRequest& request, u64 program_id, u8 storage_id) {
++    return request.open_code && request.arguments.content_attributes == 1 &&
++           request.arguments.program_id == program_id && request.arguments.storage_id == storage_id;
++}
+ 
+ /// The fsp-ldr command that opens a program's code file system.
+ constexpr u32 FsProxyForLoaderCommand_OpenCodeFileSystem = 0;
+diff --git a/common/control.h b/common/control.h
+--- a/common/control.h
++++ b/common/control.h
+@@ -20,7 +20,24 @@
+     HenControlCommand_ReleaseControlPort = 13,
+     HenControlCommand_CreateServiceManagerSession = 14,
+     HenControlCommand_CloneFilesystemRoot = 15,
++    HenControlCommand_ConfigurePluginReload = 16,
++    // Moader diagnostic extension. Read-only on control and homebrew sessions.
++    HenControlCommand_MoaderGameTrace = 0x4d4f0001,
+ };
++
++typedef struct {
++    u64 program_id;
++    u32 flags;
++    u8 storage_id;
++    u8 reserved[3];
++} HenPluginLaunchConfig;
++
++// COPY an independent PM shell client cloned for HEN; the bootstrap closes
++// only its local kernel reference, never its protocol connection.
++NX_INLINE Result henConfigurePluginReload(Service* s, const HenPluginLaunchConfig* config, Handle shell) {
++    return serviceDispatchIn(s, HenControlCommand_ConfigurePluginReload, *config,
++        .in_num_handles = 1, .in_handles = {shell});
++}
+ 
+ 
+ 
+diff --git a/common/domain_mount.hpp b/common/domain_mount.hpp
+--- a/common/domain_mount.hpp
++++ b/common/domain_mount.hpp
+@@ -40,13 +40,7 @@
+         if (R_FAILED(rc) || !decoded.open_code) {
+             return rc;
+         }
+-        const CodeMountArguments& arguments = decoded.arguments;
+-        if (arguments.content_attributes != 1 ||
+-            arguments.storage_id != NcmStorageId_BuiltInSystem ||
+-            arguments.program_id != config_.title) {
+-            return UnexpectedState;
+-        }
+-        mount = true;
++        mount = matchesCodeMount(decoded, config_.title, NcmStorageId_BuiltInSystem);
+         return 0;
+     }
+ 
+diff --git a/common/loader_gate.hpp b/common/loader_gate.hpp
+--- a/common/loader_gate.hpp
++++ b/common/loader_gate.hpp
+@@ -105,9 +105,21 @@
+     GateStep_RestoreReceiptSeen = 0x1010,
+     GateStep_RestoreParentMoved = 0x1110,
+     GateStep_RestoreTimeout = 0xe30,
++    // Additive steps for the resident-only asynchronous park entry point.
++    GateStep_ParkInspect = 0x1300,
++    GateStep_ParkPublishWait = 0x1301,
++    GateStep_ParkCancelWorkers = 0x1302,
+ };
+ 
+-template <MemoryWriter Writer>
++// Default clock preserves native behavior. Host fixtures supply a controlled
++// clock while exercising the real gate and RetainedMemory implementation.
++struct LoaderGateClock {
++    static u64 now() { return armGetSystemTick(); }
++    static u64 toNs(u64 ticks) { return armTicksToNs(ticks); }
++    static u64 toTicks(u64 ns) { return armNsToTicks(ns); }
++};
++
++template <MemoryWriter Writer, typename Clock = LoaderGateClock>
+ class LoaderGate {
+   public:
+     using ProgressCallback = void (*)(void*, u32);
+@@ -125,6 +137,26 @@
+         if (R_SUCCEEDED(rc)) rc = replaceWaitForPark();
+         if (R_SUCCEEDED(rc)) rc = cancelWorkersForPark();
+         if (R_SUCCEEDED(rc)) rc = emptyStepForPark();
++        return rc;
++    }
++
++    // Dedicated resident-reload path. The established park() entry point and
++    // its synchronous bootstrap/GameArm behavior remain unchanged.
++    Result beginPark() {
++        markStep(GateStep_ParkInspect);
++        R_TRY(inspectForPark());
++        markStep(GateStep_ParkPublishWait);
++        R_TRY(replaceWaitForPark());
++        markStep(GateStep_ParkCancelWorkers);
++        R_TRY(cancelWorkersForPark());
++        return beginStep(true);
++    }
++
++    Result pollPark(bool& complete) {
++        complete = false;
++        R_UNLESS(step_empty_, UnexpectedState);
++        const Result rc = pollStep(nullptr, complete);
++        if (R_SUCCEEDED(rc) && complete) park_established_ = true;
+         return rc;
+     }
+ 
+@@ -191,7 +223,7 @@
+ 
+         step_active_ = true;
+         step_empty_ = empty;
+-        step_started_tick_ = armGetSystemTick();
++        step_started_tick_ = Clock::now();
+         step_next_tick_ = 0;
+         step_observations_ = 0;
+         R_SUCCEED();
+@@ -205,7 +237,7 @@
+                     bool fail_after_injection = false) {
+         complete = false;
+         R_UNLESS(step_active_, UnexpectedState);
+-        const u64 now = armGetSystemTick();
++        const u64 now = Clock::now();
+         if (step_next_tick_ && now < step_next_tick_) R_SUCCEED();
+ 
+         const u32 attempt = step_observations_++;
+@@ -246,11 +278,11 @@
+                           allow_injection, fail_after_injection));
+ 
+         step_last_action_ = diagnostic_step_;
+-        if (armTicksToNs(armGetSystemTick() - step_started_tick_) >= StepDeadlineNs) {
++        if (Clock::toNs(Clock::now() - step_started_tick_) >= StepDeadlineNs) {
+             markStep(GateStep_StepDeadline);
+             return KERNELRESULT(TimedOut);
+         }
+-        step_next_tick_ = armGetSystemTick() + armNsToTicks(StepPollNs);
++        step_next_tick_ = Clock::now() + Clock::toTicks(StepPollNs);
+         R_SUCCEED();
+     }
+ 
+@@ -308,6 +340,7 @@
+     }
+ 
+     u32 diagnosticStep() const { return diagnostic_step_; }
++    LoaderGateProbe cachedProbe() const { return cached_probe_; }
+     u32 failureStep() const {
+         return diagnostic_step_ == GateStep_StepDeadline ? step_last_action_ : diagnostic_step_;
+     }
+@@ -424,6 +457,7 @@
+         if (knownWaiter(view.parent)) {
+             markStep(GateStep_ObserveEpoch + attempt);
+             R_TRY(memory_.read(view.parent + EpochOffset, &epoch, sizeof(epoch)));
++            cached_probe_.epoch = epoch;
+         }
+ 
+         markStep(GateStep_ObserveHeader + attempt);
+@@ -522,19 +556,34 @@
+     }
+ 
+     Result inspectIdentity(LoaderSessionView& view) {
+-        R_TRY(memory_.read(config_.server, &view, sizeof(view)));
++        const Result rc = memory_.read(config_.server, &view, sizeof(view));
++        cached_probe_.read_result = rc;
++        if (R_FAILED(rc)) return rc;
++        cached_probe_.parent = view.parent;
++        cached_probe_.wait = view.wait;
++        cached_probe_.receive = view.receive;
++        cached_probe_.state = view.state;
++        cached_probe_.receive_result = view.receive_result;
+         R_UNLESS(sessionIdentityMatches(view), UnexpectedState);
+         R_SUCCEED();
+     }
+ 
+     Result isSelected(bool& selected) {
+         alignas(8) u8 bytes[6 * WaiterStride + sizeof(u64)];
+-        R_TRY(memory_.read(config_.waiters[0] + SelectionOffset, bytes, sizeof(bytes)));
++        const Result rc = memory_.read(config_.waiters[0] + SelectionOffset, bytes, sizeof(bytes));
++        if (R_FAILED(rc)) {
++            cached_probe_.read_result = rc;
++            return rc;
++        }
+         selected = false;
++        cached_probe_.waiter_mask = 0;
+         for (u32 i = 0; i < 7; i++) {
+             u64 address;
+             __builtin_memcpy(&address, bytes + i * WaiterStride, sizeof(address));
+-            if (address == config_.server) selected = true;
++            if (address == config_.server) {
++                selected = true;
++                cached_probe_.waiter_mask |= 1u << (i + 8);
++            }
+         }
+         R_SUCCEED();
+     }
+@@ -759,6 +808,7 @@
+     u32 diagnostic_step_ = 0;
+     ProgressCallback progress_callback_ = nullptr;
+     void* progress_context_ = nullptr;
++    LoaderGateProbe cached_probe_ = {.read_result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized)};
+ };
+ 
+ } // namespace ounce
+diff --git a/common/package.hpp b/common/package.hpp
+--- a/common/package.hpp
++++ b/common/package.hpp
+@@ -29,11 +29,15 @@
+             u64 program_id;
+         } request = {FsContentAttributes_None, FsFileSystemType_ApplicationPackage, 0};
+ 
++        // SDK's response parser forms all raw output-handle addresses even
++        // for None attributes; object replies still need non-null storage.
++        Handle unused_handles[8] = {};
+         Result rc = serviceDispatchIn(&root_, 10, request,
+             .buffer_attrs = {SfBufferAttr_HipcPointer | SfBufferAttr_In},
+             .buffers = {{package_path, sizeof(package_path)}},
+             .out_num_objects = 1,
+-            .out_objects = &filesystem_.s);
++            .out_objects = &filesystem_.s,
++            .out_handles = unused_handles);
+         if (R_FAILED(rc)) return rc;
+         opened_ = true;
+ 
+diff --git a/common/plugin_launch.hpp b/common/plugin_launch.hpp
+new file mode 100644
+--- /dev/null
++++ b/common/plugin_launch.hpp
+@@ -0,0 +1,25 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "package.hpp"
++#include "loader_gate.hpp"
++
++// Borrowed only while GameArm's reload lease is held. No destructor closes
++// these resources; the original GameArm remains their sole lifetime owner.
++struct PluginLaunchContext {
++    ounce::RetainedMemoryConfig memory;
++    ounce::LoaderGateConfig gate;
++    ounce::DomainMountConfig mount;
++    Handle reader;
++    Handle filesystem_process;
++    Handle filesystem_root;
++    Handle loader_root;
++    Handle monitor;
++};
++
++struct PluginLaunchSpec {
++    u64 program_id;
++    u32 flags;
++    u8 storage_id;
++    u8 reserved[3];
++};
++static_assert(sizeof(PluginLaunchSpec) == 16);
+diff --git a/common/policy_package.cpp b/common/policy_package.cpp
+--- a/common/policy_package.cpp
++++ b/common/policy_package.cpp
+@@ -88,7 +88,7 @@
+ }
+ 
+ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
+-                         const char* package_path, const SignedPolicy& policy) {
++                         const char* package_path, const SignedPolicy& policy, u8* expected_sha256) {
+     if (!policy.size || policy.size > SignedPolicy::Capacity) return InvalidPackage;
+     SdReader reader;
+     u64 main_size = 0;
+@@ -101,6 +101,13 @@
+     SdWriter writer;
+     rc = writer.begin(fs_root, package_path, package_size);
+     if (R_FAILED(rc)) return rc;
++
++    Sha256Context sha;
++    if (expected_sha256) sha256ContextCreate(&sha);
++    const auto write = [&](const void* bytes, size_t size) {
++        if (expected_sha256) sha256ContextUpdate(&sha, bytes, size);
++        return writer.write(bytes, size);
++    };
+ 
+     u8 header[HeaderSize] = {};
+     std::memcpy(header, "PFS0", 4);
+@@ -115,7 +122,7 @@
+     std::memcpy(header + 48, &policy_size, sizeof(policy_size));
+     std::memcpy(header + 56, &policy_name_offset, sizeof(policy_name_offset));
+     std::memcpy(header + 64, "main\0main.npdm\0", names_size);
+-    rc = writer.write(header, sizeof(header));
++    rc = write(header, sizeof(header));
+ 
+     u8 buffer[CopyChunk];
+     u64 remaining = main_size;
+@@ -124,16 +131,17 @@
+         u64 received = 0;
+         rc = reader.read(buffer, wanted, &received);
+         if (R_SUCCEEDED(rc) && received != wanted) rc = InvalidPackage;
+-        if (R_SUCCEEDED(rc)) rc = writer.write(buffer, wanted);
++        if (R_SUCCEEDED(rc)) rc = write(buffer, wanted);
+         remaining -= received;
+     }
+     reader.close();
+ 
+     if (R_SUCCEEDED(rc) && policy_offset > main_size) {
+         const u8 padding[0x20] = {};
+-        rc = writer.write(padding, policy_offset - main_size);
++        rc = write(padding, policy_offset - main_size);
+     }
+-    if (R_SUCCEEDED(rc)) rc = writer.write(policy.bytes, policy.size);
++    if (R_SUCCEEDED(rc)) rc = write(policy.bytes, policy.size);
+     if (R_SUCCEEDED(rc)) rc = writer.finish();
++    if (R_SUCCEEDED(rc) && expected_sha256) sha256ContextGetHash(&sha, expected_sha256);
+     return rc;
+ }
+diff --git a/common/policy_package.hpp b/common/policy_package.hpp
+--- a/common/policy_package.hpp
++++ b/common/policy_package.hpp
+@@ -23,4 +23,5 @@
+ 
+ // Build a flat ExeFS package with /main from SD and /main.npdm from policy.
+ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
+-                         const char* package_path, const SignedPolicy& policy);
++                         const char* package_path, const SignedPolicy& policy,
++                         u8* expected_sha256 = nullptr);
+diff --git a/common/retained_memory.hpp b/common/retained_memory.hpp
+--- a/common/retained_memory.hpp
++++ b/common/retained_memory.hpp
+@@ -40,6 +40,10 @@
+     }
+ 
+     Result read(u64 address, void* output, u64 size) {
++        // The SDK response parser forms all eight output-handle addresses
++        // even when every attribute is None. Supply real storage instead of
++        // permitting pointer arithmetic on its default null out_handles.
++        Handle unused_handles[8] = {};
+         const struct {
+             u64 process_id;
+             u64 address;
+@@ -52,6 +56,7 @@
+             .buffers = {{output, size}},
+             .in_num_handles = 1,
+             .in_handles = {filesystem_process_},
++            .out_handles = unused_handles,
+         );
+     }
+ 
+@@ -166,6 +171,7 @@
+ 
+   private:
+     Result writeThroughReader(u64 address, const void* input, u64 size) {
++        Handle unused_handles[8] = {};
+         const struct {
+             u64 process_id;
+             u64 address;
+@@ -178,6 +184,7 @@
+             .buffers = {{input, size}},
+             .in_num_handles = 1,
+             .in_handles = {filesystem_process_},
++            .out_handles = unused_handles,
+         );
+     }
+ 
+diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
+--- a/hen/source/game_arm.cpp
++++ b/hen/source/game_arm.cpp
+@@ -46,9 +46,10 @@
+ }
+ 
+ bool containsEntry(const ounce::DomainEntry entries[ounce::MaxDomainEntries], u32 count,
+-                   u64 address) {
++                   const ounce::DomainEntry& expected) {
+     for (u32 index = 0; index < count; index++) {
+-        if (entries[index].address == address) {
++        if (entries[index].address == expected.address && entries[index].object == expected.object &&
++            entries[index].metadata == expected.metadata) {
+             return true;
+         }
+     }
+@@ -191,6 +192,7 @@
+ }
+ 
+ void GameArm::step() {
++    if (reload_leased_) return;
+     Result rc = 0;
+     switch (state_) {
+     case State::Inactive:
+@@ -241,6 +243,16 @@
+     if (R_FAILED(rc)) {
+         fault(rc);
+     }
++}
++
++bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
++    if (!started_ || reload_leased_ || !memory_ || !gate_ || step_started_ ||
++        bootstrap_restore_pending_ || gate_->pendingRestoreWithReceipt() ||
++        (state_ != State::WaitForInput && state_ != State::WaitExit)) return false;
++    reload_leased_ = true;
++    out = {memory_config_, gate_config_, mount_config_, reader_session_,
++           filesystem_process_, filesystem_root_, loader_root_, monitor_};
++    return true;
+ }
+ 
+ Result GameArm::openPackage() {
+@@ -468,7 +480,7 @@
+     trace_.write(GameTracePoint_SecondSnapshotDone, rc, after_count);
+     if (R_FAILED(rc)) return restoreGate(rc);
+ 
+-    if (status_.mounts == 1 && !containsEntry(after, after_count, first_.address)) {
++    if (status_.mounts == 1 && !containsEntry(after, after_count, first_)) {
+         first_closed_ = true;
+     }
+     bool matching = false;
+@@ -514,8 +526,17 @@
+         // restored, the pending title can continue on its stock CodeFS.
+         return restoreGate(rc, State::WaitProcess);
+     }
+-    rc = mount_->exchange(code_);
++    rc = exchangeGameCode();
+     return restoreGate(rc, R_SUCCEEDED(rc) ? State::WaitProcess : State::Fault);
++}
++
++Result GameArm::exchangeGameCode() {
++    const Result rc = mount_->exchange(code_);
++    // The entry now holds the package's donor, not the original stock
++    // CodeFS object. Track that identity until host exit; an address alone
++    // can be recycled by unrelated plugin/package allocations.
++    if (R_SUCCEEDED(rc)) code_.object = current_mount_.donor_object;
++    return rc;
+ }
+ 
+ Result GameArm::waitForProcess() {
+@@ -538,7 +559,10 @@
              return rc;
          }
          if (!allow_bridge_process_ && !isApplicationProgram(title)) {
@@ -12,39 +462,3477 @@
          }
          active_title_ = title;
      }
---- research/sources/kaihen/hen/source/game_arm.hpp	2026-11-13 21:18:44
-+++ runtime/kaihen/hen/source/game_arm.hpp	2026-11-13 22:06:55
-@@ -27,6 +27,7 @@
+@@ -563,9 +587,9 @@
+     if (R_FAILED(rc)) return rc;
+     if (program_id != active_title_) return UnexpectedState;
+ 
+-    const u64 now = armGetSystemTick();
++    const u64 now = GameClock::now();
+     if (capture_next_tick_ && now < capture_next_tick_) return 0;
+-    capture_next_tick_ = now + armNsToTicks(CaptureIntervalNs);
++    capture_next_tick_ = now + GameClock::toTicks(CaptureIntervalNs);
+     capture_attempts_++;
+     trace_.write(GameTracePoint_PolicyCaptureAttempt, 0, capture_attempts_);
+ 
+@@ -619,7 +643,7 @@
+         u32 count = 0;
+         GameMount final_mount(*memory_, mount_config_);
+         R_TRY(final_mount.snapshot(entries, count));
+-        if (containsEntry(entries, count, code_.address)) return 0;
++        if (containsEntry(entries, count, code_)) return 0;
+     }
+     if (package_) package_->close();
+     package_.reset();
+diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
+--- a/hen/source/game_arm.hpp
++++ b/hen/source/game_arm.hpp
+@@ -7,13 +7,22 @@
+ #include "../../common/package.hpp"
+ #include "../../common/loader_gate.hpp"
+ #include "game_trace.hpp"
++#include "../../common/plugin_launch.hpp"
+ 
+ using GameMemory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
+-using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
++#ifdef KAIHEN_GAME_ARM_TEST_CLOCK
++using GameClock = KAIHEN_GAME_ARM_TEST_CLOCK;
++#else
++using GameClock = ounce::LoaderGateClock;
++#endif
++using GameGate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess, GameClock>;
+ using GamePackage = ounce::NativePackage<ounce::MemoryWriter::RoProcess>;
+ using GameMount = ounce::DomainMount<ounce::MemoryWriter::RoProcess>;
+ 
+ class GameArm {
++#ifdef KAIHEN_GAME_ARM_TEST_CLOCK
++    friend struct GameArmLifetimeTest;
++#endif
+   public:
+     ~GameArm();
+ 
+@@ -27,6 +36,9 @@
      Result start(Handle filesystem_root, Handle bootstrap_process);
      void step();
      HenGameStatus status() const;
 +    GameTraceSnapshot trace() const { return trace_.snapshot(); }
++    bool acquireReloadLease(PluginLaunchContext& out);
++    void releaseReloadLease() { reload_leased_ = false; }
  
    private:
      enum class InputChoice {
---- research/sources/kaihen/hen/source/server.cpp	2026-11-13 21:18:44
-+++ runtime/kaihen/hen/source/server.cpp	2026-11-13 22:06:55
-@@ -248,6 +248,12 @@
-         if (!request.num_copy_handles) {
-             reply.result = 0;
-             reply.setData(game_.status());
+@@ -52,6 +64,7 @@
+     Result waitForInput();
+     Result parkGate();
+     Result receiveGameMount();
++    Result exchangeGameCode();
+     Result waitForProcess();
+     Result capturePolicy();
+     Result pollProcessExit();
+@@ -98,6 +111,7 @@
+     bool handles1_ = false;
+     bool started_ = false;
+     bool policy_ready_ = false;
++    bool reload_leased_ = false;
+     bool capture_pending_ = false;
+     u32 capture_attempts_ = 0;
+     u64 capture_next_tick_ = 0;
+diff --git a/hen/source/lifecycle_client.hpp b/hen/source/lifecycle_client.hpp
+new file mode 100644
+--- /dev/null
++++ b/hen/source/lifecycle_client.hpp
+@@ -0,0 +1,74 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "reload_state.hpp"
++
++// Transport and clock adapters allow the actual asynchronous owner contract
++// to be exercised on the host without mirroring it in a fake HEN manager.
++namespace reload {
++inline KaihenPluginLifecycleRequest lifecycleRequest(u32 command, u64 operation) {
++    return {command, 0, command == KaihenPluginLifecycle_Query || command == KaihenPluginLifecycle_Health ? 0 : operation};
++}
++inline bool validLifecycleReply(const KaihenPluginLifecycleRequest& request, const KaihenPluginLifecycleReply& reply) {
++    const bool query = request.command == KaihenPluginLifecycle_Query || request.command == KaihenPluginLifecycle_Health;
++    return reply.version == KAIHEN_PLUGIN_LIFECYCLE_VERSION && !reply.reserved &&
++           (reply.flags & KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE) &&
++           (query || reply.operation_id == request.operation_id);
++}
++template <typename Io>
++Result lifecycleRetryBusy(Io& io, u32 command, KaihenPluginLifecycleReply& reply, u64 timeout) {
++    const u64 start = io.now();
++    do {
++        if (io.cancelled()) return Deadline;
++        Result rc = io.call(command, reply);
++        if (rc != KAIHEN_PLUGIN_LIFECYCLE_BUSY) return rc;
++        io.pause();
++    } while (!io.deadline(start, timeout));
++    return Deadline;
++}
++
++template <typename Io>
++Result lifecycleWait(Io& io, u32 command, u32 state, bool healthy, u64 timeout) {
++    const u64 start = io.now();
++    do {
++        if (io.cancelled()) return Deadline;
++        KaihenPluginLifecycleReply reply = {};
++        Result rc = io.call(command, reply);
++        if (rc != KAIHEN_PLUGIN_LIFECYCLE_BUSY) {
++            if (R_FAILED(rc)) return rc;
++            if (reply.state == state && (!healthy || (reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY))) return 0;
++            if (reply.state == KaihenPluginLifecycleState_Failed) return Invalid;
 +        }
-+        return reply;
++        io.pause();
++    } while (!io.deadline(start, timeout));
++    return Deadline;
++}
++
++template <typename Io>
++bool lifecycleAbort(Io& io, u64 timeout) {
++    const u64 start = io.now();
++    bool accepted = false;
++    do {
++        if (io.cancelled()) return false;
++        KaihenPluginLifecycleReply reply = {};
++        const Result rc = io.call(accepted ? KaihenPluginLifecycle_Poll : KaihenPluginLifecycle_Abort, reply);
++        if (rc != KAIHEN_PLUGIN_LIFECYCLE_BUSY) {
++            if (R_FAILED(rc)) return false;
++            accepted = true;
++            if (reply.state == KaihenPluginLifecycleState_Running &&
++                (reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY)) return true;
++            if (reply.state == KaihenPluginLifecycleState_Failed) return false;
++        }
++        io.pause();
++    } while (!io.deadline(start, timeout));
++    return false;
++}
++
++template <typename Io>
++Result lifecycleCommit(Io& io, u64 timeout) {
++    KaihenPluginLifecycleReply reply = {};
++    const Result rc = lifecycleRetryBusy(io, KaihenPluginLifecycle_Commit, reply, timeout);
++    if (R_FAILED(rc)) return rc;
++    return reply.state == KaihenPluginLifecycleState_Quiesced ||
++           reply.state == KaihenPluginLifecycleState_Exiting ? 0 : Invalid;
++}
++} // namespace reload
+diff --git a/hen/source/plugin_reload.cpp b/hen/source/plugin_reload.cpp
+new file mode 100644
+--- /dev/null
++++ b/hen/source/plugin_reload.cpp
+@@ -0,0 +1,512 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include "plugin_reload.hpp"
++#include "../../common/sd_writer.hpp"
++#include "../../libkaihen/source/plugin_startup.h"
++#include <cstdio>
++#include <cstring>
++
++namespace {
++constexpr u64 Second = 1000000000ull;
++constexpr Result ProcessNotFound = MAKERESULT(15, 1);
++constexpr u64 MaxExecutable = 64 * 1024 * 1024;
++bool elapsed(u64 tick, u64 ns) { return armGetSystemTick() - tick >= armNsToTicks(ns); }
++void close(Handle& handle) { if (handle != INVALID_HANDLE) svcCloseHandle(handle); handle = INVALID_HANDLE; }
++
++void deleteArtifact(Handle fs, const char* path) {
++    if (!path[0]) return;
++    Service root = {};
++    serviceCreate(&root, fs);
++    FsFileSystem sd = {};
++    if (R_SUCCEEDED(serviceDispatch(&root, 18, .out_num_objects = 1, .out_objects = &sd.s))) {
++        // FS may still deny deletion of a backing object it retains. Leave
++        // that file intact; never force-close another owner's object.
++        fsFsDeleteFile(&sd, path);
++        fsFsCommit(&sd);
++        fsFsClose(&sd);
++    }
++}
++
++// The staged bytes are read twice: verify their digest before packaging and
++// verify the package itself after flush. NSO section ranges are bounded before
++// the old process is asked to drain.
++Result digestFile(Handle fs, const char* path, u8 hash[32], u64* size_out = nullptr) {
++    SdReader reader;
++    u64 size = 0;
++    R_TRY(reader.begin(fs, path, &size));
++    if (!size || size > MaxExecutable + SignedPolicy::Capacity + 0x1000) return reload::Invalid;
++    Sha256Context sha;
++    sha256ContextCreate(&sha);
++    u8 buffer[4096];
++    for (u64 left = size; left;) {
++        u64 read = 0;
++        const size_t wanted = left < sizeof(buffer) ? left : sizeof(buffer);
++        R_TRY(reader.read(buffer, wanted, &read));
++        if (read != wanted) return reload::Invalid;
++        sha256ContextUpdate(&sha, buffer, read);
++        left -= read;
++    }
++    sha256ContextGetHash(&sha, hash);
++    if (size_out) *size_out = size;
++    return 0;
++}
++
++Result stageExecutable(Handle fs, const char* source, const char* target) {
++    SdReader reader;
++    u64 size = 0;
++    R_TRY(reader.begin(fs, source, &size));
++    if (size < 0x100 || size > MaxExecutable) return reload::Invalid;
++    u8 header[0x100];
++    u64 read = 0;
++    R_TRY(reader.read(header, sizeof(header), &read));
++    if (read != sizeof(header) || std::memcmp(header, "NSO0", 4)) return reload::Invalid;
++    u32 flags = 0;
++    std::memcpy(&flags, header + 0x0c, 4);
++    u64 previous_end = 0x100;
++    for (unsigned section = 0; section < 3; ++section) {
++        u32 offset, unpacked, packed;
++        std::memcpy(&offset, header + 0x10 + 0x10 * section, 4);
++        std::memcpy(&unpacked, header + 0x18 + 0x10 * section, 4);
++        std::memcpy(&packed, header + 0x60 + 4 * section, 4);
++        const u64 extent = flags & (1u << section) ? packed : unpacked;
++        if (!extent || !unpacked || unpacked > MaxExecutable || offset < previous_end ||
++            offset > size || extent > size - offset) return reload::Invalid;
++        previous_end = offset + extent;
++    }
++    SdWriter writer;
++    R_TRY(writer.begin(fs, target, size));
++    R_TRY(writer.write(header, sizeof(header)));
++    Sha256Context sha;
++    sha256ContextCreate(&sha);
++    sha256ContextUpdate(&sha, header, sizeof(header));
++    u8 buffer[4096];
++    for (u64 left = size - sizeof(header); left;) {
++        const size_t wanted = left < sizeof(buffer) ? left : sizeof(buffer);
++        R_TRY(reader.read(buffer, wanted, &read));
++        if (read != wanted) return reload::Invalid;
++        sha256ContextUpdate(&sha, buffer, read);
++        R_TRY(writer.write(buffer, read));
++        left -= read;
++    }
++    R_TRY(writer.finish());
++    u8 expected[32], actual[32];
++    sha256ContextGetHash(&sha, expected);
++    R_TRY(digestFile(fs, target, actual));
++    return std::memcmp(expected, actual, sizeof(actual)) ? reload::Invalid : 0;
++}
++} // namespace
++
++Result PluginReload::start(const Input& input, const HenPluginReloadStatus& status) {
++    if (created_ && !joined_) return reload::Busy;
++    input_ = input;
++    status_ = status;
++    diagnostics_ = {};
++    diagnostics_.version = 1;
++    diagnostics_.operation_id = status.operation_id;
++    diagnostics_.probe_result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
++    live_gate_step_.store(0);
++    stage_tick_ = armGetSystemTick();
++    created_ = joined_ = pm_created_ = pm_started_ = pm_joined_ = false;
++    success_ = quarantined_ = touched_old_ = false;
++    finished_.store(false);
++    pm_finished_.store(false);
++    cancelled_.store(false);
++    pm_pid_.store(0);
++    new_control_ = INVALID_HANDLE;
++    Result rc = threadCreate(&thread_, worker, this, nullptr, 0x20000, 0x2c, -2);
++    if (R_FAILED(rc)) return rc;
++    created_ = true;
++    rc = threadStart(&thread_);
++    if (R_FAILED(rc)) {
++        threadClose(&thread_);
++        created_ = false;
++    }
++    return rc;
++}
++
++HenPluginReloadStatus PluginReload::status() {
++    mutexLock(&lock_);
++    if (!finished_.load(std::memory_order_acquire) && elapsed(stage_tick_, 60 * Second)) {
++        cancelled_.store(true);
++        status_.phase = HenPluginReloadPhase_Quarantined;
++        status_.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++        status_.result = reload::Deadline;
++    }
++    // Even a late PM completion remains tracked. Never free/reuse its state.
++    if (pm_pid_.load(std::memory_order_acquire)) status_.new_process_id = pm_pid_.load();
++    const auto value = status_;
++    mutexUnlock(&lock_);
++    return value;
++}
++
++HenPluginReloadDiagnostics PluginReload::diagnostics() {
++    mutexLock(&lock_);
++    auto snapshot = diagnostics_;
++    if (!(snapshot.flags & HEN_RELOAD_DIAG_PRIMARY_CAPTURED))
++        snapshot.primary_gate_step = live_gate_step_.load(std::memory_order_relaxed);
++    if (pm_finished_.load(std::memory_order_acquire)) {
++        snapshot.flags |= HEN_RELOAD_DIAG_PM_FINISHED;
++        snapshot.pm_result = pm_result_;
++    }
++    mutexUnlock(&lock_);
++    return snapshot;
++}
++
++void PluginReload::diagnosticStage(u32 stage, u32 flags) {
++    mutexLock(&lock_);
++    if (!(diagnostics_.flags & HEN_RELOAD_DIAG_PRIMARY_CAPTURED) || !diagnostics_.primary_result)
++        diagnostics_.stage = stage;
++    diagnostics_.flags |= flags;
++    mutexUnlock(&lock_);
++}
++
++void PluginReload::captureGate(Result result, bool restoration) {
++    // This is only the gate's cached local view. No probe()/RO/FS requests.
++    const auto probe = gate_->cachedProbe();
++    mutexLock(&lock_);
++    reload::captureGateDiagnostics(diagnostics_, result, restoration, gate_->diagnosticStep(), probe,
++                                    input_.context.gate.original_wait, input_.context.gate.park);
++    mutexUnlock(&lock_);
++}
++
++bool PluginReload::join() {
++    if (!finished() || !created_) return false;
++    if (!joined_) {
++        Result rc = threadWaitForExit(&thread_);
++        if (R_SUCCEEDED(rc)) rc = threadClose(&thread_);
++        if (R_FAILED(rc)) { fail(rc, true); return false; }
++        joined_ = true;
++    }
++    return true;
++}
++
++void PluginReload::worker(void* value) {
++    auto& self = *static_cast<PluginReload*>(value);
++    const Result rc = reload::run(self);
++    self.success_ = R_SUCCEEDED(rc) && !self.cancelled_.load();
++    if (self.cancelled_.load()) self.fail(reload::preservePrimary(rc, reload::Deadline), true);
++    if (!self.quarantined_) self.releaseOwned();
++    // Cleanup can outlive its deadline. Finalize and publish finished under
++    // the supervisor's lock so cancellation cannot slip between the two.
++    mutexLock(&self.lock_);
++    reload::finalizeWorker(R_SUCCEEDED(rc), self.cancelled_.load(), self.success_, self.quarantined_,
++                            self.status_, &self.diagnostics_);
++    self.finished_.store(true, std::memory_order_release);
++    mutexUnlock(&self.lock_);
++}
++
++void PluginReload::phase(u32 value) {
++    mutexLock(&lock_);
++    if (!cancelled_.load()) { status_.phase = value; stage_tick_ = armGetSystemTick(); }
++    mutexUnlock(&lock_);
++}
++bool PluginReload::expired() const { return cancelled_.load(); }
++Result PluginReload::fail(Result rc, bool quarantine) {
++    mutexLock(&lock_);
++    quarantined_ |= quarantine || cancelled_.load();
++    reload::recordFailure(status_, diagnostics_, rc, quarantined_);
++    mutexUnlock(&lock_);
++    return rc;
++}
++
++Result PluginReload::lifecycle(u32 command, KaihenPluginLifecycleReply& out, Handle control) {
++    if (expired()) return reload::Deadline;
++    Service service = {};
++    serviceCreate(&service, control);
++    const auto request = reload::lifecycleRequest(command, status_.operation_id);
++    Result rc = serviceDispatchInOut(&service, KAIHEN_PLUGIN_CONTROL_LIFECYCLE, request, out);
++    if (expired()) return reload::Deadline;
++    if (R_FAILED(rc)) return rc;
++    if (!reload::validLifecycleReply(request, out)) return reload::Capability;
++    return out.result;
++}
++
++Result PluginReload::processProgram(u64 pid, u64* program) {
++    Service monitor = {};
++    serviceCreate(&monitor, input_.context.monitor);
++    return serviceDispatchInOut(&monitor, 7, pid, *program);
++}
++
++Result PluginReload::preflight() {
++    u64 program = 0;
++    R_TRY(processProgram(input_.request.expected_process_id, &program));
++    if (program != input_.spec.program_id) return reload::Identity;
++    KaihenPluginLifecycleReply reply = {};
++    LifecycleIo query_io{*this, input_.old_control};
++    R_TRY(reload::lifecycleRetryBusy(query_io, KaihenPluginLifecycle_Query, reply, 5 * Second));
++    if (reply.state != KaihenPluginLifecycleState_Running ||
++        !(reply.flags & KAIHEN_PLUGIN_LIFECYCLE_HEALTHY)) return reload::Busy;
++    R_TRY(readSignedPolicy(input_.context.loader_root, input_.spec.program_id,
++                          input_.spec.storage_id, 1, &policy_));
++    char source[128];
++    std::snprintf(source, sizeof(source), "/kaihen/plugins/%s.nso", input_.request.name);
++    std::snprintf(staged_file_, sizeof(staged_file_), "/kaihen/plugin-packages/reload-%016llx-%016llx.nso",
++                  (unsigned long long)status_.instance_id, (unsigned long long)status_.operation_id);
++    std::snprintf(package_file_, sizeof(package_file_), "/kaihen/plugin-packages/reload-%016llx-%016llx.nsp",
++                  (unsigned long long)status_.instance_id, (unsigned long long)status_.operation_id);
++    std::snprintf(package_path_, sizeof(package_path_), "@Sdcard:%s", package_file_);
++    R_TRY(stageExecutable(input_.fs, source, staged_file_));
++    u8 first[32], second[32];
++    R_TRY(writeExeFsPackage(input_.fs, staged_file_, package_file_, policy_, first));
++    R_TRY(digestFile(input_.fs, package_file_, second));
++    if (std::memcmp(first, second, 32) || expired()) return reload::Invalid;
++    memory_.emplace(input_.context.memory, input_.context.reader, input_.context.filesystem_process);
++    R_TRY(memory_->begin());
++    // Open and pin the exact staged package before the old process stops.
++    package_.emplace(*memory_, input_.fs);
++    auto mount = input_.context.mount;
++    mount.title = input_.spec.program_id;
++    R_TRY(package_->open(package_path_, mount));
++    input_.context.mount = mount;
++    return 0;
++}
++
++Result PluginReload::prepare() {
++    touched_old_ = true;
++    KaihenPluginLifecycleReply reply = {};
++    Result rc = lifecycle(KaihenPluginLifecycle_Prepare, reply, input_.old_control);
++    // Resident's explicit fast Busy denial guarantees no state was changed.
++    if (rc == KAIHEN_PLUGIN_LIFECYCLE_BUSY) touched_old_ = false;
++    return rc;
++}
++Result PluginReload::waitLifecycle(u32 command, u32 state, u64 timeout) {
++    LifecycleIo io{*this, input_.old_control};
++    return reload::lifecycleWait(io, command, state, false, timeout);
++}
++Result PluginReload::drain() { return waitLifecycle(KaihenPluginLifecycle_Poll, KaihenPluginLifecycleState_Quiesced, 10 * Second); }
++bool PluginReload::abort() {
++    if (!touched_old_) return true;
++    LifecycleIo io{*this, input_.old_control};
++    return reload::lifecycleAbort(io, 10 * Second);
++}
++Result PluginReload::commit() {
++    LifecycleIo io{*this, input_.old_control};
++    return reload::lifecycleCommit(io, 5 * Second);
++}
++bool PluginReload::waitGone(u64 pid, u64 timeout) {
++    const u64 start = armGetSystemTick();
++    do {
++        u64 program = 0;
++        const Result rc = processProgram(pid, &program);
++        if (rc == ProcessNotFound) return true;
++        if (R_FAILED(rc) || program != input_.spec.program_id || expired()) return false;
++        svcSleepThread(1000000);
++    } while (!elapsed(start, timeout));
++    return false;
++}
++Result PluginReload::waitExit() { return waitGone(input_.request.expected_process_id, 5 * Second) ? 0 : reload::Deadline; }
++void PluginReload::oldExited() {
++    mutexLock(&lock_);
++    status_.flags |= HEN_PLUGIN_RELOAD_OLD_EXITED;
++    mutexUnlock(&lock_);
++    if (input_.previous_package_operation) {
++        char previous[160];
++        std::snprintf(previous, sizeof(previous), "/kaihen/plugin-packages/reload-%016llx-%016llx.nsp",
++                      (unsigned long long)status_.instance_id,
++                      (unsigned long long)input_.previous_package_operation);
++        deleteArtifact(input_.fs, previous);
++    }
++}
++
++void PluginReload::pmWorker(void* value) {
++    auto& self = *static_cast<PluginReload*>(value);
++    // Only this worker uses libounce's PM-shell global. All monitor and
++    // cleanup operations use explicit local Services, never rebind it.
++    serviceCreate(pmshellGetServiceSession(), self.input_.shell);
++    NcmProgramLocation location = {};
++    location.program_id = self.input_.spec.program_id;
++    location.storageID = self.input_.spec.storage_id;
++    u64 pid = 0;
++    self.pm_result_ = pmshellLaunchProgram(self.input_.spec.flags, &location, &pid);
++    self.pm_pid_.store(pid, std::memory_order_release);
++    self.pm_finished_.store(true, std::memory_order_release);
++}
++
++Result PluginReload::launch() {
++    gate_.emplace(*memory_, input_.context.gate);
++    gate_->setProgressCallback([](void* context, u32 step) {
++        // May run between the selected-waiter write and cancellation. Never
++        // acquire a mutex or call any service from this callback.
++        static_cast<PluginReload*>(context)->live_gate_step_.store(step, std::memory_order_relaxed);
++    }, this);
++    diagnosticStage(HenReloadLaunchStage_ParkBegin, HEN_RELOAD_DIAG_PARK_ATTEMPTED);
++    Result rc = gate_->beginPark();
++    bool parked = false;
++    if (R_SUCCEEDED(rc)) {
++        diagnosticStage(HenReloadLaunchStage_ParkPoll);
++        do {
++            rc = gate_->pollPark(parked);
++            if (R_FAILED(rc) || parked || expired()) break;
++            svcSleepThread(1000000);
++        } while (true); // pollStep enforces its elapsed one-second deadline
++    }
++    if (R_SUCCEEDED(rc) && parked)
++        diagnosticStage(HenReloadLaunchStage_ParkPoll, HEN_RELOAD_DIAG_PARK_COMPLETED);
++    if (expired() && R_SUCCEEDED(rc)) rc = reload::Deadline;
++    if (R_SUCCEEDED(rc)) {
++        diagnosticStage(HenReloadLaunchStage_PmCreate);
++        rc = threadCreate(&pm_thread_, pmWorker, this, nullptr, 0x8000, 0x2c, -2);
++        if (R_SUCCEEDED(rc)) {
++            pm_created_ = true;
++            diagnosticStage(HenReloadLaunchStage_PmStart, HEN_RELOAD_DIAG_PM_CREATED);
++            rc = threadStart(&pm_thread_);
++            if (R_FAILED(rc)) {
++                // Failure to close an unstarted thread still retains owned
++                // state and forces quarantine; never silently reuse it.
++                if (R_SUCCEEDED(threadClose(&pm_thread_))) pm_created_ = false;
++            } else {
++                pm_started_ = true;
++                diagnosticStage(HenReloadLaunchStage_RequestWait, HEN_RELOAD_DIAG_PM_STARTED);
++            }
++        }
++    }
++    bool exchanged = false;
++    if (R_SUCCEEDED(rc)) {
++        const u64 start = armGetSystemTick();
++        ounce::DomainMount<ounce::MemoryWriter::RoProcess> mount(*memory_, input_.context.mount);
++        u32 matches = 0;
++        while (!elapsed(start, 30 * Second) && !expired()) {
++            if (pm_finished_.load(std::memory_order_acquire) && R_FAILED(pm_result_)) { rc = pm_result_; break; }
++            bool ready = false;
++            rc = gate_->pending(ready);
++            if (R_FAILED(rc)) break;
++            if (!ready) { svcSleepThread(1000000); continue; }
++            ounce::DomainEntry before[ounce::MaxDomainEntries], after[ounce::MaxDomainEntries], added;
++            u32 before_count = 0, after_count = 0;
++            rc = mount.snapshot(before, before_count);
++            alignas(16) u8 request[ounce::LoaderRequestSize] = {};
++            if (R_SUCCEEDED(rc)) {
++                diagnosticStage(HenReloadLaunchStage_RequestPoll);
++                rc = gate_->beginStep();
++                bool complete = false;
++                while (R_SUCCEEDED(rc) && !complete && !expired()) {
++                    rc = gate_->pollStep(request, complete);
++                    if (R_FAILED(rc) || complete) break;
++                    svcSleepThread(1000000);
++                }
++                if (expired() && R_SUCCEEDED(rc)) rc = reload::Deadline;
++            }
++            if (R_SUCCEEDED(rc)) rc = mount.snapshot(after, after_count);
++            if (R_FAILED(rc)) break;
++            ounce::CodeMountRequest decoded = {};
++            rc = ounce::decodeCodeMountRequest(request, input_.context.mount.root_id, decoded);
++            if (R_FAILED(rc)) break;
++            // Unrelated Loader requests complete normally and never count.
++            if (!ounce::matchesCodeMount(decoded, input_.spec.program_id, input_.spec.storage_id)) {
++                diagnosticStage(HenReloadLaunchStage_RequestWait);
++                continue;
++            }
++            ++matches;
++            mutexLock(&lock_);
++            diagnostics_.matching_mounts = matches;
++            mutexUnlock(&lock_);
++            diagnosticStage(HenReloadLaunchStage_MountMatch);
++            if (matches != 2) {
++                diagnosticStage(HenReloadLaunchStage_RequestWait);
++                continue;
++            }
++            diagnosticStage(HenReloadLaunchStage_Exchange);
++            rc = mount.added(before, before_count, after, after_count, added);
++            if (R_SUCCEEDED(rc)) rc = mount.exchange(added);
++            exchanged = R_SUCCEEDED(rc);
++            break;
++        }
++        if (R_SUCCEEDED(rc) && !exchanged) rc = reload::Deadline;
++    }
++    captureGate(rc, false); // save primary step BEFORE restore overwrites it
++    mutexLock(&lock_);
++    diagnostics_.flags |= HEN_RELOAD_DIAG_RESTORE_ATTEMPTED;
++    mutexUnlock(&lock_);
++    const Result restore = gate_->restore();
++    const Result channel = memory_->restore();
++    captureGate(R_FAILED(restore) ? restore : channel, true);
++    mutexLock(&lock_);
++    status_.restoration_result = R_FAILED(restore) ? restore : channel;
++    mutexUnlock(&lock_);
++    if (R_FAILED(restore) || R_FAILED(channel)) return R_FAILED(rc) ? rc : status_.restoration_result;
++    if (pm_created_ && !pm_started_) return R_FAILED(rc) ? rc : reload::Invalid;
++    if (pm_created_) {
++        diagnosticStage(HenReloadLaunchStage_PmJoin);
++        PmCompletionIo io{*this};
++        const Result completion = reload::completePmLaunch(io, rc, 5 * Second);
++        if (R_FAILED(completion)) return completion;
++    }
++    if (R_FAILED(rc)) return rc;
++    if (R_FAILED(pm_result_) || !pm_pid_.load() || pm_pid_.load() == input_.request.expected_process_id)
++        return R_FAILED(pm_result_) ? pm_result_ : reload::Identity;
++    u64 program = 0;
++    R_TRY(processProgram(pm_pid_.load(), &program));
++    if (program != input_.spec.program_id) return reload::Identity;
++    Service monitor = {};
++    serviceCreate(&monitor, input_.context.monitor);
++    const u64 pid = pm_pid_.load();
++    return serviceDispatchIn(&monitor, 1, pid);
++}
++
++Result PluginReload::handoff() {
++    diagnosticStage(HenReloadLaunchStage_Handoff);
++    // This independent SM proxy session can wait in GetService without
++    // blocking HEN's main thread. The supervisor retains it on a timeout.
++    Service sm = {}, plugin = {};
++    serviceCreate(&sm, input_.sm);
++    const SmServiceName name = smEncodeName("mig:usr");
++    Handle endpoint = INVALID_HANDLE;
++    Result rc = serviceDispatchIn(&sm, 1, name,
++        .out_handle_attrs = {SfOutHandleAttr_HipcMove}, .out_handles = &endpoint);
++    if (R_FAILED(rc)) return rc;
++    serviceCreate(&plugin, endpoint);
++    Handle process = INVALID_HANDLE;
++    rc = serviceDispatch(&plugin, PluginStartupCommand_GetIdentity,
++        .out_handle_attrs = {SfOutHandleAttr_HipcCopy}, .out_handles = &process);
++    u64 pid = 0;
++    if (R_SUCCEEDED(rc)) rc = svcGetProcessId(&pid, process);
++    close(process);
++    if (R_SUCCEEDED(rc) && pid != pm_pid_.load()) rc = reload::Identity;
++    Handle release = INVALID_HANDLE, ready = INVALID_HANDLE;
++    if (R_SUCCEEDED(rc) && !expired()) rc = pluginAdoptHandles(&plugin, input_.sm, input_.fs, &release, &ready, &new_control_);
++    if (R_SUCCEEDED(rc)) rc = svcSignalEvent(release);
++    if (R_SUCCEEDED(rc)) rc = svcWaitSynchronizationSingle(ready, 5 * Second);
++    close(release);
++    close(ready);
++    close(endpoint);
++    if (R_SUCCEEDED(rc) && new_control_ == INVALID_HANDLE) rc = reload::Capability;
++    return expired() ? reload::Deadline : rc;
++}
++
++Result PluginReload::health() {
++    diagnosticStage(HenReloadLaunchStage_Health);
++    LifecycleIo io{*this, new_control_};
++    return reload::lifecycleWait(io, KaihenPluginLifecycle_Health, KaihenPluginLifecycleState_Running, true, 30 * Second);
++}
++
++bool PluginReload::cleanup() {
++    // No forced termination of the OLD plugin exists. Only this operation's
++    // unpublished, pre-health candidate may be reaped through PID-targeted PM.
++    if (expired() || R_FAILED(status_.restoration_result) || (pm_created_ && !pm_joined_)) return false;
++    const u64 pid = pm_pid_.load();
++    if (!pid) return true;
++    if (pid == input_.request.expected_process_id) return false;
++    u64 program = 0;
++    Result rc = processProgram(pid, &program);
++    if (rc == ProcessNotFound) return true;
++    if (R_FAILED(rc) || program != input_.spec.program_id) return false;
++    Service shell = {};
++    serviceCreate(&shell, input_.shell);
++    rc = serviceDispatchIn(&shell, 1, pid);
++    return R_SUCCEEDED(rc) && waitGone(pid, 5 * Second);
++}
++
++void PluginReload::releaseOwned() {
++    if (package_) package_->close();
++    package_.reset();
++    gate_.reset();
++    memory_.reset();
++    // Files are unique to this operation. Never delete while a launch or
++    // restore remains uncertain; quarantined paths deliberately stay pinned.
++    deleteArtifact(input_.fs, staged_file_);
++    // A successful plugin keeps its backing NSP until a later reload proves
++    // that exact process exited. The registry records its operation ID.
++    if (!success_) deleteArtifact(input_.fs, package_file_);
++    close(input_.sm);
++    close(input_.fs);
++    if (!success_) close(new_control_);
++}
+diff --git a/hen/source/plugin_reload.hpp b/hen/source/plugin_reload.hpp
+new file mode 100644
+--- /dev/null
++++ b/hen/source/plugin_reload.hpp
+@@ -0,0 +1,105 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <atomic>
++#include <optional>
++#include <switch.h>
++#include "../../common/plugin_launch.hpp"
++#include "../../common/policy_package.hpp"
++#include "reload_state.hpp"
++#include "lifecycle_client.hpp"
++#include "reload_diagnostics.hpp"
++
++class PluginReload {
++    static_assert(std::atomic<u32>::is_always_lock_free, "gate progress callback must never block");
++  public:
++    struct Input {
++        PluginLaunchContext context;
++        PluginLaunchSpec spec;
++        HenPluginReloadRequest request;
++        Handle shell;
++        Handle old_control; // borrowed: registry is pinned until worker completes
++        Handle sm; // owned, new plugin's SM proxy session
++        Handle fs; // owned, new plugin's cloned FS root
++        u64 previous_package_operation;
++    };
++    PluginReload() { mutexInit(&lock_); }
++    Result start(const Input& input, const HenPluginReloadStatus& status);
++    HenPluginReloadStatus status();
++    HenPluginReloadDiagnostics diagnostics();
++    bool finished() const { return finished_.load(std::memory_order_acquire); }
++    bool join();
++    bool succeeded() const { return success_; }
++    bool quarantined() const { return quarantined_; }
++    Handle takeControl() { Handle value = new_control_; new_control_ = INVALID_HANDLE; return value; }
++
++  private:
++    using Memory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
++    using Gate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess>;
++    using Package = ounce::NativePackage<ounce::MemoryWriter::RoProcess>;
++    static void worker(void* argument);
++    static void pmWorker(void* argument);
++    Result preflight();
++    Result prepare();
++    Result drain();
++    bool abort();
++    Result commit();
++    Result waitExit();
++    void oldExited();
++    Result launch();
++    Result handoff();
++    Result health();
++    bool cleanup();
++    Result fail(Result rc, bool quarantine);
++    void phase(u32 value);
++    void diagnosticStage(u32 stage, u32 flags = 0);
++    void captureGate(Result result, bool restoration);
++    Result lifecycle(u32 command, KaihenPluginLifecycleReply& out, Handle control);
++    struct LifecycleIo {
++        PluginReload& owner;
++        Handle control;
++        Result call(u32 command, KaihenPluginLifecycleReply& reply) { return owner.lifecycle(command, reply, control); }
++        u64 now() const { return armGetSystemTick(); }
++        bool deadline(u64 start, u64 ns) const { return now() - start >= armNsToTicks(ns); }
++        bool cancelled() const { return owner.expired(); }
++        void pause() const { svcSleepThread(1000000); }
++    };
++    struct PmCompletionIo {
++        PluginReload& owner;
++        u64 now() const { return armGetSystemTick(); }
++        bool deadline(u64 start, u64 ns) const { return now() - start >= armNsToTicks(ns); }
++        bool cancelled() const { return owner.expired(); }
++        void pause() const { svcSleepThread(1000000); }
++        bool finished() const { return owner.pm_finished_.load(std::memory_order_acquire); }
++        Result wait() { return threadWaitForExit(&owner.pm_thread_); }
++        Result close() { return threadClose(&owner.pm_thread_); }
++        void joined() {
++            owner.pm_joined_ = true;
++            owner.diagnosticStage(HenReloadLaunchStage_ProcessStart, HEN_RELOAD_DIAG_PM_JOINED);
++        }
++    };
++    Result waitLifecycle(u32 command, u32 state, u64 timeout);
++    Result processProgram(u64 pid, u64* program);
++    bool waitGone(u64 pid, u64 timeout);
++    bool expired() const;
++    void releaseOwned();
++    template <typename Io> friend Result reload::run(Io&);
++
++    Mutex lock_ = {};
++    Input input_ = {};
++    HenPluginReloadStatus status_ = {};
++    HenPluginReloadDiagnostics diagnostics_ = {};
++    std::atomic<u32> live_gate_step_{0};
++    Thread thread_ = {}, pm_thread_ = {};
++    bool created_ = false, joined_ = false, pm_created_ = false, pm_started_ = false, pm_joined_ = false;
++    bool success_ = false, quarantined_ = false, touched_old_ = false;
++    std::atomic<bool> finished_{false}, pm_finished_{false}, cancelled_{false};
++    u64 stage_tick_ = 0;
++    std::atomic<u64> pm_pid_{0};
++    Result pm_result_ = 0;
++    SignedPolicy policy_ = {};
++    std::optional<Memory> memory_;
++    std::optional<Gate> gate_;
++    std::optional<Package> package_;
++    Handle new_control_ = INVALID_HANDLE;
++    char staged_file_[160] = {}, package_file_[160] = {}, package_path_[176] = {};
++};
+diff --git a/hen/source/reload_diagnostics.hpp b/hen/source/reload_diagnostics.hpp
+new file mode 100644
+--- /dev/null
++++ b/hen/source/reload_diagnostics.hpp
+@@ -0,0 +1,42 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "../../libkaihen/include/kaihen/reload.h"
++
++namespace reload {
++inline void recordUncapturedPrimary(HenPluginReloadDiagnostics& diagnostics, Result result) {
++    if (!(diagnostics.flags & HEN_RELOAD_DIAG_PRIMARY_CAPTURED)) diagnostics.primary_result = result;
++}
++
++// Shared by the worker's real fail path and focused host regressions.
++inline void recordFailure(HenPluginReloadStatus& status, HenPluginReloadDiagnostics& diagnostics,
++                          Result result, bool quarantined) {
++    status.result = result;
++    recordUncapturedPrimary(diagnostics, result);
++    status.phase = quarantined ? HenPluginReloadPhase_Quarantined : HenPluginReloadPhase_Failed;
++    if (quarantined) status.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++}
++
++// Pure snapshot publication. Probe is a previously cached local gate read;
++// this helper never calls the gate, RO, FS, a clock or a logger.
++template <typename Probe>
++void captureGateDiagnostics(HenPluginReloadDiagnostics& diagnostics, Result result,
++                            bool restoration, u32 step, const Probe& probe,
++                            u32 original_wait, u32 park_wait) {
++    if (restoration) {
++        diagnostics.restoration_gate_step = step;
++        diagnostics.restoration_result = result;
++        diagnostics.flags |= HEN_RELOAD_DIAG_RESTORE_ATTEMPTED;
++    } else {
++        diagnostics.primary_gate_step = step;
++        diagnostics.primary_result = result;
++        diagnostics.flags |= HEN_RELOAD_DIAG_PRIMARY_CAPTURED;
++    }
++    diagnostics.probe_result = probe.read_result;
++    diagnostics.probe_state = probe.state;
++    diagnostics.probe_receive_result = probe.receive_result;
++    diagnostics.probe_selected_mask = (probe.waiter_mask >> 8) & 0x7f;
++    diagnostics.probe_wait_kind = probe.wait == original_wait ? 1 : probe.wait == park_wait ? 2 : probe.wait ? 3 : 0;
++    diagnostics.flags &= ~HEN_RELOAD_DIAG_PROBE_VALID;
++    if (R_SUCCEEDED(probe.read_result)) diagnostics.flags |= HEN_RELOAD_DIAG_PROBE_VALID;
++}
++} // namespace reload
+diff --git a/hen/source/reload_state.hpp b/hen/source/reload_state.hpp
+new file mode 100644
+--- /dev/null
++++ b/hen/source/reload_state.hpp
+@@ -0,0 +1,177 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <cstring>
++#include <switch/result.h>
++#include "../../libkaihen/include/kaihen/reload.h"
++#include "reload_diagnostics.hpp"
++
++namespace reload {
++// Dedicated results, independent of libnx's evolving error enum.
++constexpr Result Busy = MAKERESULT(345, 1);
++constexpr Result Stale = MAKERESULT(345, 2);
++constexpr Result Capability = MAKERESULT(345, 3);
++constexpr Result Expired = MAKERESULT(345, 4);
++constexpr Result Invalid = MAKERESULT(345, 5);
++constexpr Result Exhausted = MAKERESULT(345, 6);
++constexpr Result Deadline = MAKERESULT(345, 7);
++constexpr Result Identity = MAKERESULT(345, 8);
++
++inline Result preservePrimary(Result primary, Result later) {
++    return R_FAILED(primary) ? primary : later;
++}
++
++// Performs the real PM completion policy with injectable kernel/clock calls.
++// On timeout/wait/close failure it retains all ownership: joined() is never
++// called, and an earlier gate error wins over the later cleanup error.
++template <typename Io>
++Result completePmLaunch(Io& io, Result primary, u64 timeout) {
++    const u64 start = io.now();
++    while (!io.finished() && !io.deadline(start, timeout) && !io.cancelled()) io.pause();
++    if (!io.finished()) return preservePrimary(primary, Deadline);
++    Result result = io.wait();
++    if (R_SUCCEEDED(result)) result = io.close();
++    if (R_FAILED(result)) return preservePrimary(primary, result);
++    io.joined();
++    return primary;
++}
++
++inline bool validName(const char name[64]) {
++    for (unsigned i = 0; i != 64; ++i) {
++        const char c = name[i];
++        if (!c) return i != 0;
++        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
++              (c >= '0' && c <= '9') || c == '_' || c == '-')) return false;
++    }
++    return false;
++}
++
++// Called under the same owner lock used by the supervisor's cancellation.
++// finished must be published before releasing that lock, closing the window
++// between checking cancellation and exposing completion.
++inline void finalizeWorker(bool eligible, bool cancelled, bool& success, bool& quarantined,
++                           HenPluginReloadStatus& status, HenPluginReloadDiagnostics* diagnostics = nullptr) {
++    quarantined |= cancelled;
++    success = eligible && !quarantined;
++    if (cancelled) status.result = preservePrimary(status.result, Deadline);
++    if (quarantined) {
++        status.phase = HenPluginReloadPhase_Quarantined;
++        status.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++    }
++    if (diagnostics && R_FAILED(status.result)) recordUncapturedPrimary(*diagnostics, status.result);
++}
++
++inline bool publishable(const HenPluginReloadStatus& status, bool success, bool quarantined) {
++    return success && !quarantined && !(status.flags & HEN_PLUGIN_RELOAD_BLOCKED) &&
++           (status.flags & HEN_PLUGIN_RELOAD_OLD_EXITED) && status.old_process_id &&
++           R_SUCCEEDED(status.result) && R_SUCCEEDED(status.restoration_result) &&
++           status.new_process_id && status.new_process_id != status.old_process_id;
++}
++
++template <typename Worker>
++bool completedSnapshot(Worker& worker, HenPluginReloadStatus& status) {
++    status = worker.status();
++    if (!worker.finished() || !worker.join()) return false;
++    // The worker may have completed between the first snapshot and finished.
++    status = worker.status();
++    return true;
++}
++
++class Journal {
++  public:
++    struct Entry {
++        u64 caller = 0;
++        HenPluginReloadRequest request = {};
++        HenPluginReloadStatus status = {};
++        HenPluginReloadDiagnostics diagnostics = {};
++    };
++    struct Caller { u64 pid = 0; u64 high = 0; };
++    static constexpr unsigned Capacity = 8;
++    Entry entries[Capacity] = {};
++    Caller callers[32] = {};
++    unsigned next = 0;
++    u64 serial = 0;
++    u64 active = 0;
++    bool blocked = false;
++
++    Entry* find(u64 id) {
++        for (auto& entry : entries) if (id && entry.status.operation_id == id) return &entry;
++        return nullptr;
++    }
++    Result lookup(u64 caller, const HenPluginReloadRequest& request, Entry** out) {
++        *out = nullptr;
++        if (!caller || !request.nonce || !validName(request.name)) return Invalid;
++        for (auto& entry : entries) {
++            if (entry.caller != caller || entry.request.nonce != request.nonce) continue;
++            if (std::memcmp(&entry.request, &request, sizeof(request))) return Invalid;
++            *out = &entry;
++            return 0;
++        }
++        for (const auto& owner : callers)
++            if (owner.pid == caller && request.nonce <= owner.high) return Expired;
++        return active || blocked ? Busy : 0;
++    }
++    Result begin(u64 caller, const HenPluginReloadRequest& request, Entry** out) {
++        Result rc = lookup(caller, request, out);
++        if (R_FAILED(rc) || *out) return rc;
++        Caller* owner = nullptr;
++        for (auto& slot : callers) if (slot.pid == caller) owner = &slot;
++        if (!owner) for (auto& slot : callers) if (!slot.pid) { owner = &slot; break; }
++        if (!owner || serial == UINT64_MAX) return Exhausted;
++        *owner = {caller, request.nonce};
++        auto& entry = entries[next++ % Capacity];
++        entry = {};
++        entry.caller = caller;
++        entry.request = request;
++        entry.status.instance_id = request.instance_id;
++        entry.status.operation_id = ++serial;
++        entry.status.old_process_id = request.expected_process_id;
++        entry.status.generation = request.expected_generation;
++        entry.status.phase = HenPluginReloadPhase_Preparing;
++        entry.status.flags = HEN_PLUGIN_RELOAD_BUSY;
++        entry.diagnostics.version = 1;
++        entry.diagnostics.operation_id = entry.status.operation_id;
++        entry.diagnostics.probe_result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
++        active = serial;
++        *out = &entry;
++        return 0;
++    }
++    void finish(u64 id, bool quarantine) {
++        if (auto* entry = find(id)) {
++            entry->status.flags &= ~HEN_PLUGIN_RELOAD_BUSY;
++            if (quarantine) entry->status.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++        }
++        blocked |= quarantine;
++        // Keep the quarantined operation pinned, including a late PM PID.
++        active = quarantine ? id : 0;
++    }
++};
++
++// Production orchestration, also executed with fault-injecting host adapters.
++// Each adapter owns its pending IPC/thread storage beyond a deadline. A
++// failure after prepare may only restore availability after acknowledged abort.
++template <typename Io> Result run(Io& io) {
++    Result rc = io.preflight();
++    if (R_FAILED(rc)) return io.fail(rc, false);
++    io.phase(HenPluginReloadPhase_Draining);
++    rc = io.prepare();
++    if (R_FAILED(rc)) return io.fail(rc, !io.abort());
++    rc = io.drain();
++    if (R_FAILED(rc)) return io.fail(rc, !io.abort());
++    io.phase(HenPluginReloadPhase_Exiting);
++    rc = io.commit();
++    if (R_FAILED(rc)) return io.fail(rc, true);
++    rc = io.waitExit();
++    if (R_FAILED(rc)) return io.fail(rc, true);
++    io.oldExited();
++    io.phase(HenPluginReloadPhase_Launching);
++    rc = io.launch();
++    if (R_FAILED(rc)) return io.fail(rc, !io.cleanup());
++    io.phase(HenPluginReloadPhase_Handoff);
++    rc = io.handoff();
++    if (R_FAILED(rc)) return io.fail(rc, !io.cleanup());
++    io.phase(HenPluginReloadPhase_Health);
++    rc = io.health();
++    if (R_FAILED(rc)) return io.fail(rc, !io.cleanup());
++    return 0; // owner loop publishes before marking Complete
++}
++} // namespace reload
+diff --git a/hen/source/server.cpp b/hen/source/server.cpp
+--- a/hen/source/server.cpp
++++ b/hen/source/server.cpp
+@@ -23,6 +23,7 @@
+ HenServer::HenServer() = default;
+ 
+ HenServer::~HenServer() {
++    ounce::closeHandle(&reload_shell_);
+     ounce::closeHandle(&fs_root_);
+     ounce::closeHandle(&sm_session_);
+     if (settings_ready_) {
+@@ -44,6 +45,8 @@
+ }
+ 
+ Result HenServer::initialize() {
++    reload_instance_ = randomGet64();
++    if (!reload_instance_) reload_instance_ = armGetSystemTick() | 1;
+     status_.protocol_version = HEN_PROTOCOL_VERSION;
+     Result rc = svcGetProcessId(&status_.process_id, CUR_PROCESS_HANDLE);
+     if (R_SUCCEEDED(rc)) {
+@@ -98,6 +101,7 @@
+         if (R_FAILED(serve_result)) {
+             return serve_result;
+         }
++        advanceReload();
+     }
+ }
+ 
+@@ -124,6 +128,7 @@
+ 
+ /// Advances game arming between incoming requests.
+ void HenServer::stepBetweenRequests() {
++    advanceReload();
+     game_.step();
+     svcSleepThread(IdleSleepNs);
+ }
+@@ -250,6 +255,12 @@
+             reply.setData(game_.status());
+         }
+         return reply;
 +    case HenControlCommand_MoaderGameTrace:
 +        if (!request.num_copy_handles) {
 +            reply.result = 0;
 +            reply.setData(game_.trace());
-         }
-         return reply;
++        }
++        return reply;
      default:
---- research/sources/kaihen/common/control.h	2026-11-13 21:18:44
-+++ runtime/kaihen/common/control.h	2026-11-13 22:06:55
-@@ -20,6 +20,8 @@
-     HenControlCommand_ReleaseControlPort = 13,
-     HenControlCommand_CreateServiceManagerSession = 14,
-     HenControlCommand_CloneFilesystemRoot = 15,
-+    // Moader diagnostic extension. Read-only on control and homebrew sessions.
-+    HenControlCommand_MoaderGameTrace = 0x4d4f0001,
+         break;
+     }
+@@ -268,6 +279,20 @@
+     const Handle* handles = request.copy_handles;
+ 
+     switch (request.command_id) {
++    case HenControlCommand_ConfigurePluginReload:
++        if (copies == 1 && request.data_size >= sizeof(HenPluginLaunchConfig) && !reload_configured_) {
++            HenPluginLaunchConfig config;
++            std::memcpy(&config, request.data, sizeof(config));
++            if (config.program_id && config.storage_id == NcmStorageId_BuiltInSystem &&
++                !config.reserved[0] && !config.reserved[1] && !config.reserved[2]) {
++                reload_shell_ = handles[0];
++                reload_spec_ = {config.program_id, config.flags, config.storage_id, {0, 0, 0}};
++                reload_configured_ = true;
++                reply.result = 0;
++                reply.keeps_request_handles = true;
++            }
++        }
++        break;
+     case HenControlCommand_ConfigureGame:
+         if (!copies && request.data_size >= sizeof(HenGameConfig)) {
+             HenGameConfig configuration;
+@@ -358,6 +383,54 @@
+     }
+ 
+     switch (request.command_id) {
++    case HenHomebrewCommand_GetReloadCapabilities: {
++        HenReloadCapabilities caps = {1, reload_configured_ ? HEN_PLUGIN_RELOAD_AVAILABLE : 0,
++                                      reload_instance_, reload_journal_.active};
++        if (reload_journal_.active) caps.flags |= HEN_PLUGIN_RELOAD_BUSY;
++        if (reload_journal_.blocked) caps.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
++        reply.result = 0;
++        reply.setData(caps);
++        break;
++    }
++    case HenHomebrewCommand_GetPluginInfo: {
++        HenPluginName name;
++        if (request.data_size < sizeof(name)) break;
++        std::memcpy(&name, request.data, sizeof(name));
++        HenPluginInfo info = {};
++        reply.result = getPluginInfo(name, info);
++        if (R_SUCCEEDED(reply.result)) reply.setData(info);
++        break;
++    }
++    case HenHomebrewCommand_ReloadPlugin: {
++        HenPluginReloadRequest input;
++        if (request.data_size < sizeof(input)) break;
++        std::memcpy(&input, request.data, sizeof(input));
++        HenPluginReloadStatus output = {};
++        reply.result = submitReload(index, input, output);
++        if (R_SUCCEEDED(reply.result)) reply.setData(output);
++        break;
++    }
++    case HenHomebrewCommand_GetPluginReloadStatus: {
++        u64 id = 0;
++        if (request.data_size < sizeof(id)) break;
++        std::memcpy(&id, request.data, sizeof(id));
++        advanceReload();
++        auto* entry = reload_journal_.find(id);
++        reply.result = entry ? 0 : reload::Expired;
++        if (entry) reply.setData(entry->status);
++        break;
++    }
++    case HenHomebrewCommand_GetPluginReloadDiagnostics: {
++        u64 id = 0;
++        if (request.data_size < sizeof(id)) break;
++        std::memcpy(&id, request.data, sizeof(id));
++        // Only copy the snapshot published by advanceReload. In particular,
++        // never probe the gate or issue RO/FS IPC from the query thread.
++        const auto* entry = reload_journal_.find(id);
++        reply.result = entry ? 0 : reload::Expired;
++        if (entry) reply.setData(entry->diagnostics);
++        break;
++    }
+     case HenHomebrewCommand_GetFilesystemRoot:
+         if (fs_root_ == INVALID_HANDLE) {
+             reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+@@ -516,6 +589,12 @@
+         if (std::strcmp(plugins_[index].name.name, name.name)) {
+             continue;
+         }
++        if (plugins_[index].operation_id) {
++            const auto* operation = reload_journal_.find(plugins_[index].operation_id);
++            if ((operation && (operation->status.flags & (HEN_PLUGIN_RELOAD_BUSY | HEN_PLUGIN_RELOAD_BLOCKED))) ||
++                plugins_[index].control_session == INVALID_HANDLE) return reload::Busy;
++        }
++        if (plugins_[index].control_session == INVALID_HANDLE) return reload::Busy;
+         Service control = {};
+         serviceCreate(&control, plugins_[index].control_session);
+         control.own_handle = false;
+@@ -525,6 +604,10 @@
+         );
+         // The plugin closed its control session, so it no longer serves.
+         if (rc == KERNELRESULT(ConnectionClosed)) {
++            if (plugins_[index].operation_id || game_.processExists(plugins_[index].process_id)) {
++                ounce::closeHandle(&plugins_[index].control_session);
++                return rc;
++            }
+             removePlugin(index);
+             return MAKERESULT(Module_Libnx, LibnxError_NotFound);
+         }
+@@ -547,8 +630,111 @@
+ /// the two can still name a plugin that exits in the meantime.
+ void HenServer::removeExitedPlugins() {
+     for (u32 index = plugin_count_; index > 0; index--) {
+-        if (!game_.processExists(plugins_[index - 1].process_id)) {
++        if (!plugins_[index - 1].operation_id && !game_.processExists(plugins_[index - 1].process_id)) {
+             removePlugin(index - 1);
+         }
+     }
+ }
++
++HenServer::PluginRecord* HenServer::findPlugin(const char* name) {
++    for (u32 index = 0; index < plugin_count_; ++index)
++        if (!std::strcmp(plugins_[index].name.name, name)) return &plugins_[index];
++    return nullptr;
++}
++
++Result HenServer::getPluginInfo(const HenPluginName& name, HenPluginInfo& out) {
++    if (!reload::validName(name.name)) return reload::Invalid;
++    advanceReload();
++    removeExitedPlugins();
++    out = {};
++    out.instance_id = reload_instance_;
++    // Explicit successful absence is the ONLY new-client fallback signal.
++    auto* plugin = findPlugin(name.name);
++    if (!plugin) return 0;
++    out.process_id = plugin->process_id;
++    out.generation = plugin->generation;
++    out.operation_id = plugin->operation_id;
++    out.flags = reload_configured_ ? HEN_PLUGIN_RELOAD_AVAILABLE : 0;
++    if (auto* entry = reload_journal_.find(plugin->operation_id)) {
++        out.phase = entry->status.phase;
++        out.flags |= entry->status.flags;
++    }
++    return 0;
++}
++
++Result HenServer::submitReload(u32 caller, const HenPluginReloadRequest& request, HenPluginReloadStatus& out) {
++    advanceReload();
++    u64 caller_pid = 0;
++    R_TRY(svcGetProcessId(&caller_pid, homebrew_processes_[caller]));
++    reload::Journal::Entry* entry = nullptr;
++    R_TRY(reload_journal_.lookup(caller_pid, request, &entry));
++    if (entry) { out = entry->status; return 0; }
++    if (!reload_configured_) return reload::Capability;
++    if (request.instance_id != reload_instance_) return reload::Stale;
++    auto* plugin = findPlugin(request.name);
++    if (!plugin || !plugin->process_id || plugin->process_id != request.expected_process_id ||
++        plugin->generation != request.expected_generation || plugin->generation == UINT64_MAX ||
++        plugin->control_session == INVALID_HANDLE) return reload::Stale;
++    PluginLaunchContext context = {};
++    if (!game_.acquireReloadLease(context)) return reload::Busy;
++    Handle fs = INVALID_HANDLE, sm = INVALID_HANDLE;
++    Result rc = cmifCloneCurrentObject(fs_root_, &fs);
++    if (R_SUCCEEDED(rc)) rc = sm_proxy_.openSession(&sm);
++    if (R_SUCCEEDED(rc)) rc = reload_journal_.begin(caller_pid, request, &entry);
++    if (R_FAILED(rc)) {
++        ounce::closeHandle(&fs);
++        ounce::closeHandle(&sm);
++        game_.releaseReloadLease();
++        return rc;
++    }
++    plugin->operation_id = entry->status.operation_id;
++    const PluginReload::Input input = {context, reload_spec_, request, reload_shell_, plugin->control_session, sm, fs,
++                                      plugin->package_operation_id};
++    rc = reload_.start(input, entry->status);
++    if (R_FAILED(rc)) {
++        ounce::closeHandle(&fs);
++        ounce::closeHandle(&sm);
++        entry->status.result = rc;
++        entry->diagnostics.primary_result = rc;
++        entry->status.phase = HenPluginReloadPhase_Failed;
++        reload_journal_.finish(entry->status.operation_id, false);
++        game_.releaseReloadLease();
++    }
++    out = entry->status;
++    // A reserved ticket remains queryable even if creating its worker failed.
++    return 0;
++}
++
++void HenServer::advanceReload() {
++    if (!reload_journal_.active) return;
++    auto* entry = reload_journal_.find(reload_journal_.active);
++    if (!entry) return;
++    const bool complete = reload::completedSnapshot(reload_, entry->status);
++    entry->diagnostics = reload_.diagnostics();
++    if (!complete) return;
++    auto* plugin = findPlugin(entry->request.name);
++    bool quarantine = reload_.quarantined();
++    if (reload::publishable(entry->status, reload_.succeeded(), quarantine) &&
++        plugin && plugin->generation != UINT64_MAX) {
++        ounce::closeHandle(&plugin->control_session);
++        plugin->control_session = reload_.takeControl();
++        plugin->process_id = entry->status.new_process_id;
++        plugin->package_operation_id = entry->status.operation_id;
++        ++plugin->generation;
++        entry->status.generation = plugin->generation;
++        entry->status.phase = HenPluginReloadPhase_Complete;
++        entry->status.result = 0;
++    } else if (reload_.succeeded()) {
++        // An impossible registry/generation conflict cannot turn a healthy
++        // but unpublished process into an untracked writer.
++        quarantine = true;
++        entry->status.phase = HenPluginReloadPhase_Quarantined;
++        entry->status.result = reload::Stale;
++    }
++    if (entry->status.phase != HenPluginReloadPhase_Complete &&
++        (entry->status.flags & HEN_PLUGIN_RELOAD_OLD_EXITED)) {
++        if (plugin) { ounce::closeHandle(&plugin->control_session); plugin->process_id = 0; }
++    }
++    reload_journal_.finish(entry->status.operation_id, quarantine);
++    if (!quarantine) game_.releaseReloadLease();
++}
+diff --git a/hen/source/server.hpp b/hen/source/server.hpp
+--- a/hen/source/server.hpp
++++ b/hen/source/server.hpp
+@@ -5,6 +5,7 @@
+ #include "../../common/control.h"
+ #include "game_arm.hpp"
+ #include "sm_proxy.hpp"
++#include "plugin_reload.hpp"
+ #include "../../libkaihen/source/cmif_server.hpp"
+ 
+ /// HEN's IPC server. It serves the mig:usr control port, on which the
+@@ -84,6 +85,9 @@
+         HenPluginName name = {};
+         u64 process_id = 0;
+         Handle control_session = INVALID_HANDLE;
++        u64 generation = 1;
++        u64 operation_id = 0;
++        u64 package_operation_id = 0;
+     };
+ 
+     // The loop
+@@ -112,6 +116,10 @@
+     Result openPlugin(const HenPluginName& name, Handle* out_session);
+     void removePlugin(u32 index);
+     void removeExitedPlugins();
++    Result getPluginInfo(const HenPluginName& name, HenPluginInfo& out);
++    Result submitReload(u32 caller, const HenPluginReloadRequest& request, HenPluginReloadStatus& out);
++    void advanceReload();
++    PluginRecord* findPlugin(const char* name);
+ 
+     Handle port_ = INVALID_HANDLE;
+     Handle fs_root_ = INVALID_HANDLE;
+@@ -127,4 +135,10 @@
+     u32 plugin_count_ = 0;
+     HenStatus status_ = {};
+     GameArm game_ = {};
++    PluginReload reload_;
++    reload::Journal reload_journal_;
++    Handle reload_shell_ = INVALID_HANDLE;
++    PluginLaunchSpec reload_spec_ = {};
++    bool reload_configured_ = false;
++    u64 reload_instance_ = 0;
+ };
+diff --git a/hen/source/sm_proxy.cpp b/hen/source/sm_proxy.cpp
+--- a/hen/source/sm_proxy.cpp
++++ b/hen/source/sm_proxy.cpp
+@@ -44,25 +44,37 @@
+ }
+ 
+ /// Joins and frees the sessions whose thread has ended. Under lock_.
+-void SmProxy::reapFinishedSessions() {
++Result SmProxy::reapFinishedSessions() {
+     Session** link = &sessions_;
+     while (Session* session = *link) {
+         if (session->running.load(std::memory_order_acquire)) {
+             link = &session->next;
+             continue;
+         }
+-        threadWaitForExit(&session->thread);
+-        threadClose(&session->thread);
++        if (session->thread_started && !session->thread_exited) {
++            const Result rc = threadWaitForExit(&session->thread);
++            if (R_FAILED(rc)) return rc;
++            session->thread_exited = true;
++        }
++        const Result rc = threadClose(&session->thread);
++        if (R_FAILED(rc)) return rc;
+         *link = session->next;
+         delete session;
+     }
++    return 0;
++}
++
++Result SmProxy::collectFinishedSessions() {
++    LockGuard guard(&lock_);
++    return reapFinishedSessions();
+ }
+ 
+ Result SmProxy::openSession(Handle* out_client) {
+     LockGuard guard(&lock_);
+     if (master_ == INVALID_HANDLE)
+         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+-    reapFinishedSessions();
++    const Result reap = reapFinishedSessions();
++    if (R_FAILED(reap)) return reap;
+ 
+     Session* session = new (std::nothrow) Session;
+     if (!session)
+@@ -79,14 +91,23 @@
+     session->running.store(true, std::memory_order_release);
+     rc = threadCreate(&session->thread, sessionMain, session, nullptr,
+                       ThreadStackSize, ThreadPriority, -2);
++    bool thread_created = R_SUCCEEDED(rc);
+     if (R_SUCCEEDED(rc)) {
+         rc = threadStart(&session->thread);
+-        if (R_FAILED(rc))
+-            threadClose(&session->thread);
++        session->thread_started = R_SUCCEEDED(rc);
+     }
+     if (R_FAILED(rc)) {
+         svcCloseHandle(session->server);
+         svcCloseHandle(client);
++        session->server = INVALID_HANDLE;
++        session->running.store(false, std::memory_order_release);
++        if (thread_created && R_FAILED(threadClose(&session->thread))) {
++            // Keep the descriptor's backing context after an unstarted
++            // thread could not be closed. A later collection resumes it.
++            session->next = sessions_;
++            sessions_ = session;
++            return rc;
++        }
+         delete session;
+         return rc;
+     }
+diff --git a/hen/source/sm_proxy.hpp b/hen/source/sm_proxy.hpp
+--- a/hen/source/sm_proxy.hpp
++++ b/hen/source/sm_proxy.hpp
+@@ -43,6 +43,9 @@
+     /// There is no fixed number of sessions: it fails only when HEN cannot
+     /// allocate the session or create its thread.
+     Result openSession(Handle* out_client);
++    /// Reclaims ended proxy threads. Failure retains the context and partial
++    /// join state; it is never permission to free an unclosed thread object.
++    Result collectFinishedSessions();
+ 
+   private:
+     static constexpr size_t ThreadStackSize = 0x4000;
+@@ -57,6 +60,8 @@
+         Thread thread = {};
+         Handle server = INVALID_HANDLE;
+         std::atomic<bool> running{false};
++        bool thread_started = false;
++        bool thread_exited = false;
+     };
+ 
+     static void sessionMain(void* argument);
+@@ -67,7 +72,7 @@
+     /// Asks SM for the service on the master session. The session SM returns
+     /// is in *out_handle.
+     Result lookUpService(const SmServiceName& name, Handle* out_handle);
+-    void reapFinishedSessions();
++    Result reapFinishedSessions();
+ 
+     Handle master_ = INVALID_HANDLE;
+     Mutex lock_ = {};
+diff --git a/hen/test.sh b/hen/test.sh
+--- a/hen/test.sh
++++ b/hen/test.sh
+@@ -4,12 +4,13 @@
+ set -eu
+ cd "$(dirname "$0")"
+ nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
+-mkdir -p build/tests
++out=${TEST_OUT:-build/tests}
++mkdir -p "$out"
+ cxx=${CXX:-g++}
+ # libnx's HIPC parser reads unaligned fields, as allowed on AArch64. Keep the
+ # other ASan/UBSan checks.
+-flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
+-$cxx $flags -I"$nx/include" -I../libkaihen/include tests/mount_request_test.cpp -o build/tests/mount_request
+-build/tests/mount_request
+-$cxx $flags -I"$nx/include" -I../libkaihen/include tests/sm_request_test.cpp -o build/tests/sm_request
+-build/tests/sm_request
++flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
++for test in mount_request sm_request reload lifecycle_server loader_gate session_lifetime; do
++    $cxx $flags -Itests/host -I"$nx/include" -I../libkaihen/include "tests/${test}_test.cpp" -o "$out/$test"
++    "$out/$test"
++done
+diff --git a/hen/tests/host/switch.h b/hen/tests/host/switch.h
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/host/switch.h
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++
++// Test-only selector for the real SDK declarations used by HEN's IPC
++// fixtures and the actual plugin server. The SDK umbrella also imports
++// ARM-only crypto intrinsics, which these host tests neither use nor emulate.
++extern "C" {
++#include <switch/types.h>
++#include <switch/result.h>
++#include <switch/kernel/svc.h>
++#include <switch/kernel/mutex.h>
++#include <switch/kernel/thread.h>
++#include <switch/arm/tls.h>
++#include <switch/sf/hipc.h>
++#include <switch/sf/cmif.h>
++#include <switch/sf/service.h>
++#include <switch/services/sm.h>
++#include <switch/services/hid.h>
++#include <switch/services/pm.h>
++}
+diff --git a/hen/tests/host/sys/lock.h b/hen/tests/host/sys/lock.h
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/host/sys/lock.h
+@@ -0,0 +1,6 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include <stdint.h>
++// Only the newlib lock layout needed by SDK headers in host IPC fixtures.
++typedef uint32_t _LOCK_T;
++typedef struct { uint32_t lock; uint32_t counter; } _LOCK_RECURSIVE_T;
+diff --git a/hen/tests/lifecycle_server_test.cpp b/hen/tests/lifecycle_server_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/lifecycle_server_test.cpp
+@@ -0,0 +1,106 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstring>
++#include <cstdio>
++#include "../../libkaihen/source/plugin_server.cpp"
++
++namespace {
++alignas(16) u8 tls[0x100];
++bool reply_sent = false, ack = false;
++unsigned callbacks = 0;
++Result send_result = 0;
++Thread* fail_wait = nullptr;
++Thread* fail_close = nullptr;
++unsigned waits = 0, thread_closes = 0, handle_closes = 0;
++}
++extern "C" {
++void* armGetTls() { return tls; }
++void mutexLock(Mutex*) {}
++void mutexUnlock(Mutex*) {}
++Result svcCloseHandle(Handle) { ++handle_closes; return 0; }
++Result svcSignalEvent(Handle) { return 0; }
++Result svcCreateEvent(Handle* write, Handle* read) { *write = 60; *read = 61; return 0; }
++Result svcClearEvent(Handle) { return 0; }
++Result svcCreateSession(Handle* server, Handle* client, u32, u64) { *server = 50; *client = 51; return 0; }
++Result svcReplyAndReceive(s32*, const Handle*, s32, Handle, u64) {
++    assert(!ack); // post-reply callback must not have run early
++    reply_sent = R_SUCCEEDED(send_result);
++    return R_SUCCEEDED(send_result) ? KERNELRESULT(TimedOut) : send_result;
++}
++Result threadCreate(Thread*, ThreadFunc, void*, void*, size_t, int, int) { return 0; }
++Result threadStart(Thread*) { return 0; }
++Result threadClose(Thread* thread) { ++thread_closes; return thread == fail_close ? MAKERESULT(345, 222) : 0; }
++Result threadWaitForExit(Thread* thread) { ++waits; return thread == fail_wait ? MAKERESULT(345, 221) : 0; }
++}
++namespace {
++Result lifecycle(const KaihenPluginLifecycleRequest* input, KaihenPluginLifecycleReply* output, void*) {
++    ++callbacks;
++    assert(input->operation_id == 19);
++    if (input->command == KaihenPluginLifecycle_CommitAcknowledged) {
++        assert(reply_sent);
++        ack = true;
++        return 0;
++    }
++    assert(input->command == KaihenPluginLifecycle_Commit);
++    assert(!reply_sent && !ack);
++    *output = {1, KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE, KaihenPluginLifecycleState_Quiesced, 0, 19, 0};
++    return 0;
++}
++void request(u32 command) {
++    std::memset(tls, 0, sizeof(tls));
++    CmifRequestFormat format = {};
++    format.request_id = KAIHEN_PLUGIN_CONTROL_LIFECYCLE;
++    format.data_size = sizeof(KaihenPluginLifecycleRequest);
++    auto message = cmifMakeRequest(tls, format);
++    const KaihenPluginLifecycleRequest input = {command, 0, 19};
++    std::memcpy(message.data, &input, sizeof(input));
++    reply_sent = ack = false;
++    callbacks = 0;
++}
++}
++int main() {
++    PluginService service = {};
++    service.control_session = 20;
++    service.lifecycle_handler = lifecycle;
++    request(KaihenPluginLifecycle_Commit);
++    assert(!serveControlRequest(&service));
++    assert(reply_sent && ack && callbacks == 2);
++    request(KaihenPluginLifecycle_Commit);
++    send_result = KERNELRESULT(ConnectionClosed);
++    assert(serveControlRequest(&service) == send_result);
++    assert(!reply_sent && !ack && callbacks == 1);
++    request(KaihenPluginLifecycle_CommitAcknowledged);
++    send_result = 0;
++    assert(!serveControlRequest(&service));
++    assert(reply_sent && !ack && !callbacks); // remote internal notification rejected
++    request(KaihenPluginLifecycle_Commit);
++    service.lifecycle_handler = nullptr;
++    assert(!serveControlRequest(&service));
++    assert(reply_sent && !ack && !callbacks); // legacy plugin has no shutdown command
++    PluginService owned = {};
++    owned.started = true;
++    owned.control_thread_state = owned.worker_thread_state = {true, true, false, false};
++    owned.stop_write = 40; owned.stop_read = 41; owned.wake_write = 42; owned.wake_read = 43;
++    handle_closes = waits = thread_closes = 0;
++    fail_wait = &owned.control_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes && !thread_closes);
++    Handle extra = INVALID_HANDLE;
++    assert(createClientSession(&owned, &extra) == KAIHEN_PLUGIN_LIFECYCLE_BUSY && extra == INVALID_HANDLE);
++    fail_wait = nullptr;
++    fail_close = &owned.control_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes);
++    assert(owned.control_thread_state.exited && !owned.control_thread_state.closed);
++    fail_close = nullptr;
++    fail_wait = &owned.worker_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes);
++    assert(owned.control_thread_state.closed && !owned.worker_thread_state.exited);
++    fail_wait = nullptr;
++    fail_close = &owned.worker_thread;
++    assert(R_FAILED(pluginServiceStop(&owned)) && owned.started && !handle_closes);
++    assert(owned.worker_thread_state.exited && !owned.worker_thread_state.closed);
++    fail_close = nullptr;
++    assert(!pluginServiceStop(&owned) && !owned.started && handle_closes == 4);
++    assert(waits == 4 && thread_closes == 4); // completed joins never repeated
++    std::puts("plugin lifecycle server: real dispatch, post-reply acknowledgement and legacy/remote rejection passed");
++    std::puts("plugin stop: wait/close failures retain ownership and partial joins resume without double close");
++}
+diff --git a/hen/tests/loader_gate_test.cpp b/hen/tests/loader_gate_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/loader_gate_test.cpp
+@@ -0,0 +1,468 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Actual LoaderGate + RetainedMemory<RoProcess>, with real SDK CMIF/HIPC
++// packing. Only Horizon kernel/RO endpoints and elapsed time are simulated.
++#include <array>
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include "../../common/loader_gate.hpp"
++#include "../../libkaihen/source/cmif_server.hpp"
++#include "../source/reload_state.hpp"
++
++namespace fixture {
++constexpr u64 Base = 0x100000;
++constexpr u64 Millisecond = 1000000;
++constexpr u64 Delay = 75 * Millisecond;
++constexpr Result BadInput = MAKERESULT(Module_Libnx, LibnxError_BadInput);
++alignas(16) u8 tls[0x100];
++std::array<u8, 0x8000> bytes;
++ounce::LoaderGateConfig config;
++u64 ticks, settle_at, wake_at;
++bool pending, signalled, never_settle, selected_written;
++bool inject_conflict, corrupt_wait_write;
++bool same_parent;
++bool fail_restore_signal;
++unsigned ro_reads, ro_writes, storage_writes, cancellations, cookie_writes;
++u64 first_selection_tick;
++std::array<u8, 0x100> real_request;
++enum class Receipt { Empty, Real } receipt;
++
++template <typename T> T get(u64 address) {
++    assert(address >= Base && address + sizeof(T) <= Base + bytes.size());
++    T value;
++    std::memcpy(&value, bytes.data() + address - Base, sizeof(value));
++    return value;
++}
++template <typename T> void put(u64 address, const T& value) {
++    assert(address >= Base && address + sizeof(T) <= Base + bytes.size());
++    std::memcpy(bytes.data() + address - Base, &value, sizeof(value));
++}
++void progress() {
++    if (settle_at && ticks >= settle_at && !never_settle) {
++        settle_at = 0;
++        for (u64 waiter : config.waiters) put<u64>(waiter + 0x10, 0);
++        auto view = get<ounce::LoaderSessionView>(config.server);
++        const u64 old_parent = view.parent;
++        if (!same_parent) view.parent = old_parent == config.waiters[0] ? config.waiters[1] : config.waiters[0];
++        put<u64>(view.parent + 0x18, get<u64>(view.parent + 0x18) + 1);
++        view.receive_result = receipt == Receipt::Empty ? 3 : 0;
++        put(config.server, view);
++        if (receipt == Receipt::Real) {
++            std::memcpy(bytes.data() + config.request - Base, real_request.data(), real_request.size());
++            pending = false;
++        }
++    }
++    if (wake_at && ticks >= wake_at) {
++        wake_at = 0;
++        auto view = get<ounce::LoaderSessionView>(config.server);
++        view.receive_result = 0; // the actual receive overwrote the armed cookie
++        put(config.server, view);
++    }
++}
++struct Clock {
++    static u64 now() { return ticks; }
++    static u64 toNs(u64 value) { return value * 32; }
++    static u64 toTicks(u64 ns) { return ns / 32 + (ns % 32 != 0); }
++};
++using Memory = ounce::RetainedMemory<ounce::MemoryWriter::RoProcess>;
++using Gate = ounce::LoaderGate<ounce::MemoryWriter::RoProcess, Clock>;
++constexpr ounce::RetainedMemoryConfig MemoryConfig{25, 0x100, 0x200};
++
++void reset() {
++    bytes.fill(0);
++    std::memset(tls, 0, sizeof(tls));
++    config = {};
++    config.server = Base + 0x100;
++    config.vptr = 0xabc;
++    config.domain = 0xdef;
++    config.metadata = 0x123;
++    config.request = Base + 0x500;
++    for (unsigned i = 0; i != 7; ++i) {
++        config.waiters[i] = Base + 0x1000 + i * 0x110;
++        config.workers[i] = 100 + i;
++        put<u64>(config.waiters[i] + 0x18, 10 + i);
++    }
++    config.receive = config.original_wait = 20;
++    config.park = 21;
++    config.server_copy = 22;
++    config.event_read = 23;
++    config.event_write = 24;
++    ounce::LoaderSessionView view = {};
++    view.vptr = config.vptr;
++    view.parent = config.waiters[0];
++    view.wait = config.original_wait;
++    view.tag = 1;
++    view.state = 1;
++    view.receive = config.receive;
++    view.request = config.request;
++    view.capacity = 0x100;
++    view.domain = config.domain;
++    view.metadata = config.metadata;
++    put(config.server, view);
++    put<u32>(config.request, 0x01020304);
++    ticks = settle_at = wake_at = first_selection_tick = 0;
++    pending = signalled = never_settle = selected_written = false;
++    inject_conflict = corrupt_wait_write = false;
++    same_parent = false;
++    fail_restore_signal = false;
++    ro_reads = ro_writes = storage_writes = cancellations = cookie_writes = 0;
++    receipt = Receipt::Empty;
++    for (unsigned i = 0; i < real_request.size(); ++i) real_request[i] = i ^ 0x55;
++}
++Result timedPark(Gate& gate) {
++    Result rc = gate.beginPark();
++    if (R_FAILED(rc)) return rc;
++    bool complete = false;
++    do {
++        rc = gate.pollPark(complete);
++        if (R_FAILED(rc) || complete) return rc;
++        svcSleepThread(Millisecond);
++    } while (true); // the gate enforces its real one-second deadline
++}
++Result timedRequest(Gate& gate, void* output) {
++    Result rc = gate.beginStep();
++    if (R_FAILED(rc)) return rc;
++    bool complete = false;
++    do {
++        rc = gate.pollStep(output, complete);
++        if (R_FAILED(rc) || complete) return rc;
++        svcSleepThread(Millisecond);
++    } while (true);
++}
++
++struct PmKernel {
++    bool completed = false, did_join = false;
++    Result wait_error = 0, close_error = 0;
++    unsigned waits = 0, closes = 0;
++    u64 now() const { return ticks; }
++    bool deadline(u64 start, u64 ns) const { return Clock::toNs(ticks - start) >= ns; }
++    bool cancelled() const { return false; }
++    void pause() { svcSleepThread(Millisecond); }
++    bool finished() const { return completed; }
++    Result wait() { ++waits; return wait_error; }
++    Result close() { ++closes; return close_error; }
++    void joined() { did_join = true; }
++};
++} // namespace fixture
++
++extern "C" {
++void* armGetTls() { return fixture::tls; }
++Result svcGetProcessId(u64* pid, Handle process) { assert(process == 27); *pid = 8; return 0; }
++Result fsStorageRead(FsStorage*, s64 offset, void* buffer, u64 size) {
++    assert(offset == fixture::MemoryConfig.pointer_offset && size == sizeof(u64));
++    std::memset(buffer, 0, size);
++    return 0;
++}
++Result fsStorageWrite(FsStorage*, s64, const void*, u64) { ++fixture::storage_writes; return fixture::BadInput; }
++Result svcSendSyncRequest(Handle handle) {
++    using namespace fixture;
++    progress();
++    auto parsed = hipcParseRequest(tls);
++    const auto* header = static_cast<const CmifInHeader*>(cmifGetAlignedDataStart(parsed.data.data_words, tls));
++    assert(header->magic == CMIF_IN_HEADER_MAGIC);
++    if (parsed.meta.type == CmifCommandType_Control && header->command_id == 3) {
++        assert(handle == 25 || handle == 26);
++        ounce::writePointerBufferSizeReply(tls);
++        return 0;
++    }
++    assert(handle == 26);
++    assert(parsed.meta.num_copy_handles == 1 && parsed.data.copy_handles[0] == 27);
++    RoProcessMemoryRequest input;
++    std::memcpy(&input, header + 1, sizeof(input));
++    assert(input.process_id == 8 && !input.reserved);
++    assert(input.address >= Base && input.address + input.size <= Base + bytes.size());
++    if (header->command_id == RoProcessReadCommand) {
++        ++ro_reads;
++        assert(parsed.meta.num_recv_buffers == 1);
++        void* output = hipcGetBufferAddress(parsed.data.recv_buffers);
++        assert(hipcGetBufferSize(parsed.data.recv_buffers) >= input.size);
++        std::memcpy(output, bytes.data() + input.address - Base, input.size);
++    } else {
++        assert(header->command_id == RoProcessWriteCommand);
++        ++ro_writes;
++        assert(parsed.meta.num_send_buffers == 1 && input.size <= 256);
++        const void* source = hipcGetBufferAddress(parsed.data.send_buffers);
++        assert(hipcGetBufferSize(parsed.data.send_buffers) >= input.size);
++        std::memcpy(bytes.data() + input.address - Base, source, input.size);
++        if (input.address == config.server + 0x44 && input.size == 1 && get<u8>(input.address) == 0xff)
++            ++cookie_writes;
++        if (input.address == config.server + 0x30 && corrupt_wait_write) put<u32>(input.address, 0xdead);
++        for (u64 waiter : config.waiters) {
++            if (input.address == waiter + 0x10 && get<u64>(input.address) == config.server) {
++                selected_written = true;
++                first_selection_tick = ticks;
++                if (inject_conflict) {
++                    auto view = get<ounce::LoaderSessionView>(config.server);
++                    view.metadata ^= 1;
++                    put(config.server, view);
++                }
++            }
++        }
++    }
++    ounce::writeReply(tls, 0, nullptr, 0);
++    return 0;
++}
++Result svcCancelSynchronization(Handle worker) {
++    using namespace fixture;
++    assert(worker >= 100 && worker < 107);
++    ++cancellations;
++    if (selected_written && !settle_at) settle_at = ticks + Clock::toTicks(Delay);
++    return 0;
++}
++Result svcWaitSynchronization(s32* index, const Handle* handles, s32 count, u64 timeout) {
++    using namespace fixture;
++    assert(count == 1 && timeout == 0);
++    progress();
++    const bool ready = handles[0] == config.server_copy ? pending : signalled;
++    assert(handles[0] == config.server_copy || handles[0] == config.event_read);
++    *index = ready ? 0 : -1;
++    return ready ? 0 : KERNELRESULT(TimedOut);
++}
++Result svcSignalEvent(Handle event) {
++    using namespace fixture;
++    assert(event == config.event_write);
++    if (fail_restore_signal) return BadInput;
++    signalled = true;
++    wake_at = ticks + Clock::toTicks(25 * Millisecond);
++    return 0;
++}
++Result svcClearEvent(Handle event) { assert(event == fixture::config.event_read); fixture::signalled = false; return 0; }
++void svcSleepThread(s64 ns) {
++    assert(ns > 0);
++    fixture::ticks += fixture::Clock::toTicks(ns);
++    fixture::progress();
++}
++}
++
++int main() {
++    using namespace fixture;
++    // Before PM creation: the old synchronous empty step exhausts 30
++    // observations without giving the delayed FS waiter elapsed time.
++    reset();
++    Memory memory(MemoryConfig, 26, 27);
++    assert(!memory.begin());
++    Gate synchronous(memory, config);
++    bool pm_created = false;
++    const Result park = synchronous.park();
++    if (!park) pm_created = true;
++    assert(park == KERNELRESULT(TimedOut) && !pm_created && !ticks);
++    assert(selected_written && ro_reads && ro_writes && !storage_writes);
++    assert(synchronous.restore() == BadInput);
++
++    // Dedicated timed empty parking completes the same delayed receipt.
++    reset();
++    Memory timed_memory(MemoryConfig, 26, 27);
++    assert(!timed_memory.begin());
++    Gate timed(timed_memory, config);
++    assert(!timedPark(timed));
++    assert(Clock::toNs(ticks) >= Delay && Clock::toNs(ticks) < 1000000000ull);
++    assert(get<u32>(config.request) == 0x01020304);
++    assert(!timed.restore() && timed.restored() && !timed.pendingRestoreWithReceipt());
++    assert(get<ounce::LoaderSessionView>(config.server).wait == config.original_wait);
++    assert(!signalled && !storage_writes && cookie_writes == 1);
++    const auto reads_after_restore = ro_reads;
++    for (unsigned i = 0; i != 100; ++i) assert(timed.cachedProbe().read_result == 0);
++    assert(ro_reads == reads_after_restore); // cached diagnostics do not issue RO requests
++
++    // A different epoch on the same parent is also a valid empty receipt.
++    reset(); same_parent = true;
++    Memory epoch_memory(MemoryConfig, 26, 27);
++    assert(!epoch_memory.begin());
++    Gate epoch_gate(epoch_memory, config);
++    assert(!timedPark(epoch_gate));
++    assert(!epoch_gate.restore() && cookie_writes == 1 && epoch_gate.restored());
++
++    // Poll calls before the scheduled observation do not issue extra IPC.
++    reset();
++    Memory paced_memory(MemoryConfig, 26, 27);
++    assert(!paced_memory.begin());
++    Gate paced(paced_memory, config);
++    assert(!paced.beginPark());
++    bool complete = false;
++    assert(!paced.pollPark(complete) && !complete);
++    const unsigned initial_reads = ro_reads;
++    for (unsigned i = 0; i != 100; ++i) assert(!paced.pollPark(complete) && !complete);
++    assert(initial_reads == ro_reads && !ticks);
++
++    // A captured successful gate result is still a recorded value. Execute
++    // actual restoration failure, then the production fail/finalize helpers.
++    reset();
++    Memory restore_failure_memory(MemoryConfig, 26, 27);
++    assert(!restore_failure_memory.begin());
++    Gate restore_failure_gate(restore_failure_memory, config);
++    assert(!timedPark(restore_failure_gate));
++    HenPluginReloadDiagnostics successful_primary = {};
++    successful_primary.version = 1;
++    reload::captureGateDiagnostics(successful_primary, 0, false, restore_failure_gate.diagnosticStep(),
++                                    restore_failure_gate.cachedProbe(), config.original_wait, config.park);
++    const u32 success_step = successful_primary.primary_gate_step;
++    fail_restore_signal = true;
++    const Result restore_failure = restore_failure_gate.restore();
++    assert(restore_failure == BadInput);
++    reload::captureGateDiagnostics(successful_primary, restore_failure, true, restore_failure_gate.diagnosticStep(),
++                                    restore_failure_gate.cachedProbe(), config.original_wait, config.park);
++    HenPluginReloadStatus restore_status = {};
++    restore_status.restoration_result = restore_failure;
++    reload::recordFailure(restore_status, successful_primary, restore_failure, true);
++    bool worker_success = false, worker_quarantined = true;
++    reload::finalizeWorker(false, false, worker_success, worker_quarantined, restore_status, &successful_primary);
++    assert(successful_primary.flags & HEN_RELOAD_DIAG_PRIMARY_CAPTURED);
++    assert(successful_primary.primary_result == 0 && successful_primary.primary_gate_step == success_step);
++    assert(successful_primary.restoration_result == BadInput && restore_status.result == BadInput);
++    assert(restore_status.phase == HenPluginReloadPhase_Quarantined && !worker_success);
++    // A later supervisor deadline also cannot overwrite the recorded pair.
++    reload::finalizeWorker(false, true, worker_success, worker_quarantined, restore_status, &successful_primary);
++    assert(successful_primary.primary_result == 0 && successful_primary.restoration_result == BadInput);
++    assert(restore_status.result == BadInput);
++
++    // Post-PM counterexample: park succeeded; PM can be pending with PID0,
++    // while a synchronous real request gives the identical result pair.
++    reset();
++    Memory post_memory(MemoryConfig, 26, 27);
++    assert(!post_memory.begin());
++    Gate post(post_memory, config);
++    assert(!timedPark(post));
++    pm_created = true;
++    const u64 pm_pid = 0; // pending launch, not proof that PM was never created
++    receipt = Receipt::Real;
++    pending = true;
++    std::array<u8, 0x100> output = {};
++    const u64 before = ticks;
++    assert(post.step(output.data()) == KERNELRESULT(TimedOut));
++    assert(ticks == before && pm_created && !pm_pid);
++    assert(post.restore() == BadInput);
++
++    // Actual gate failure followed by successful restoration: the delayed
++    // waiter settles after the primary timeout but before cleanup begins.
++    reset();
++    Memory late_memory(MemoryConfig, 26, 27);
++    assert(!late_memory.begin());
++    Gate late_gate(late_memory, config);
++    assert(!timedPark(late_gate));
++    receipt = Receipt::Real; pending = true;
++    const Result gate_failure = late_gate.step(output.data());
++    assert(gate_failure == KERNELRESULT(TimedOut));
++    HenPluginReloadDiagnostics late_diagnostics = {};
++    late_diagnostics.version = 1;
++    reload::captureGateDiagnostics(late_diagnostics, gate_failure, false, late_gate.diagnosticStep(),
++                                    late_gate.cachedProbe(), config.original_wait, config.park);
++    svcSleepThread(Delay);
++    assert(!late_gate.restore() && late_gate.restored());
++    reload::captureGateDiagnostics(late_diagnostics, 0, true, late_gate.diagnosticStep(),
++                                    late_gate.cachedProbe(), config.original_wait, config.park);
++    const Result wait_failure = MAKERESULT(345, 221), close_failure = MAKERESULT(345, 222);
++    for (unsigned mode = 0; mode != 3; ++mode) {
++        PmKernel pm;
++        pm.completed = mode != 0;
++        pm.wait_error = mode == 1 ? wait_failure : 0;
++        pm.close_error = mode == 2 ? close_failure : 0;
++        const Result completion = reload::completePmLaunch(pm, gate_failure, 3 * Millisecond);
++        assert(completion == gate_failure && !pm.did_join);
++        assert(pm.waits == (mode != 0) && pm.closes == (mode == 2));
++        reload::Journal journal;
++        HenPluginReloadRequest input = {};
++        std::strcpy(input.name, "moader");
++        input.instance_id = 1; input.expected_process_id = 212; input.expected_generation = 1; input.nonce = 1;
++        reload::Journal::Entry* entry = nullptr;
++        assert(!journal.begin(80, input, &entry));
++        entry->diagnostics = late_diagnostics;
++        entry->diagnostics.operation_id = entry->status.operation_id;
++        entry->diagnostics.flags |= HEN_RELOAD_DIAG_PM_CREATED | HEN_RELOAD_DIAG_PM_STARTED;
++        if (pm.completed) entry->diagnostics.flags |= HEN_RELOAD_DIAG_PM_FINISHED;
++        entry->status.flags |= HEN_PLUGIN_RELOAD_OLD_EXITED;
++        reload::recordFailure(entry->status, entry->diagnostics, completion, !pm.did_join);
++        worker_success = false; worker_quarantined = !pm.did_join;
++        reload::finalizeWorker(false, false, worker_success, worker_quarantined, entry->status, &entry->diagnostics);
++        journal.finish(entry->status.operation_id, worker_quarantined);
++        assert(entry->status.result == gate_failure && !entry->status.restoration_result);
++        assert(entry->diagnostics.primary_result == gate_failure && !entry->diagnostics.restoration_result);
++        assert(!(entry->diagnostics.flags & HEN_RELOAD_DIAG_PM_JOINED));
++        assert(!entry->status.new_process_id && journal.blocked && journal.active == entry->status.operation_id);
++    }
++    // Without an earlier gate failure, surface the PM error itself.
++    PmKernel pending_pm;
++    assert(reload::completePmLaunch(pending_pm, 0, 3 * Millisecond) == reload::Deadline);
++    PmKernel failed_join;
++    failed_join.completed = true; failed_join.wait_error = wait_failure;
++    assert(reload::completePmLaunch(failed_join, 0, 3 * Millisecond) == wait_failure);
++    PmKernel joined_pm;
++    joined_pm.completed = true;
++    assert(!reload::completePmLaunch(joined_pm, 0, 3 * Millisecond) && joined_pm.did_join);
++
++    // Timed real request uses the established beginStep/pollStep contract.
++    reset();
++    Memory request_memory(MemoryConfig, 26, 27);
++    assert(!request_memory.begin());
++    Gate request_gate(request_memory, config);
++    assert(!timedPark(request_gate));
++    receipt = Receipt::Real;
++    pending = true;
++    assert(!timedRequest(request_gate, output.data()));
++    assert(output == real_request && !pending);
++    assert(!request_gate.restore() && request_gate.restored());
++    assert(!request_memory.restore() && !storage_writes);
++
++    // No progress remains bounded and restoration's selected-waiter guard
++    // is preserved; the new API does not turn uncertainty into success.
++    reset(); never_settle = true;
++    Memory stuck_memory(MemoryConfig, 26, 27);
++    assert(!stuck_memory.begin());
++    Gate stuck(stuck_memory, config);
++    assert(timedPark(stuck) == KERNELRESULT(TimedOut));
++    assert(Clock::toNs(ticks) >= 1000000000ull && Clock::toNs(ticks) <= 1025000000ull);
++    assert(stuck.diagnosticStep() == ounce::GateStep_StepDeadline);
++    const auto primary_step = stuck.diagnosticStep();
++    HenPluginReloadDiagnostics diagnostic = {};
++    diagnostic.version = 1; diagnostic.operation_id = 1;
++    diagnostic.stage = HenReloadLaunchStage_ParkPoll;
++    diagnostic.flags = HEN_RELOAD_DIAG_PARK_ATTEMPTED;
++    reload::captureGateDiagnostics(diagnostic, KERNELRESULT(TimedOut), false, primary_step,
++                                    stuck.cachedProbe(), config.original_wait, config.park);
++    assert(stuck.restore() == BadInput);
++    assert(primary_step != stuck.diagnosticStep()); // why snapshots must preserve both
++    reload::captureGateDiagnostics(diagnostic, BadInput, true, stuck.diagnosticStep(),
++                                    stuck.cachedProbe(), config.original_wait, config.park);
++    assert(diagnostic.primary_gate_step == primary_step);
++    assert(diagnostic.restoration_gate_step == ounce::GateStep_RestoreReceiptSelected);
++    assert(diagnostic.primary_result == KERNELRESULT(TimedOut) && diagnostic.restoration_result == BadInput);
++    assert(diagnostic.probe_selected_mask && diagnostic.probe_wait_kind == 2);
++    assert((diagnostic.flags & (HEN_RELOAD_DIAG_PRIMARY_CAPTURED | HEN_RELOAD_DIAG_RESTORE_ATTEMPTED)) ==
++                              (HEN_RELOAD_DIAG_PRIMARY_CAPTURED | HEN_RELOAD_DIAG_RESTORE_ATTEMPTED));
++    assert(!(diagnostic.flags & (HEN_RELOAD_DIAG_PARK_COMPLETED | HEN_RELOAD_DIAG_PM_CREATED)));
++
++    // No progress after PM/start remains elapsed-time bounded too.
++    reset();
++    Memory real_stuck_memory(MemoryConfig, 26, 27);
++    assert(!real_stuck_memory.begin());
++    Gate real_stuck(real_stuck_memory, config);
++    assert(!timedPark(real_stuck));
++    receipt = Receipt::Real; pending = true; never_settle = true;
++    const u64 real_start = ticks;
++    assert(timedRequest(real_stuck, output.data()) == KERNELRESULT(TimedOut));
++    assert(Clock::toNs(ticks - real_start) >= 1000000000ull && Clock::toNs(ticks - real_start) <= 1025000000ull);
++    assert(real_stuck.restore() == BadInput);
++
++    // Session identity and RO write readback checks are not relaxed.
++    reset();
++    auto wrong = get<ounce::LoaderSessionView>(config.server);
++    wrong.metadata ^= 1; put(config.server, wrong);
++    Memory wrong_memory(MemoryConfig, 26, 27);
++    assert(!wrong_memory.begin());
++    Gate wrong_gate(wrong_memory, config);
++    assert(wrong_gate.beginPark() == BadInput && !ro_writes);
++    assert(wrong_gate.diagnosticStep() == ounce::GateStep_ParkInspect);
++    reset(); corrupt_wait_write = true;
++    Memory corrupt_memory(MemoryConfig, 26, 27);
++    assert(!corrupt_memory.begin());
++    Gate corrupt_gate(corrupt_memory, config);
++    assert(corrupt_gate.beginPark() == BadInput && !cancellations);
++    assert(corrupt_gate.diagnosticStep() == ounce::GateStep_ParkPublishWait);
++    reset(); inject_conflict = true;
++    Memory conflict_memory(MemoryConfig, 26, 27);
++    assert(!conflict_memory.begin());
++    Gate conflict_gate(conflict_memory, config);
++    assert(timedPark(conflict_gate) == BadInput);
++    assert(conflict_gate.restore() == BadInput); // never restore a recycled/wrong session
++
++    std::puts("actual RO LoaderGate: pre/post-PM synchronous exhaustion reproduced; timed parking/request, receipts, bounded failure and invariant checks passed");
++}
+diff --git a/hen/tests/reload_test.cpp b/hen/tests/reload_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/reload_test.cpp
+@@ -0,0 +1,302 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <cassert>
++#include <cstdio>
++#include <cstring>
++#include <vector>
++#include <thread>
++#include <mutex>
++#include <condition_variable>
++#include "../source/reload_state.hpp"
++#include "../source/lifecycle_client.hpp"
++#include "../../libkaihen/include/kaihen/protocol.h"
++#include "../../libkaihen/source/cmif_server.hpp"
++#include "../../common/code_mount_request.hpp"
++
++namespace {
++HenPluginReloadRequest request(u64 nonce = 1) {
++    HenPluginReloadRequest out = {};
++    std::strcpy(out.name, "moader");
++    out.instance_id = 41;
++    out.expected_process_id = 52;
++    out.expected_generation = 1;
++    out.nonce = nonce;
++    return out;
++}
++
++void journal() {
++    reload::Journal journal;
++    reload::Journal::Entry* entry = nullptr;
++    auto input = request();
++    assert(!journal.begin(80, input, &entry));
++    const auto operation = entry->status.operation_id;
++    assert(operation && journal.active == operation);
++    assert(!journal.lookup(80, input, &entry) && entry->status.operation_id == operation);
++    auto changed = input;
++    ++changed.expected_generation;
++    assert(journal.lookup(80, changed, &entry) == reload::Invalid);
++    assert(journal.lookup(81, input, &entry) == reload::Busy);
++    assert(journal.lookup(80, request(2), &entry) == reload::Busy);
++    journal.find(operation)->status.phase = HenPluginReloadPhase_Complete;
++    journal.finish(operation, false);
++    // Lost terminal reply reuses the ticket, even though the target's
++    // generation has already changed outside the journal.
++    assert(!journal.begin(80, input, &entry) && entry->status.operation_id == operation);
++    assert(journal.serial == 1 && !journal.active);
++    for (u64 nonce = 2; nonce <= 12; ++nonce) {
++        assert(!journal.begin(80, request(nonce), &entry));
++        journal.finish(entry->status.operation_id, false);
++    }
++    assert(journal.lookup(80, input, &entry) == reload::Expired);
++    assert(!journal.find(operation));
++    assert(!journal.begin(80, request(13), &entry));
++    auto blocked = entry->status.operation_id;
++    journal.finish(blocked, true);
++    assert(journal.active == blocked && journal.blocked);
++    assert(journal.find(blocked)->status.flags & HEN_PLUGIN_RELOAD_BLOCKED);
++    assert(journal.lookup(80, request(14), &entry) == reload::Busy);
++    assert(!journal.lookup(80, request(13), &entry));
++    // Malformed requests never allocate a nonce/operation.
++    reload::Journal fresh;
++    auto malformed = request();
++    std::strcpy(malformed.name, "../moader");
++    assert(fresh.begin(80, malformed, &entry) == reload::Invalid && fresh.serial == 0);
++    std::memset(malformed.name, 'x', sizeof(malformed.name));
++    assert(fresh.begin(80, malformed, &entry) == reload::Invalid);
++    malformed = request(0);
++    assert(fresh.begin(80, malformed, &entry) == reload::Invalid);
++    for (u64 caller = 1; caller <= 32; ++caller) {
++        assert(!fresh.begin(caller, request(), &entry));
++        fresh.finish(entry->status.operation_id, false);
++    }
++    assert(fresh.begin(33, request(), &entry) == reload::Exhausted);
++}
++
++// Executes the exact production orchestration with observable effects and
++// failures, including uncertainty that is NOT equivalent to process exit.
++struct Io {
++    unsigned failure = 0, calls = 0;
++    bool abort_ok = true, cleanup_ok = true, stopped = false, gone = false;
++    bool launched = false, quarantined = false, aborted = false, cleaned = false;
++    u32 current_phase = HenPluginReloadPhase_Preparing;
++    Result result = 0;
++    Result restoration_result = 0;
++    std::vector<unsigned> actions;
++    Result action(unsigned id) {
++        ++calls; actions.push_back(id);
++        return failure == id ? MAKERESULT(345, 100 + id) : 0;
++    }
++    void phase(u32 value) { current_phase = value; }
++    Result preflight() { assert(!stopped && !launched); return action(1); }
++    Result prepare() { assert(!launched); return action(2); }
++    Result drain() { return action(3); }
++    bool abort() { assert(!stopped && !launched); aborted = true; return abort_ok; }
++    Result commit() { stopped = failure != 4; return action(4); }
++    Result waitExit() { assert(stopped); return action(5); }
++    void oldExited() { assert(stopped); gone = true; }
++    Result launch() { assert(gone); launched = true; return action(6); }
++    Result handoff() { assert(gone && launched); return action(7); }
++    Result health() { assert(gone && launched); return action(8); }
++    bool cleanup() { assert(gone); cleaned = true; return cleanup_ok; }
++    Result fail(Result rc, bool quarantine) {
++        result = rc; quarantined = quarantine;
++        current_phase = quarantine ? HenPluginReloadPhase_Quarantined : HenPluginReloadPhase_Failed;
++        return rc;
++    }
++};
++
++void flow() {
++    Io happy;
++    assert(!reload::run(happy));
++    assert(happy.calls == 8 && happy.gone && happy.launched && !happy.quarantined);
++    assert(happy.current_phase == HenPluginReloadPhase_Health); // owner publishes next
++    for (unsigned failure = 1; failure <= 8; ++failure) {
++        Io io;
++        io.failure = failure;
++        assert(R_FAILED(reload::run(io)));
++        assert(io.calls == failure && io.result == MAKERESULT(345, 100 + failure));
++        assert(io.quarantined == (failure == 4 || failure == 5));
++        if (failure < 4) assert(!io.stopped && !io.launched);
++        if (failure < 6) assert(!io.launched);
++        assert(io.aborted == (failure == 2 || failure == 3));
++        assert(io.cleaned == (failure >= 6));
++    }
++    for (unsigned failure : {2u, 3u}) {
++        Io io; io.failure = failure; io.abort_ok = false;
++        assert(R_FAILED(reload::run(io)) && io.quarantined && !io.launched);
++    }
++    for (unsigned failure : {6u, 7u, 8u}) {
++        Io io; io.failure = failure; io.cleanup_ok = false;
++        io.restoration_result = MAKERESULT(345, 250);
++        assert(R_FAILED(reload::run(io)) && io.quarantined);
++        assert(io.result == MAKERESULT(345, 100 + failure));
++        assert(io.restoration_result == MAKERESULT(345, 250));
++        assert(io.calls == failure); // one attempt; no rollback launch/retry
++    }
++}
++
++struct LifecycleIo {
++    struct Step { u32 command; Result result; u32 state; bool healthy = false; };
++    std::vector<Step> steps;
++    size_t cursor = 0;
++    u64 clock = 0;
++    bool cancel = false;
++    Result call(u32 command, KaihenPluginLifecycleReply& reply) {
++        assert(cursor < steps.size());
++        const auto step = steps[cursor++];
++        assert(command == step.command);
++        reply = {1, KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE |
++                    (step.healthy ? KAIHEN_PLUGIN_LIFECYCLE_HEALTHY : 0), step.state, 0, 19, 0};
++        return step.result;
++    }
++    u64 now() { return clock; }
++    void pause() { ++clock; }
++    bool deadline(u64 start, u64 timeout) { return clock - start >= timeout; }
++    bool cancelled() { return cancel; }
++};
++void lifecycleContract() {
++    const auto query = reload::lifecycleRequest(KaihenPluginLifecycle_Query, 19);
++    const auto health = reload::lifecycleRequest(KaihenPluginLifecycle_Health, 19);
++    const auto commit = reload::lifecycleRequest(KaihenPluginLifecycle_Commit, 19);
++    assert(!query.operation_id && !health.operation_id && commit.operation_id == 19);
++    KaihenPluginLifecycleReply reply = {1, KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE, 0, 0, 82, 0};
++    assert(reload::validLifecycleReply(query, reply)); // last operation, not request op
++    assert(reload::validLifecycleReply(health, reply));
++    assert(!reload::validLifecycleReply(commit, reply));
++    reply.operation_id = 19;
++    assert(reload::validLifecycleReply(commit, reply));
++    LifecycleIo commit_io{{{KaihenPluginLifecycle_Commit, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                           {KaihenPluginLifecycle_Commit, 0, KaihenPluginLifecycleState_Quiesced}}};
++    assert(!reload::lifecycleCommit(commit_io, 10) && commit_io.cursor == 2);
++    LifecycleIo lost{{{KaihenPluginLifecycle_Commit, KERNELRESULT(ConnectionClosed), 0}}};
++    assert(reload::lifecycleCommit(lost, 10) == KERNELRESULT(ConnectionClosed) && lost.cursor == 1);
++    LifecycleIo abort_io{{{KaihenPluginLifecycle_Abort, 0, KaihenPluginLifecycleState_Quiesced},
++                         {KaihenPluginLifecycle_Poll, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                         {KaihenPluginLifecycle_Poll, 0, KaihenPluginLifecycleState_Draining},
++                         {KaihenPluginLifecycle_Poll, 0, KaihenPluginLifecycleState_Running},
++                         {KaihenPluginLifecycle_Poll, 0, KaihenPluginLifecycleState_Running, true}}};
++    assert(reload::lifecycleAbort(abort_io, 10) && abort_io.cursor == 5);
++    LifecycleIo health_io{{{KaihenPluginLifecycle_Health, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                          {KaihenPluginLifecycle_Health, 0, KaihenPluginLifecycleState_Starting},
++                          {KaihenPluginLifecycle_Health, 0, KaihenPluginLifecycleState_Running},
++                          {KaihenPluginLifecycle_Health, 0, KaihenPluginLifecycleState_Running, true}}};
++    assert(!reload::lifecycleWait(health_io, KaihenPluginLifecycle_Health, KaihenPluginLifecycleState_Running, true, 10));
++    assert(health_io.cursor == 4);
++    LifecycleIo busy{{{KaihenPluginLifecycle_Query, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0},
++                     {KaihenPluginLifecycle_Query, KAIHEN_PLUGIN_LIFECYCLE_BUSY, 0}}};
++    assert(reload::lifecycleRetryBusy(busy, KaihenPluginLifecycle_Query, reply, 2) == reload::Deadline);
++    assert(busy.cursor == 2);
++    LifecycleIo cancelled;
++    cancelled.cancel = true;
++    assert(!reload::lifecycleAbort(cancelled, 10) && !cancelled.cursor);
++}
++
++void publicationRaces() {
++    struct Worker {
++        HenPluginReloadStatus live = {};
++        bool done = false;
++        unsigned reads = 0;
++        HenPluginReloadStatus status() {
++            ++reads;
++            auto snapshot = live;
++            if (!done) {
++                // Completion occurs after the snapshot but before the
++                // caller's finished check, exactly the reported race.
++                live.new_process_id = 53;
++                live.flags |= HEN_PLUGIN_RELOAD_OLD_EXITED;
++                done = true;
++            }
++            return snapshot;
++        }
++        bool finished() { return done; }
++        bool join() { assert(done); return true; }
++    } worker;
++    worker.live.old_process_id = 52;
++    HenPluginReloadStatus snapshot = {};
++    assert(reload::completedSnapshot(worker, snapshot));
++    assert(worker.reads == 2 && snapshot.new_process_id == 53);
++    assert(reload::publishable(snapshot, true, false));
++    auto broken = snapshot;
++    broken.new_process_id = 0;
++    assert(!reload::publishable(broken, true, false));
++    broken = snapshot;
++    broken.restoration_result = reload::Deadline;
++    assert(!reload::publishable(broken, true, false));
++
++    // Real host threads place the supervisor deadline inside blocked
++    // cleanup, then use the SAME finalization/publish guard as production.
++    std::mutex mutex;
++    std::condition_variable condition;
++    bool cleanup_blocked = false, cleanup_allowed = false, cancelled = false;
++    bool success = true, quarantined = false, finished = false;
++    std::thread thread([&] {
++        std::unique_lock lock(mutex);
++        cleanup_blocked = true;
++        condition.notify_all();
++        condition.wait(lock, [&] { return cleanup_allowed; });
++        reload::finalizeWorker(true, cancelled, success, quarantined, snapshot);
++        finished = true; // published under supervisor lock, as production
++    });
++    {
++        std::unique_lock lock(mutex);
++        condition.wait(lock, [&] { return cleanup_blocked; });
++        assert(!finished);
++        cancelled = true;
++        cleanup_allowed = true;
++        condition.notify_all();
++    }
++    thread.join();
++    assert(finished && !success && quarantined && snapshot.result == reload::Deadline);
++    assert(snapshot.phase == HenPluginReloadPhase_Quarantined);
++    assert(!reload::publishable(snapshot, success, quarantined));
++}
++
++void wire() {
++    static_assert(HenHomebrewCommand_GetStatus == 0);
++    static_assert(HenHomebrewCommand_GetFilesystemRoot == 16);
++    static_assert(HenHomebrewCommand_OpenPlugin == 22);
++    static_assert(sizeof(HenStatus) == 16 && sizeof(HenPluginName) == 64);
++    static_assert(sizeof(HenPluginReloadStatus) <= 64);
++    static_assert(sizeof(HenPluginReloadStatus) == 56);
++    static_assert(sizeof(HenPluginReloadDiagnostics) == 64);
++    static_assert(HenHomebrewCommand_GetPluginReloadDiagnostics == 27);
++    alignas(16) u8 message[0x100] = {};
++    CmifRequestFormat format = {};
++    format.request_id = HenHomebrewCommand_ReloadPlugin;
++    format.data_size = sizeof(HenPluginReloadRequest);
++    auto built = cmifMakeRequest(message, format);
++    auto input = request();
++    std::memcpy(built.data, &input, sizeof(input));
++    auto parsed = ounce::parseRequest(message);
++    assert(parsed.valid && parsed.command_id == HenHomebrewCommand_ReloadPlugin);
++    assert(parsed.data_size >= sizeof(input));
++    assert(!std::memcmp(parsed.data, &input, sizeof(input)));
++    format = {};
++    format.request_id = HenHomebrewCommand_GetPluginReloadDiagnostics;
++    format.data_size = sizeof(u64);
++    built = cmifMakeRequest(message, format);
++    const u64 operation = 19;
++    std::memcpy(built.data, &operation, sizeof(operation));
++    parsed = ounce::parseRequest(message);
++    assert(parsed.valid && parsed.command_id == 27 && parsed.data_size >= sizeof(operation));
++    HenPluginReloadDiagnostics diagnostics = {};
++    diagnostics.version = 1; diagnostics.operation_id = operation;
++    diagnostics.primary_gate_step = 0x1100;
++    diagnostics.restoration_gate_step = 0xe01;
++    ounce::writeReply(message, 0, &diagnostics, sizeof(diagnostics));
++    CmifResponse response = {};
++    assert(!cmifParseResponse(&response, message, false, sizeof(diagnostics)));
++    assert(!std::memcmp(response.data, &diagnostics, sizeof(diagnostics)));
++    ounce::CodeMountRequest mount = {};
++    mount.open_code = true;
++    mount.arguments = {1, 1, {}, 0x040000000000003a};
++    assert(ounce::matchesCodeMount(mount, 0x040000000000003a, 1));
++    assert(!ounce::matchesCodeMount(mount, 0x040000000000003b, 1));
++    assert(!ounce::matchesCodeMount(mount, 0x040000000000003a, 2));
++    mount.arguments.content_attributes = 0;
++    assert(!ounce::matchesCodeMount(mount, 0x040000000000003a, 1));
++}
++}
++int main() {
++    journal(); flow(); lifecycleContract(); publicationRaces(); wire();
++    std::puts("reload: real orchestration failure matrix, idempotency/expiry/quarantine and ABI envelopes passed");
++}
+diff --git a/hen/tests/session_lifetime_test.cpp b/hen/tests/session_lifetime_test.cpp
+new file mode 100644
+--- /dev/null
++++ b/hen/tests/session_lifetime_test.cpp
+@@ -0,0 +1,512 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Actual plugin runtime and SM proxy loops, real SDK clone/close/IPC packing,
++// counted fake kernel. FS's quota/peer teardown are a MODEL, not device proof.
++#include <array>
++#include <cassert>
++#include <chrono>
++#include <condition_variable>
++#include <cstdio>
++#include <cstring>
++#include <map>
++#include <memory>
++#include <mutex>
++#include <thread>
++#include <vector>
++#include "../source/sm_proxy.cpp"
++#include "../../libkaihen/source/plugin_runtime.cpp"
++struct LifetimeClock {
++    static u64 now() { return 0; }
++    static u64 toNs(u64 value) { return value * 32; }
++    static u64 toTicks(u64 value) { return value / 32 + (value % 32 != 0); }
++};
++#define KAIHEN_GAME_ARM_TEST_CLOCK LifetimeClock
++#include "../source/game_arm.cpp"
++#undef KAIHEN_GAME_ARM_TEST_CLOCK
++
++namespace kernel {
++using Wire = std::array<u8, 0x100>;
++thread_local Wire tls;
++thread_local unsigned realm = 1;
++enum class Kind { Session, Event, Port, Master, Fs, Other, Process, Reader, Monitor };
++struct Request { Wire input{}, output{}; unsigned caller = 0; bool replied = false; Result result = 0; };
++struct Object {
++    Kind kind;
++    unsigned owner = 0, clients = 0, servers = 0;
++    bool closed = false, signalled = false;
++    std::vector<std::shared_ptr<Request>> requests;
++    std::shared_ptr<Request> current;
++    std::vector<Handle> accepts;
++};
++struct Entry { std::shared_ptr<Object> object; unsigned owner; bool server; };
++struct Task { ThreadFunc entry; void* arg; unsigned owner; bool started = false; std::thread thread; };
++struct SmState { Service service{}; unsigned refs = 0; std::map<u64, Handle> overrides; };
++std::mutex lock;
++std::condition_variable changed;
++std::map<Handle, Entry> handles;
++std::map<Thread*, std::shared_ptr<Task>> tasks;
++std::map<Mutex*, std::unique_ptr<std::mutex>> mutexes;
++std::map<unsigned, SmState> sm;
++Handle next_handle = 10, migration_port = 0;
++unsigned fs_live = 0, fs_peak = 0;
++constexpr unsigned FsBudget = 16;
++unsigned fail_wait = 0, fail_close = 0, fail_start = 0, wait_calls = 0, close_calls = 0;
++constexpr Result WaitFailure = MAKERESULT(345, 221), CloseFailure = MAKERESULT(345, 222), StartFailure = MAKERESULT(345, 223);
++unsigned abandon_lookup = 0;
++thread_local std::shared_ptr<Request> active_request;
++constexpr u64 MemoryBase = 0x200000, Domain = MemoryBase + 0x80, Table = MemoryBase + 0x1000;
++constexpr u64 DonorObject = MemoryBase + 0x4100, StockObject = MemoryBase + 0x4200, OtherObject = MemoryBase + 0x4300;
++std::array<u8, 0x8000> memory;
++Service monitor_service{};
++template <typename T> void put(u64 address, const T& value) {
++    assert(address >= MemoryBase && address + sizeof(T) <= MemoryBase + memory.size());
++    std::memcpy(memory.data() + address - MemoryBase, &value, sizeof(value));
++}
++
++Handle add(const std::shared_ptr<Object>& object, unsigned owner, bool server = false) {
++    const Handle handle = next_handle++;
++    handles.emplace(handle, Entry{object, owner, server});
++    if (server) ++object->servers; else ++object->clients;
++    return handle;
++}
++void close(Handle handle) {
++    auto it = handles.find(handle);
++    assert(it != handles.end());
++    auto entry = it->second;
++    handles.erase(it);
++    if (entry.server) --entry.object->servers; else --entry.object->clients;
++    if (entry.object->kind == Kind::Fs && !entry.object->clients && !entry.object->closed) {
++        entry.object->closed = true; --fs_live;
++    }
++    changed.notify_all();
++}
++void processExit(unsigned owner) {
++    std::vector<Handle> dying;
++    for (const auto& [handle, entry] : handles) if (entry.owner == owner) dying.push_back(handle);
++    for (Handle handle : dying) close(handle);
++}
++Handle service(Kind kind, unsigned owner) {
++    if (kind == Kind::Fs) {
++        if (fs_live == FsBudget) return 0;
++        fs_peak = std::max(fs_peak, ++fs_live);
++    }
++    auto object = std::make_shared<Object>(); object->kind = kind; object->owner = owner;
++    return add(object, owner);
++}
++std::pair<Handle, Handle> session(unsigned server_owner, unsigned client_owner) {
++    auto object = std::make_shared<Object>(); object->kind = Kind::Session; object->owner = server_owner;
++    return {add(object, server_owner, true), add(object, client_owner)};
++}
++void transfer(Wire& wire, unsigned destination, bool receive) {
++    auto message = hipcParseRequest(wire.data());
++    for (u32 i = 0; i < message.meta.num_copy_handles; ++i) {
++        if (message.data.copy_handles[i] == CUR_PROCESS_HANDLE) {
++            auto process = std::make_shared<Object>(); process->kind = Kind::Process; process->owner = realm;
++            if (receive) message.data.copy_handles[i] = add(process, destination);
++            continue;
++        }
++        auto found = handles.find(message.data.copy_handles[i]); assert(found != handles.end());
++        if (receive) message.data.copy_handles[i] = add(found->second.object, destination, found->second.server);
++    }
++    for (u32 i = 0; i < message.meta.num_move_handles; ++i) {
++        const Handle old = message.data.move_handles[i];
++        auto found = handles.find(old); assert(found != handles.end());
++        if (receive) message.data.move_handles[i] = add(found->second.object, destination, found->second.server);
++        // Reference model, not a native Switch 2 observation:
++        // Atmosphere's kern_k_server_session.cpp SendReply/CleanupServerHandles
++        // consumes moved handles even when the destination has closed.
++        // https://github.com/Atmosphere-NX/Atmosphere/blob/master/libraries/libmesosphere/source/kern_k_server_session.cpp
++        close(old);
++    }
++}
++void reply(const std::shared_ptr<Object>& object) {
++    auto request = object->current; assert(request);
++    request->output = tls;
++    bool alive = false;
++    for (const auto& [handle, entry] : handles) {
++        (void)handle;
++        if (entry.object == object && !entry.server && entry.owner == request->caller) alive = true;
++    }
++    transfer(request->output, request->caller, alive);
++    request->result = alive ? 0 : KERNELRESULT(ConnectionClosed);
++    request->replied = true;
++    object->current.reset();
++    changed.notify_all();
++}
++void boundedWait(std::unique_lock<std::mutex>& held, auto predicate) {
++    assert(changed.wait_for(held, std::chrono::seconds(5), predicate));
++}
++unsigned owned(unsigned owner) {
++    std::lock_guard guard(lock); unsigned count = 0;
++    for (const auto& [handle, entry] : handles) { (void)handle; count += entry.owner == owner; }
++    return count;
++}
++void finishProxies(SmProxy& proxy) {
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
++    while (std::chrono::steady_clock::now() < deadline) {
++        assert(!proxy.collectFinishedSessions());
++        { std::lock_guard guard(lock); if (tasks.empty()) return; }
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(false && "proxy threads did not finish");
++}
++} // namespace kernel
++
++extern "C" {
++void* armGetTls() { return kernel::tls.data(); }
++void mutexLock(Mutex* mutex) {
++    std::mutex* native;
++    { std::lock_guard guard(kernel::lock); auto& value = kernel::mutexes[mutex]; if (!value) value = std::make_unique<std::mutex>(); native = value.get(); }
++    native->lock();
++}
++void mutexUnlock(Mutex* mutex) {
++    std::mutex* native;
++    { std::lock_guard guard(kernel::lock); native = kernel::mutexes.at(mutex).get(); }
++    native->unlock();
++}
++Result svcCloseHandle(Handle handle) {
++    std::lock_guard guard(kernel::lock);
++    assert(kernel::handles.at(handle).owner == kernel::realm);
++    kernel::close(handle); return 0;
++}
++Result svcCreateSession(Handle* server, Handle* client, u32, u64) {
++    std::lock_guard guard(kernel::lock);
++    const auto pair = kernel::session(kernel::realm, kernel::realm); *server = pair.first; *client = pair.second; return 0;
++}
++Result svcCreateEvent(Handle* write, Handle* read) {
++    std::lock_guard guard(kernel::lock);
++    auto object = std::make_shared<kernel::Object>(); object->kind = kernel::Kind::Event;
++    *write = kernel::add(object, kernel::realm); *read = kernel::add(object, kernel::realm); return 0;
++}
++Result svcSignalEvent(Handle handle) {
++    std::lock_guard guard(kernel::lock); kernel::handles.at(handle).object->signalled = true; kernel::changed.notify_all(); return 0;
++}
++Result svcClearEvent(Handle handle) {
++    std::lock_guard guard(kernel::lock); kernel::handles.at(handle).object->signalled = false; return 0;
++}
++Result svcWaitSynchronization(s32* index, const Handle* handles, s32 count, u64) {
++    std::unique_lock held(kernel::lock); assert(count == 1);
++    auto object = kernel::handles.at(handles[0]).object;
++    kernel::boundedWait(held, [&] { return object->signalled; }); *index = 0; return 0;
++}
++Result svcAcceptSession(Handle* session, Handle port) {
++    std::lock_guard guard(kernel::lock); auto object = kernel::handles.at(port).object;
++    assert(!object->accepts.empty()); *session = object->accepts.front(); object->accepts.erase(object->accepts.begin()); return 0;
++}
++Result svcReplyAndReceive(s32* index, const Handle* list, s32 count, Handle target, u64) {
++    using namespace kernel;
++    std::unique_lock held(lock);
++    if (target) reply(handles.at(target).object);
++    if (!count) { *index = -1; return KERNELRESULT(TimedOut); }
++    const auto ready = [&]() -> int {
++        for (s32 i = 0; i < count; ++i) {
++            const auto object = handles.at(list[i]).object;
++            if (object->kind == Kind::Port && !object->accepts.empty()) return i;
++            if (object->kind == Kind::Session && (!object->requests.empty() || !object->clients)) return i;
++        }
++        return -1;
++    };
++    boundedWait(held, [&] { return ready() >= 0; });
++    *index = ready(); auto object = handles.at(list[*index]).object;
++    if (object->kind == Kind::Port) return 0;
++    if (object->requests.empty()) return KERNELRESULT(ConnectionClosed);
++    object->current = object->requests.front(); object->requests.erase(object->requests.begin());
++    active_request = object->current; tls = object->current->input; return 0;
++}
++Result svcSendSyncRequest(Handle handle) {
++    using namespace kernel;
++    std::unique_lock held(lock);
++    auto found = handles.find(handle); if (found == handles.end()) return KERNELRESULT(ConnectionClosed);
++    assert(found->second.owner == realm && !found->second.server);
++    auto object = found->second.object;
++    auto message = hipcParseRequest(tls.data());
++    if (object->kind == Kind::Session) {
++        if (!object->servers) return KERNELRESULT(ConnectionClosed);
++        auto request = std::make_shared<kernel::Request>(); request->input = tls; request->caller = realm;
++        transfer(request->input, object->owner, true);
++        object->requests.push_back(request); changed.notify_all();
++        boundedWait(held, [&] { return request->replied || !object->servers; });
++        if (!request->replied) return KERNELRESULT(ConnectionClosed);
++        tls = request->output; return request->result;
++    }
++    if (message.meta.type == CmifCommandType_Close) {
++        if (!object->closed && object->kind == Kind::Fs) --fs_live;
++        object->closed = true; return 0;
++    }
++    assert(!object->closed);
++    const auto* header = static_cast<const CmifInHeader*>(cmifGetAlignedDataStart(message.data.data_words, tls.data()));
++    assert(header->magic == CMIF_IN_HEADER_MAGIC);
++    if (message.meta.type == CmifCommandType_Control) {
++        if (header->command_id == 3) { ounce::writePointerBufferSizeReply(tls.data()); return 0; }
++        if (header->command_id == 0) { const u32 id = 1; ounce::writeReply(tls.data(), 0, &id, sizeof(id)); return 0; }
++        assert(header->command_id == 2 || header->command_id == 4);
++        const Handle clone = service(object->kind, realm);
++        ounce::sm::writeReply(tls.data(), ounce::sm::Protocol::Cmif,
++            clone ? 0 : MAKERESULT(345, 240), clone); return 0;
++    }
++    if (object->kind == Kind::Monitor) {
++        assert(header->command_id == 7); ounce::writeReply(tls.data(), MAKERESULT(15, 1), nullptr, 0); return 0;
++    }
++    if (object->kind == Kind::Reader) {
++        RoProcessMemoryRequest input; std::memcpy(&input, header + 1, sizeof(input));
++        assert(input.process_id == 8 && input.address >= MemoryBase && input.address + input.size <= MemoryBase + memory.size());
++        if (header->command_id == RoProcessReadCommand)
++            std::memcpy(hipcGetBufferAddress(message.data.recv_buffers), memory.data() + input.address - MemoryBase, input.size);
++        else {
++            assert(header->command_id == RoProcessWriteCommand);
++            std::memcpy(memory.data() + input.address - MemoryBase, hipcGetBufferAddress(message.data.send_buffers), input.size);
++        }
++        ounce::writeReply(tls.data(), 0, nullptr, 0); return 0;
++    }
++    if (object->kind == Kind::Fs) {
++        assert(header->command_id == 10);
++        const Handle child = service(Kind::Fs, realm);
++        ounce::sm::writeReply(tls.data(), ounce::sm::Protocol::Cmif, child ? 0 : MAKERESULT(345, 240), child); return 0;
++    }
++    assert(object->kind == Kind::Master && header->command_id == 1);
++    SmServiceName name; std::memcpy(&name, header + 1, sizeof(name));
++    if (abandon_lookup) { assert(active_request && active_request->caller == abandon_lookup); processExit(abandon_lookup); abandon_lookup = 0; }
++    const Handle service_handle = service(!std::strncmp(name.name, "fsp-srv", 8) ? Kind::Fs : Kind::Other, realm);
++    ounce::sm::writeReply(tls.data(), ounce::sm::Protocol::Cmif,
++        service_handle ? 0 : MAKERESULT(345, 240), service_handle); return 0;
++}
++Result threadCreate(Thread* thread, ThreadFunc entry, void* arg, void*, size_t, int, int) {
++    std::lock_guard guard(kernel::lock);
++    auto task = std::make_shared<kernel::Task>(); task->entry = entry; task->arg = arg; task->owner = kernel::realm;
++    assert(!kernel::tasks.count(thread)); kernel::tasks[thread] = task; return 0;
++}
++Result threadStart(Thread* thread) {
++    std::shared_ptr<kernel::Task> task;
++    { std::lock_guard guard(kernel::lock); if (kernel::fail_start) { --kernel::fail_start; return kernel::StartFailure; } task = kernel::tasks.at(thread); task->started = true; }
++    task->thread = std::thread([task] { kernel::realm = task->owner; task->entry(task->arg); }); return 0;
++}
++Result threadWaitForExit(Thread* thread) {
++    std::shared_ptr<kernel::Task> task;
++    { std::lock_guard guard(kernel::lock); ++kernel::wait_calls; if (kernel::fail_wait) { --kernel::fail_wait; return kernel::WaitFailure; } task = kernel::tasks.at(thread); assert(task->started); }
++    if (task->thread.joinable()) task->thread.join(); return 0;
++}
++Result threadClose(Thread* thread) {
++    std::lock_guard guard(kernel::lock); ++kernel::close_calls;
++    if (kernel::fail_close) { --kernel::fail_close; return kernel::CloseFailure; }
++    auto task = kernel::tasks.at(thread); assert(!task->thread.joinable()); kernel::tasks.erase(thread); return 0;
++}
++void smAddOverrideHandle(SmServiceName name, Handle handle) { kernel::sm[kernel::realm].overrides[smServiceNameToU64(name)] = handle; }
++Result smInitialize() {
++    auto& state = kernel::sm[kernel::realm]; if (state.refs++) return 0;
++    const auto found = state.overrides.find(smServiceNameToU64(smEncodeName("sm:")));
++    Handle handle;
++    if (found != state.overrides.end()) handle = found->second;
++    else { std::lock_guard guard(kernel::lock); handle = kernel::service(kernel::Kind::Other, kernel::realm); }
++    serviceCreate(&state.service, handle); state.service.own_handle = found == state.overrides.end(); return 0;
++}
++void smExit() { auto& state = kernel::sm[kernel::realm]; assert(state.refs); if (!--state.refs) serviceClose(&state.service); }
++Result smRegisterServiceInSpace(Handle* out, u32 space, SmServiceName, bool, s32) {
++    std::lock_guard guard(kernel::lock); assert(space == 1 && !kernel::migration_port);
++    auto object = std::make_shared<kernel::Object>(); object->kind = kernel::Kind::Port; object->owner = kernel::realm;
++    *out = kernel::migration_port = kernel::add(object, kernel::realm); kernel::changed.notify_all(); return 0;
++}
++Result smUnregisterServiceInSpace(u32 space, SmServiceName) { std::lock_guard guard(kernel::lock); assert(space == 1); kernel::migration_port = 0; return 0; }
++Result svcGetProcessId(u64* pid, Handle handle) { std::lock_guard guard(kernel::lock); auto object = kernel::handles.at(handle).object; assert(object->kind == kernel::Kind::Process); *pid = object->owner; return 0; }
++Result fsStorageRead(FsStorage*, s64, void* output, u64 size) { std::memset(output, 0, size); return 0; }
++void fsFsClose(FsFileSystem* fs) { serviceClose(&fs->s); }
++Result svcCancelSynchronization(Handle) { return 0; }
++void svcSleepThread(s64) { std::this_thread::yield(); }
++Service* pmdmntGetServiceSession() { return &kernel::monitor_service; }
++Result pmdmntGetProgramId(u64* program, u64 pid) { Handle ignored[8]{}; return serviceDispatchInOut(&kernel::monitor_service, 7, pid, *program, .out_handles = ignored); }
++Result pmdmntGetProcessId(u64*, u64) { return MAKERESULT(15, 1); }
++Result pmdmntGetApplicationProcessId(u64*) { return MAKERESULT(15, 1); }
++Result hidInitialize() { return 0; }
++void hidExit() {}
++Result hidActivateNpadWithRevision(u32) { return 0; }
++Result hidSetSupportedNpadStyleSet(u32) { return 0; }
++Result hidSetSupportedNpadIdType(const HidNpadIdType*, size_t) { return 0; }
++size_t hidGetNpadStatesSystemExt(HidNpadIdType, HidNpadSystemExtState*, size_t) { return 0; }
++}
++Result readSavedPolicy(Handle, const char*, SignedPolicy*) { return MAKERESULT(2, 1); }
++Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy&, u8*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++
++struct GameArmLifetimeTest {
++    static void run(Handle root) {
++        using namespace kernel;
++        realm = 1; memory.fill(0);
++        const unsigned baseline = fs_live;
++        GameArm game;
++        assert(!cmifCloneCurrentObject(root, &game.filesystem_root_));
++        {
++            std::lock_guard guard(lock);
++            game.reader_session_ = service(Kind::Reader, 1);
++            game.filesystem_process_ = service(Kind::Process, 1);
++            handles.at(game.filesystem_process_).object->owner = 8;
++            game.memory_config_.storage = service(Kind::Other, 1);
++            game.monitor_ = service(Kind::Monitor, 1);
++        }
++        serviceCreate(pmdmntGetServiceSession(), game.monitor_);
++        game.memory_.emplace(game.memory_config_, game.reader_session_, game.filesystem_process_);
++        assert(!game.memory_->begin());
++        game.mount_config_.domain = Domain; game.mount_config_.table = Table; game.mount_config_.root_id = 1;
++        game.current_mount_ = game.mount_config_;
++        put<u64>(Table + 0x20, DonorObject); put<u64>(Table + 0x28, 0x5678);
++        put<u64>(DonorObject, 0xa550); put<u64>(StockObject, 0xa550);
++        game.package_.emplace(*game.memory_, game.filesystem_root_);
++        assert(!game.package_->open("@Sdcard:/fixture.nsp", game.current_mount_));
++        game.mount_.emplace(*game.memory_, game.current_mount_);
++        game.code_ = {Table + 0x60, StockObject, 0x5678};
++        put<u64>(game.code_.address + 0x20, StockObject); put<u64>(game.code_.address + 0x28, 0x5678);
++        assert(!game.exchangeGameCode()); // actual exchange and installed-identity tracking
++        assert(game.code_.object == game.current_mount_.donor_object);
++        put<u64>(Domain + 0x20, game.code_.address); put<u64>(game.code_.address, Domain + 0x20);
++        put<u64>(game.code_.address + 0x18, Domain);
++        game.gate_.emplace(*game.memory_, game.gate_config_);
++        game.state_ = GameArm::State::WaitExit; game.started_ = true; game.status_.process_id = 800;
++        assert(fs_live == baseline + 2); // GameArm root + active package session
++        game.step(); // PID gone, but the actual installed CodeFS still exists
++        assert(game.package_ && game.state_ == GameArm::State::WaitExit);
++        PluginLaunchContext lease{};
++        assert(game.acquireReloadLease(lease));
++        put<u64>(game.code_.address + 0x20, OtherObject); // same slot reused for another object
++        game.step(); // reload lease keeps the original tracking/resources pinned
++        assert(game.package_ && fs_live == baseline + 2);
++        game.releaseReloadLease(); game.step(); // production host-exit path
++        assert(!game.package_ && game.state_ == GameArm::State::OpenPackage && game.status_.serial == 1);
++        assert(fs_live == baseline + 1); // package session really closed in the counted kernel
++        game.step(); assert(game.state_ == GameArm::State::WaitForInput);
++        ounce::DomainEntry recycled[] = {{0x100, 0x200, 1}};
++        assert(!containsEntry(recycled, 1, {0x100, 0x300, 1}));
++    }
++};
++
++namespace {
++using namespace kernel;
++struct Resident { unsigned pid; Handle control; std::array<Service, 3> fs; };
++Handle root, master;
++SmProxy proxy;
++Handle cloneRoot() { Handle handle = 0; assert(!cmifCloneCurrentObject(root, &handle)); return handle; }
++void openFsPool(std::array<Service, 3>& pool, Handle borrowed) {
++    serviceCreate(&pool[0], borrowed); pool[0].own_handle = false;
++    assert(!serviceConvertToDomain(&pool[0]));
++    for (unsigned i = 1; i != pool.size(); ++i) assert(!serviceClone(&pool[0], &pool[i]));
++}
++Resident start(unsigned pid, Handle fs, Handle sm_client) {
++    realm = 1; Resident resident{pid, 0, {}};
++    std::thread process([&] {
++        realm = pid; sm[pid] = {};
++        Handle ready = 0, control = 0;
++        assert(!pluginRuntimeInitializeWithService(&ready, &control));
++        assert(!svcSignalEvent(ready));
++    });
++    Handle startup;
++    {
++        std::unique_lock held(lock); boundedWait(held, [] { return migration_port != 0; });
++        auto port = handles.at(migration_port).object;
++        auto pair = session(pid, 1); startup = pair.second; port->accepts.push_back(pair.first); changed.notify_all();
++    }
++    Service service_object = {}; serviceCreate(&service_object, startup);
++    Handle identity[8]{};
++    assert(!serviceDispatch(&service_object, PluginStartupCommand_GetIdentity,
++        .out_handle_attrs = {SfOutHandleAttr_HipcCopy}, .out_handles = identity));
++    u64 peer_pid = 0; assert(!svcGetProcessId(&peer_pid, identity[0]) && peer_pid == pid); svcCloseHandle(identity[0]);
++    Handle release = 0, ready = 0;
++    assert(!pluginAdoptHandles(&service_object, sm_client, fs, &release, &ready, &resident.control));
++    assert(!svcSignalEvent(release));
++    assert(!svcWaitSynchronizationSingle(ready, 5000000000ull));
++    svcCloseHandle(release); svcCloseHandle(ready); svcCloseHandle(startup);
++    process.join();
++    // Exact bootstrap/reload ownership: handoff copies, then HEN closes its
++    // local references. PluginRuntimeExit owns the received copies.
++    svcCloseHandle(fs); svcCloseHandle(sm_client);
++    realm = pid; openFsPool(resident.fs, g_received.fs_root);
++    realm = 1; return resident;
++}
++void stop(Resident& resident) {
++    realm = resident.pid;
++    for (auto& service : resident.fs) serviceClose(&service);
++    pluginRuntimeExit(); // actual production closeReceivedHandles path
++    assert(!owned(resident.pid));
++    realm = 1; svcCloseHandle(resident.control);
++}
++void lookup(Handle sm_client, const char* name, unsigned pid) {
++    realm = pid;
++    Service sm_service = {}; serviceCreate(&sm_service, sm_client);
++    Handle output[8] = {};
++    const auto encoded = smEncodeName(name);
++    assert(!serviceDispatchIn(&sm_service, 1, encoded,
++        .out_handle_attrs = {SfOutHandleAttr_HipcMove}, .out_handles = output));
++    Service service_object = {}; serviceCreate(&service_object, output[0]); serviceClose(&service_object);
++    realm = 1;
++}
++void waitForEnded() {
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
++    while (std::chrono::steady_clock::now() < deadline) {
++        // Worker close of the server proves serve() passed its final use;
++        // collection's real threadWaitForExit then proves SDK thread exit.
++        { std::lock_guard guard(lock); bool servers = false; for (const auto& [h, entry] : handles) { (void)h; servers |= entry.server && entry.object->kind == Kind::Session; } if (!servers) return; }
++        std::this_thread::sleep_for(std::chrono::milliseconds(1));
++    }
++    assert(false);
++}
++}
++
++int main() {
++    using namespace kernel;
++    { std::lock_guard guard(lock); root = service(Kind::Fs, 1); master = service(Kind::Master, 1); }
++    proxy.setMaster(master);
++    Handle sm_client = 0; assert(!proxy.openSession(&sm_client));
++    auto resident = start(212, cloneRoot(), sm_client);
++    const unsigned steady_fs = fs_live;
++    assert(steady_fs == 5); // retained HEN root + raw override + three SDK sessions
++    for (unsigned cycle = 0; cycle != 20; ++cycle) {
++        // hbmenu/NRO has its own borrowed root and SDK pool.
++        realm = 1; Handle host_root = cloneRoot(), host_sm = 0;
++        assert(!proxy.openSession(&host_sm));
++        { std::lock_guard guard(lock); handles.at(host_root).owner = 1000 + cycle; handles.at(host_sm).owner = 1000 + cycle; }
++        realm = 1000 + cycle; std::array<Service, 3> host_pool{}; openFsPool(host_pool, host_root); realm = 1;
++        lookup(host_sm, "fsp-srv", 1000 + cycle);
++        for (unsigned reload = 0; reload != 2; ++reload) {
++            const Handle staged_root = cloneRoot(); Handle staged_sm = 0;
++            assert(!proxy.openSession(&staged_sm)); // preflight before stopping old
++            stop(resident);
++            resident = start(213 + cycle * 2 + reload, staged_root, staged_sm);
++            assert(fs_live == steady_fs + 4);
++        }
++        realm = 1000 + cycle;
++        for (auto& service_object : host_pool) serviceClose(&service_object);
++        svcCloseHandle(host_root); svcCloseHandle(host_sm);
++        assert(!owned(1000 + cycle)); realm = 1;
++        // Normal next game's independent service connection, without HEN/R.
++        Handle game_root;
++        { std::lock_guard guard(lock); game_root = service(Kind::Fs, 3000 + cycle); }
++        realm = 3000 + cycle; Service game{}; serviceCreate(&game, game_root);
++        assert(!serviceConvertToDomain(&game)); serviceClose(&game); realm = 1;
++        assert(fs_live == steady_fs && fs_peak <= FsBudget);
++    }
++    stop(resident); finishProxies(proxy); assert(fs_live == 1);
++    GameArmLifetimeTest::run(root); assert(fs_live == 1);
++    // HOME/process exit while a service lookup is outstanding: execute the
++    // real proxy reply path and kernel-model move cleanup, not just encoding.
++    assert(!proxy.openSession(&sm_client));
++    { std::lock_guard guard(lock); handles.at(sm_client).owner = 9000; abandon_lookup = 9000; }
++    realm = 9000;
++    Service dying_sm = {}; serviceCreate(&dying_sm, sm_client);
++    const auto fs_name = smEncodeName("fsp-srv"); Handle abandoned_output[8] = {};
++    assert(serviceDispatchIn(&dying_sm, 1, fs_name,
++        .out_handle_attrs = {SfOutHandleAttr_HipcMove}, .out_handles = abandoned_output) == KERNELRESULT(ConnectionClosed));
++    assert(!owned(9000)); realm = 1; finishProxies(proxy); assert(fs_live == 1);
++    // Wait/close failures retain the real proxy context; no new allocation
++    // follows a failed reap, and a partial completed wait is not repeated.
++    assert(!proxy.openSession(&sm_client)); svcCloseHandle(sm_client); waitForEnded();
++    fail_wait = 1; const unsigned before_wait = wait_calls;
++    Handle rejected = INVALID_HANDLE;
++    assert(proxy.openSession(&rejected) == WaitFailure && tasks.size() == 1 && rejected == INVALID_HANDLE);
++    fail_close = 1;
++    assert(proxy.collectFinishedSessions() == CloseFailure && tasks.size() == 1);
++    const unsigned joined_waits = wait_calls;
++    assert(joined_waits == before_wait + 2);
++    assert(!proxy.collectFinishedSessions() && tasks.empty() && wait_calls == joined_waits);
++    fail_start = fail_close = 1;
++    assert(proxy.openSession(&sm_client) == StartFailure && tasks.size() == 1);
++    assert(!proxy.collectFinishedSessions() && tasks.empty()); // unstarted: no wait
++    svcCloseHandle(root); svcCloseHandle(master);
++    assert(!fs_live && handles.empty());
++    std::puts("actual plugin runtime/SM proxy: 40 reloads, host exits, next-game service admission, bounded clone/handle counts and retained failed joins passed");
++}
+diff --git a/libkaihen/include/kaihen.h b/libkaihen/include/kaihen.h
+--- a/libkaihen/include/kaihen.h
++++ b/libkaihen/include/kaihen.h
+@@ -24,6 +24,7 @@
+ #include <switch.h>
+ 
+ #include "kaihen/protocol.h"
++#include "kaihen/reload.h"
+ 
+ /// Gets the ldr:ro session that hbloader passes to the NRO. The Service does
+ /// not own the handle: do not close it. Returns LibnxError_NotFound when the
+@@ -167,3 +168,20 @@
+         serviceCreate(out, session);
+     return rc;
+ }
++
++NX_INLINE Result henGetPluginInfo(Service* s, const HenPluginName* name, HenPluginInfo* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginInfo, *name, *out);
++}
++NX_INLINE Result henReloadPlugin(Service* s, const HenPluginReloadRequest* request, HenPluginReloadStatus* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_ReloadPlugin, *request, *out);
++}
++NX_INLINE Result henGetPluginReloadStatus(Service* s, u64 operation_id, HenPluginReloadStatus* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginReloadStatus, operation_id, *out);
++}
++NX_INLINE Result henGetReloadCapabilities(Service* s, HenReloadCapabilities* out) {
++    return serviceDispatchOut(s, HenHomebrewCommand_GetReloadCapabilities, *out);
++}
++
++NX_INLINE Result henGetPluginReloadDiagnostics(Service* s, u64 operation_id, HenPluginReloadDiagnostics* out) {
++    return serviceDispatchInOut(s, HenHomebrewCommand_GetPluginReloadDiagnostics, operation_id, *out);
++}
+diff --git a/libkaihen/include/kaihen/plugin.h b/libkaihen/include/kaihen/plugin.h
+--- a/libkaihen/include/kaihen/plugin.h
++++ b/libkaihen/include/kaihen/plugin.h
+@@ -51,6 +51,7 @@
+ 
+ #include <switch.h>
+ #include "protocol.h"
++#include "reload.h"
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -96,6 +97,13 @@
+ /// Maximum number of client sessions that a PluginService serves at once.
+ #define KAIHEN_PLUGIN_MAX_SESSIONS 16
+ 
++typedef struct {
++    bool created;
++    bool started;
++    bool exited;
++    bool closed;
++} PluginServiceThreadState;
++
+ /**
+  * @brief A simple scalar-command server.
+  * @note Two threads serve it. The control thread answers HEN's requests to
+@@ -118,17 +126,31 @@
+     Result worker_result;
+     Result control_result;
+     bool started;
++    PluginLifecycleHandler lifecycle_handler;
++    void* lifecycle_context;
++    PluginServiceThreadState control_thread_state;
++    PluginServiceThreadState worker_thread_state;
++    bool stopping;
+ } PluginService;
+ 
+ /// Starts the threads that create client sessions through the control session and serve them.
+ Result pluginServiceStart(PluginService* service, Handle control_session,
+                           PluginServiceHandler handler, void* context);
+ 
++/** Opt-in lifecycle server. The lifecycle callback runs on the control
++ * thread and must only acknowledge/query/enqueue work for the owner thread. */
++Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
++                          PluginServiceHandler handler, void* context,
++                          PluginLifecycleHandler lifecycle, void* lifecycle_context);
++
+ /**
+  * @brief Stops the threads and closes the client sessions. The borrowed
+  *        control session stays open.
+  * @return The first failure of the worker or control thread, or 0. HEN
+  *         closing the control session is not a failure.
++ * @note On thread wait/close failure, started stays true and resources and
++ *       caller-owned contexts must remain alive. A later Stop resumes using
++ *       the recorded partial join state; it never joins/closes twice.
+  */
+ Result pluginServiceStop(PluginService* service);
+ 
+diff --git a/libkaihen/include/kaihen/protocol.h b/libkaihen/include/kaihen/protocol.h
+--- a/libkaihen/include/kaihen/protocol.h
++++ b/libkaihen/include/kaihen/protocol.h
+@@ -10,7 +10,7 @@
+ #include <switch/types.h>
+ 
+ /// The version of HEN's protocol, in HenStatus::protocol_version.
+-#define HEN_PROTOCOL_VERSION 6
++#define HEN_PROTOCOL_VERSION 7
+ 
+ #define HEN_PLUGIN_NAME_SIZE 64
+ #define HEN_MAX_PLUGINS 16
+@@ -86,6 +86,11 @@
+     HenHomebrewCommand_GetPluginName = 21,
+     /// Takes HenPluginName and returns a new plugin session by COPY.
+     HenHomebrewCommand_OpenPlugin = 22,
++    HenHomebrewCommand_GetPluginInfo = 23,
++    HenHomebrewCommand_ReloadPlugin = 24,
++    HenHomebrewCommand_GetPluginReloadStatus = 25,
++    HenHomebrewCommand_GetReloadCapabilities = 26,
++    HenHomebrewCommand_GetPluginReloadDiagnostics = 27,
+ } HenHomebrewCommand;
+ 
+ /// The reply of HenHomebrewCommand_GetStatus.
+diff --git a/libkaihen/include/kaihen/reload.h b/libkaihen/include/kaihen/reload.h
+new file mode 100644
+--- /dev/null
++++ b/libkaihen/include/kaihen/reload.h
+@@ -0,0 +1,185 @@
++/* SPDX-License-Identifier: ISC */
++#pragma once
++#include <switch/types.h>
++#include <switch/result.h>
++
++#define KAIHEN_PLUGIN_LIFECYCLE_VERSION 1
++#define KAIHEN_PLUGIN_CONTROL_LIFECYCLE 0x100
++#define KAIHEN_PLUGIN_LIFECYCLE_BUSY MAKERESULT(345, 200)
++
++typedef enum {
++    KaihenPluginLifecycle_Query = 0,
++    KaihenPluginLifecycle_Prepare = 1,
++    KaihenPluginLifecycle_Poll = 2,
++    KaihenPluginLifecycle_Abort = 3,
++    KaihenPluginLifecycle_Commit = 4,
++    KaihenPluginLifecycle_Health = 5,
++    /* INTERNAL notification after the successful Commit reply was sent.
++     * Never accepted from IPC. Only this notification permits owner exit. */
++    KaihenPluginLifecycle_CommitAcknowledged = 6,
++} KaihenPluginLifecycleCommand;
++
++typedef enum {
++    KaihenPluginLifecycleState_Running = 0,
++    KaihenPluginLifecycleState_Draining = 1,
++    KaihenPluginLifecycleState_Quiesced = 2,
++    KaihenPluginLifecycleState_Exiting = 3,
++    KaihenPluginLifecycleState_Starting = 4,
++    KaihenPluginLifecycleState_Failed = 5,
++} KaihenPluginLifecycleState;
++
++#define KAIHEN_PLUGIN_LIFECYCLE_COOPERATIVE (1u << 0)
++#define KAIHEN_PLUGIN_LIFECYCLE_HEALTHY (1u << 1)
++
++typedef struct {
++    u32 command;
++    u32 reserved;
++    u64 operation_id;
++} KaihenPluginLifecycleRequest;
++
++typedef struct {
++    u32 version;
++    u32 flags;
++    u32 state;
++    Result result;
++    u64 operation_id;
++    u64 reserved;
++} KaihenPluginLifecycleReply;
++
++/* Query/Health use request operation_id zero and may report the plugin's
++ * current/last operation. Other requests require a matching nonzero ticket.
++ * Abort may acknowledge while Draining/Quiesced: HEN polls until Running and
++ * HEALTHY. Commit may reply Quiesced; only CommitAcknowledged permits exit.
++ * Fast control-thread callback. Queue owner-thread work; never stop/join the
++ * PluginService here. Prepare must deny busy imports before changing state.
++ * Commit returns an acknowledgement BEFORE the owner exits. All requests for
++ * an operation are idempotent. Health reports HEALTHY only after application
++ * initialization and its runtime acknowledgement, separately from IPC ready. */
++typedef Result (*PluginLifecycleHandler)(const KaihenPluginLifecycleRequest* request,
++                                        KaihenPluginLifecycleReply* reply, void* context);
++
++typedef enum {
++    HenPluginReloadPhase_Idle = 0,
++    HenPluginReloadPhase_Preparing = 1,
++    HenPluginReloadPhase_Draining = 2,
++    HenPluginReloadPhase_Exiting = 3,
++    HenPluginReloadPhase_Launching = 4,
++    HenPluginReloadPhase_Handoff = 5,
++    HenPluginReloadPhase_Health = 6,
++    HenPluginReloadPhase_Complete = 7,
++    HenPluginReloadPhase_Failed = 8,
++    HenPluginReloadPhase_Quarantined = 9,
++} HenPluginReloadPhase;
++
++#define HEN_PLUGIN_RELOAD_AVAILABLE (1u << 0)
++#define HEN_PLUGIN_RELOAD_BUSY (1u << 1)
++#define HEN_PLUGIN_RELOAD_BLOCKED (1u << 2)
++#define HEN_PLUGIN_RELOAD_OLD_EXITED (1u << 3)
++
++typedef struct {
++    u64 instance_id;
++    u64 process_id;
++    u64 generation;
++    u64 operation_id;
++    u32 flags;
++    u32 phase;
++} HenPluginInfo;
++/* GetPluginInfo succeeds with all fields zero except instance_id for true
++ * absence. Reloading/failed/quarantined managed records are never absence. */
++
++/* Name is the exact registry basename, without .nso. No path is accepted.
++ * Nonce is nonzero and monotonically increasing per caller in this HEN
++ * instance. Query info and preserve this request when a reply is lost. */
++typedef struct {
++    char name[64];
++    u64 instance_id;
++    u64 expected_process_id;
++    u64 expected_generation;
++    u64 nonce;
++} HenPluginReloadRequest;
++
++typedef struct {
++    u64 instance_id;
++    u64 operation_id;
++    u64 old_process_id;
++    u64 new_process_id;
++    u64 generation;
++    u32 phase;
++    u32 flags;
++    Result result;
++    Result restoration_result;
++} HenPluginReloadStatus;
++
++typedef struct {
++    u32 version;
++    u32 flags;
++    u64 instance_id;
++    u64 operation_id;
++} HenReloadCapabilities;
++
++#define HEN_RELOAD_DIAG_PARK_ATTEMPTED (1u << 0)
++#define HEN_RELOAD_DIAG_PARK_COMPLETED (1u << 1)
++#define HEN_RELOAD_DIAG_PM_CREATED (1u << 2)
++#define HEN_RELOAD_DIAG_PM_STARTED (1u << 3)
++#define HEN_RELOAD_DIAG_PM_FINISHED (1u << 4)
++#define HEN_RELOAD_DIAG_PM_JOINED (1u << 5)
++#define HEN_RELOAD_DIAG_PROBE_VALID (1u << 6)
++#define HEN_RELOAD_DIAG_RESTORE_ATTEMPTED (1u << 7)
++#define HEN_RELOAD_DIAG_PRIMARY_CAPTURED (1u << 8)
++
++typedef enum {
++    HenReloadLaunchStage_None = 0,
++    HenReloadLaunchStage_ParkBegin = 1,
++    HenReloadLaunchStage_ParkPoll = 2,
++    HenReloadLaunchStage_PmCreate = 3,
++    HenReloadLaunchStage_PmStart = 4,
++    HenReloadLaunchStage_RequestWait = 5,
++    HenReloadLaunchStage_RequestPoll = 6,
++    HenReloadLaunchStage_MountMatch = 7,
++    HenReloadLaunchStage_Exchange = 8,
++    HenReloadLaunchStage_Restore = 9,
++    HenReloadLaunchStage_PmJoin = 10,
++    HenReloadLaunchStage_ProcessStart = 11,
++    HenReloadLaunchStage_Handoff = 12,
++    HenReloadLaunchStage_Health = 13,
++} HenReloadLaunchStage;
++
++/* Command 27, input u64 operation_id. Cached memory only: querying never
++ * performs filesystem, RO-memory or gate operations. Fields have meaning
++ * only with their associated flags. wait_kind: 0 unknown, 1 original,
++ * 2 park, 3 other. selected_mask identifies the seven cached waiter slots.
++ * PROBE_VALID means only that the cached read succeeded, not that gate
++ * restoration or process safety is established. The primary gate step is
++ * captured BEFORE restoration changes it. Once PRIMARY_CAPTURED is set,
++ * primary_result (including zero) is frozen; later failures are reported in
++ * HenPluginReloadStatus.result. Before capture it may describe a preflight
++ * failure. PM flags are historical
++ * milestones, not proof that a candidate is currently alive or absent.
++ * Existing HenPluginReloadStatus remains 56 bytes. */
++typedef struct {
++    u32 version;
++    u32 flags;
++    u64 operation_id;
++    u32 stage;
++    u32 primary_gate_step;
++    u32 restoration_gate_step;
++    u32 matching_mounts;
++    Result primary_result;
++    Result restoration_result;
++    Result pm_result;
++    Result probe_result;
++    u32 probe_state;
++    u32 probe_wait_kind;
++    u32 probe_selected_mask;
++    u32 probe_receive_result;
++} HenPluginReloadDiagnostics;
++
++#ifdef __cplusplus
++static_assert(sizeof(KaihenPluginLifecycleRequest) == 16);
++static_assert(sizeof(KaihenPluginLifecycleReply) == 32);
++static_assert(sizeof(HenPluginInfo) == 40);
++static_assert(sizeof(HenPluginReloadRequest) == 96);
++static_assert(sizeof(HenPluginReloadStatus) == 56);
++static_assert(sizeof(HenReloadCapabilities) == 24);
++static_assert(sizeof(HenPluginReloadDiagnostics) == 64);
++#endif
+diff --git a/libkaihen/source/plugin_runtime.cpp b/libkaihen/source/plugin_runtime.cpp
+--- a/libkaihen/source/plugin_runtime.cpp
++++ b/libkaihen/source/plugin_runtime.cpp
+@@ -135,6 +135,11 @@
+     if (ounce::isQueryPointerBufferSize(request)) {
+         ounce::writePointerBufferSizeReply(message);
+         rc = 0;
++    } else if (request.valid && request.command_id == PluginStartupCommand_GetIdentity &&
++               request.hipc.meta.type == CmifCommandType_Request && ounce::hasOnlyInlineData(request)) {
++        const Handle self = CUR_PROCESS_HANDLE;
++        ounce::writeReply(message, 0, nullptr, 0, &self, 1);
++        rc = 0;
+     } else if (isAdoptHandles(request)) {
+         rc = adoptHandles(message, request, &reply, release_event);
+         *adopted = R_SUCCEEDED(rc);
+diff --git a/libkaihen/source/plugin_server.cpp b/libkaihen/source/plugin_server.cpp
+--- a/libkaihen/source/plugin_server.cpp
++++ b/libkaihen/source/plugin_server.cpp
+@@ -49,6 +49,10 @@
+ Result createClientSession(PluginService* service, Handle* out_client) {
+     Result rc = MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
+     mutexLock(&service->sessions_lock);
++    if (__atomic_load_n(&service->stopping, __ATOMIC_ACQUIRE)) {
++        mutexUnlock(&service->sessions_lock);
++        return KAIHEN_PLUGIN_LIFECYCLE_BUSY;
++    }
+     for (u32 slot = 0; slot < MaxSessions; slot++) {
+         if (service->sessions[slot] == INVALID_HANDLE) {
+             rc = svcCreateSession(&service->sessions[slot], out_client, false, 0);
+@@ -71,6 +75,26 @@
+     Result rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+     if (isCreateSession(request))
+         rc = createClientSession(service, &client);
++    else if (request.valid && request.hipc.meta.type == CmifCommandType_Request &&
++             request.command_id == KAIHEN_PLUGIN_CONTROL_LIFECYCLE &&
++             ounce::hasOnlyInlineData(request) &&
++             request.data_size >= sizeof(KaihenPluginLifecycleRequest) && service->lifecycle_handler) {
++        KaihenPluginLifecycleRequest input;
++        __builtin_memcpy(&input, request.data, sizeof(input));
++        KaihenPluginLifecycleReply reply = {};
++        rc = input.reserved || input.command > KaihenPluginLifecycle_Health
++            ? MAKERESULT(Module_Libnx, LibnxError_BadInput)
++            : service->lifecycle_handler(&input, &reply, service->lifecycle_context);
++        ounce::closeRequestHandles(request);
++        ounce::writeReply(message, rc, R_SUCCEEDED(rc) ? &reply : nullptr,
++                          R_SUCCEEDED(rc) ? sizeof(reply) : 0);
++        const Result sent = ounce::sendReply(service->control_session);
++        if (R_SUCCEEDED(rc) && R_SUCCEEDED(sent) && input.command == KaihenPluginLifecycle_Commit) {
++            input.command = KaihenPluginLifecycle_CommitAcknowledged;
++            service->lifecycle_handler(&input, &reply, service->lifecycle_context);
++        }
++        return sent;
++    }
+     ounce::closeRequestHandles(request);
+ 
+     if (R_SUCCEEDED(rc))
+@@ -263,20 +287,27 @@
+     closeAllClientSessions(service);
+ }
+ 
+-Result startThread(PluginService* service, Thread* thread, ThreadFunc entry) {
++Result startThread(PluginService* service, Thread* thread, ThreadFunc entry, PluginServiceThreadState& state) {
+     Result rc = threadCreate(thread, entry, service, nullptr, ThreadStackSize, ThreadPriority, -2);
+     if (R_FAILED(rc))
+         return rc;
+-
++    state.created = true;
+     rc = threadStart(thread);
+-    if (R_FAILED(rc))
+-        threadClose(thread);
+-    return rc;
+-}
+-
+-void stopThread(Thread* thread) {
+-    threadWaitForExit(thread);
+-    threadClose(thread);
++    if (R_SUCCEEDED(rc)) state.started = true;
++    return rc;
++}
++
++Result stopThread(Thread* thread, PluginServiceThreadState& state) {
++    if (!state.created || state.closed) return 0;
++    if (state.started && !state.exited) {
++        Result rc = threadWaitForExit(thread);
++        if (R_FAILED(rc)) return rc;
++        state.exited = true;
++    }
++    Result rc = threadClose(thread);
++    if (R_FAILED(rc)) return rc;
++    state.closed = true;
++    return 0;
+ }
+ 
+ void closeEvents(PluginService* service) {
+@@ -290,6 +321,12 @@
+ 
+ Result pluginServiceStart(PluginService* service, Handle control_session,
+                           PluginServiceHandler handler, void* context) {
++    return pluginServiceStartWithLifecycle(service, control_session, handler, context, nullptr, nullptr);
++}
++
++Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
++                          PluginServiceHandler handler, void* context,
++                          PluginLifecycleHandler lifecycle, void* lifecycle_context) {
+     if (!service || !handler || control_session == INVALID_HANDLE)
+         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+ 
+@@ -297,6 +334,8 @@
+     service->control_session = control_session;
+     service->handler = handler;
+     service->context = context;
++    service->lifecycle_handler = lifecycle;
++    service->lifecycle_context = lifecycle_context;
+     mutexInit(&service->sessions_lock);
+ 
+     Result rc = svcCreateEvent(&service->stop_write, &service->stop_read);
+@@ -307,21 +346,23 @@
+     if (R_FAILED(rc))
+         goto fail_events;
+ 
+-    rc = startThread(service, &service->worker_thread, workerThread);
++    rc = startThread(service, &service->worker_thread, workerThread, service->worker_thread_state);
+     if (R_FAILED(rc))
+         goto fail_events;
+ 
+-    rc = startThread(service, &service->control_thread, controlThread);
+-    if (R_FAILED(rc))
+-        goto fail_worker;
++    rc = startThread(service, &service->control_thread, controlThread, service->control_thread_state);
++    if (R_FAILED(rc))
++        goto fail_events;
+ 
+     service->started = true;
+     return 0;
+ 
+-fail_worker:
+-    svcSignalEvent(service->stop_write);
+-    stopThread(&service->worker_thread);
+ fail_events:
++    service->started = service->worker_thread_state.created || service->control_thread_state.created;
++    if (service->started) {
++        pluginServiceStop(service);
++        if (service->started) return rc; // retain events/contexts on uncertainty
++    }
+     closeEvents(service);
+     return rc;
+ }
+@@ -330,14 +371,17 @@
+     if (!service || !service->started)
+         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+ 
++    __atomic_store_n(&service->stopping, true, __ATOMIC_RELEASE);
+     Result rc = svcSignalEvent(service->stop_write);
+     if (R_FAILED(rc))
+         return rc;
+ 
+     // Stop the control thread first, so that no session is added while the
+     // worker closes them.
+-    stopThread(&service->control_thread);
+-    stopThread(&service->worker_thread);
++    rc = stopThread(&service->control_thread, service->control_thread_state);
++    if (R_FAILED(rc)) return rc;
++    rc = stopThread(&service->worker_thread, service->worker_thread_state);
++    if (R_FAILED(rc)) return rc;
+     closeEvents(service);
+     service->started = false;
+ 
+diff --git a/libkaihen/source/plugin_startup.h b/libkaihen/source/plugin_startup.h
+--- a/libkaihen/source/plugin_startup.h
++++ b/libkaihen/source/plugin_startup.h
+@@ -7,6 +7,7 @@
+ 
+ enum PluginStartupCommand : u32 {
+     PluginStartupCommand_AdoptHandles = 1,
++    PluginStartupCommand_GetIdentity = 2,
  };
  
+ /// The version of the plugin runtime's AdoptHandles reply. A later version
+@@ -14,7 +15,8 @@
+ /// Versions 0 and 1 did not exist as such: the first runtime replied with a
+ /// "publishes a service" flag in this word, and sent the third handle only
+ /// when the flag was 1.
+-constexpr u32 PluginRuntimeVersion = 2;
++// Version 3 adds GetIdentity; AdoptHandles data/handle layout stays unchanged.
++constexpr u32 PluginRuntimeVersion = 3;
+ 
+ /// Sends the plugin copies of the SM session and the FS root. The reply has
+ /// the release event (writable), the ready event (readable) and the client
+diff --git a/ro/test.sh b/ro/test.sh
+--- a/ro/test.sh
++++ b/ro/test.sh
+@@ -3,19 +3,18 @@
+ set -eu
+ cd "$(dirname "$0")"
+ nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
+-mkdir -p build/tests
++out=${TEST_OUT:-build/tests}
++mkdir -p "$out"
+ cxx=${CXX:-g++}
+ # libnx's HIPC parser reads the kernel PID at an unaligned offset, as allowed
+ # on AArch64. Keep other ASan/UBSan checks enabled for the host fixtures.
+-flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o build/tests/wire
+-build/tests/wire
+-$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o build/tests/image
+-build/tests/image
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o build/tests/session
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
+-build/tests/mapping
+-build/tests/session
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
+-build/tests/mapping
++flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o "$out/wire"
++"$out/wire"
++$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o "$out/image"
++"$out/image"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o "$out/session"
++"$out/session"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o "$out/mapping"
++"$out/mapping"
+ echo 'RO wire, image, session and mapping tests: PASS'
+diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
+--- a/ro/tests/session_test.cpp
++++ b/ro/tests/session_test.cpp
+@@ -13,6 +13,7 @@
+ 
+ static Handle g_closed[8];
+ static u32 g_closeCount;
++static u64 g_clientPid = 213;
+ static u32 g_mapCount, g_unmapCount;
+ static Result g_mapResult;
+ static u32 g_jitMapCount, g_jitUnmapCount;
+@@ -39,7 +40,7 @@
+ Result svcGetProcessId(u64* pid, Handle handle) {
+     if (handle != 42 && handle != 43)
+         return 0xd401;
+-    *pid = 213;
++    *pid = g_clientPid;
+     return 0;
+ }
+ 
+@@ -132,7 +133,7 @@
+     words[0] = 6;
+     words[1] = 0x80000000 | num_data_words;
+     words[2] = special;
+-    words[3] = 213;
++    words[3] = static_cast<u32>(g_clientPid);
+     words[5] = handle;
+     words[8] = 0x49434653;
+     words[9] = 1;
+@@ -140,7 +141,7 @@
+ }
+ 
+ int main(void) {
+-    RoSession sessions[2] = {0};
++    RoSession sessions[2] = {};
+     u32 words[64];
+ 
+     request(words, RoCmd_Initialize, 10, 3, 42);
+@@ -386,6 +387,27 @@
+     request(words, RoCmd_Initialize, 10, 3, 42);
+     roDispatch(sessions, 2, 0, words);
+     assert(words[6] == 0 && sessions[0].process_handle == 42);
++    // Repeated host shutdown and next-process admission: execute the actual
++    // dispatcher/courier/close paths, retaining no old process or image/JIT
++    // records. Fixed logging storage is reset per cycle, not a pool increase.
++    assert(!roSessionClose(&sessions[0]));
++    g_aliasUnmapResult = 0;
++    for (u64 next_pid = 1000; next_pid != 1040; ++next_pid) {
++        g_closeCount = 0;
++        g_clientPid = next_pid;
++        request(words, RoCmd_Initialize, 10, 3, 42);
++        roDispatch(sessions, 2, 0, words);
++        assert(!words[6] && sessions[0].process_id == next_pid);
++        request(words, RoCmd_GetHomebrewSession, 10, 1, 0);
++        const Handle courier = roDispatch(sessions, 2, 0, words);
++        assert(courier == 77);
++        svcCloseHandle(courier); // same reply-side ownership as RoServer
++        assert(!roSessionClose(&sessions[0]));
++        assert(g_closeCount == 2 && g_closed[0] == 77 && g_closed[1] == 42);
++        assert(!sessions[0].process_handle && !sessions[0].process_id);
++        for (const auto& mapping : sessions[0].jit) assert(!mapping.size && !mapping.alias);
++        for (const auto& image : sessions[0].nro) assert(!image.mapped);
++    }
+     return 0;
+ }
  

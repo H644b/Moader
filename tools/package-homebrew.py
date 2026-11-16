@@ -46,8 +46,9 @@ Refresh in the browser explicitly rescans SD; failed scans retain that list
 with a separate warning and pause changes until a complete scan succeeds.
 
 The standalone foreground app hosts the web GUI while Moader stays open.
-The moader.nso file is staged for a later kaiHEN bootstrap; copying it does
-not start it in an already-running HEN. Resident browser access during games
+Copying moader.nso alone does not start or reload its process. With the
+matching protocol-7 backend installed, use Settings / Advanced / Reload Moader
+service. Older HEN installations need the updated backend kit once first. Resident browser access during games
 also requires the separate privileged filesystem-runtime installation.
 This archive does not perform that installation. Beginner setup and usage:
 https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/INSTALLATION.md

@@ -2,7 +2,7 @@
 'use strict';
 // Import the actual pinned Civ7 consumer graph in an isolated synthetic run.
 // This verifies the private module/transport boundary without any native call.
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),os=require('node:os'),Module=require('node:module');
 let forbidden=0;const deny=()=>{forbidden++;throw Error('Host import test cannot connect or start a process');};
 const net=require('node:net'),http=require('node:http'),cp=require('node:child_process');
 net.createConnection=net.connect=net.createServer=http.request=http.createServer=deny;
@@ -36,6 +36,28 @@ function put(root,name,data){const f=path.join(root,name);fs.mkdirSync(path.dirn
  for(const [name,key]of Object.entries(required))assert.equal(typeof hosts.load(context,name)[key],'function',name+' export');
  const launchFile=path.join(run,'switch2/ro/launch.cjs'),before=fs.readFileSync(launchFile);
  const launch=hosts.compile(context,'switch2/ro/launch.cjs','\nmodule.exports.moaderLaunchMain=main;\n');assert.equal(typeof launch.moaderLaunchMain,'function');assert(fs.readFileSync(launchFile).equals(before));
+ const gateModule=hosts.load(context,'switch2/ro/gate.cjs'),originalGate=gateModule.Gate;
+ await require('./loader-restoration.cjs').withGateRestoration(gateModule,
+  {read:async()=>{throw Error('Import test must not read native memory');},uncertain:false,block:()=>{}},async()=>{
+   const wrapped=gateModule.Gate;assert.notEqual(wrapped,originalGate);assert(wrapped.prototype instanceof originalGate);
+   // A previously cached launch must recompile against the temporary export.
+   const exposed=hosts.compile(context,'switch2/ro/launch.cjs','\nmodule.exports.moaderGate=Gate;\n');
+   assert.equal(exposed.moaderGate,wrapped);assert(fs.readFileSync(launchFile).equals(before));
+  });
+ assert.equal(gateModule.Gate,originalGate);
+ const previousRun=process.env.NS2_RUN_DIR;process.env.NS2_RUN_DIR=run;
+ try{
+  const sourceLaunch=path.join(ROOT,'research/sources/ns2jb/engine/switch2/ro/launch.cjs');
+  const sourceGate=require(path.join(path.dirname(sourceLaunch),'gate.cjs')),base=sourceGate.Gate;
+  await require('./loader-restoration.cjs').withGateRestoration(sourceGate,
+   {read:async()=>{throw Error('Import test must not read native memory');},uncertain:false,block:()=>{}},async()=>{
+    const exposed=new Module(sourceLaunch,module);exposed.filename=sourceLaunch;exposed.paths=Module._nodeModulePaths(path.dirname(sourceLaunch));
+    exposed._compile(fs.readFileSync(sourceLaunch,'utf8')+'\nmodule.exports.moaderGate=Gate;\n',sourceLaunch);
+    assert.equal(exposed.exports.moaderGate,sourceGate.Gate);assert.notEqual(exposed.exports.moaderGate,base);
+   });
+  assert.equal(sourceGate.Gate,base);
+ }finally{if(previousRun===undefined)delete process.env.NS2_RUN_DIR;else process.env.NS2_RUN_DIR=previousRun;}
+ console.log('PASS: actual SmileBASIC and cached Civ7 launch modules bind the temporary receipt Gate, restore exports, and preserve provider bytes');
  assert.equal(hosts.load(context,'switch2/tools/fs-memory.cjs'),hosts.load(context,'switch2/tools/fs-memory.cjs'));
  assert.equal(hosts.load(context,'switch2/app/session.cjs').live,rpc.a);
  assert.equal(hosts.load(context,'switch2/ro/sdk-thread.cjs').pthreadHandle.tagMask,7);

@@ -10,8 +10,7 @@ async function qualifyPrepared(prepared){
  const native=require('../runtime/modloader/lib/native/artifacts.cjs').artifacts();
  check(prepared.nativeRuntime===sha(Buffer.from(JSON.stringify(native.manifest))),'Prepared native runtime differs from the current qualified build; prepare again after integration');
  const frozen=await inputs.validateMoaderPrepared(prepared);
- const proof=JSON.parse(await fs.readFile(path.join(project,'software-builds/kaihen-mo.json')));
- check(prepared.kaihenFiles.find(item=>item.source===path.join(prepared.kaihen,'hen/main'))?.sha256===proof.hen_sha256,'The prepared HEN differs from the tested image');
+ const build=await inputs.qualifyKaihenBuild(project);inputs.assertKaihenBinding(prepared,build);
  check(frozen.programs.find(item=>item.target==='/switch/Moader.nro').data.subarray(16,20).toString()==='NRO0','Moader application is not an NRO');
  check(frozen.programs.find(item=>item.target==='/kaihen/plugins/moader.nso').data.subarray(0,4).toString()==='NSO0','Moader resident is not an NSO');
  await require('./install-kaihen.cjs').qualifyRelease(prepared);
@@ -22,15 +21,13 @@ async function prepare(profileId=hosts.DEFAULT){
  await inputs.assertLogWireContract();
  const native=require('../runtime/modloader/lib/native/artifacts.cjs').artifacts();
  const kaihen=path.join(project,'vendor/kaihen-mo'),output=path.join(project,'build/install');await fs.mkdir(output,{recursive:true});
- const proof=JSON.parse(await fs.readFile(path.join(project,'software-builds/kaihen-mo.json')));
- check(sha(await fs.readFile(path.join(kaihen,'hen/main')))===proof.hen_sha256,'The tested HEN image changed');
+ const build=await inputs.qualifyKaihenBuild(project);
  const header=Buffer.alloc(64);header.write('MOADER01');header.writeUInt32LE(1,8);crypto.randomFillSync(header,24,16);
  if(!header.readBigUInt64LE(24)&&!header.readBigUInt64LE(32))header[24]=1;
  header.writeUInt32LE(64,40);header.writeUInt32LE(64,44);
- const manifest=await inputs.snapshot({output,kaihen,hostProfile:hosts.binding(profile),nativeRuntime:sha(Buffer.from(JSON.stringify(native.manifest))),programs:[
+ const manifest=await inputs.snapshot({output,kaihen,kaihenBuild:build,hostProfile:hosts.binding(profile),nativeRuntime:sha(Buffer.from(JSON.stringify(native.manifest))),programs:[
   {source:path.join(project,'dist/Moader.nro'),target:'/switch/Moader.nro'},
   {source:path.join(project,'dist/moader.nso'),target:'/kaihen/plugins/moader.nso'}],metadata:inputs.initialRuntimeMetadata(header)});
- check(manifest.kaihenFiles.find(item=>item.source===path.join(manifest.kaihen,'hen/main'))?.sha256===proof.hen_sha256,'HEN changed while preparing its snapshot');
  await qualifyPrepared(manifest);
  // This is only a convenience pointer. Native work uses the unique snapshot.
  const latest=path.join(output,'manifest-'+process.pid+'.pending');

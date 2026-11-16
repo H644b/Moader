@@ -23,4 +23,5 @@ Result saveSignedPolicy(Handle fs_root, const char* path, const SignedPolicy& po
 
 // Build a flat ExeFS package with /main from SD and /main.npdm from policy.
 Result writeExeFsPackage(Handle fs_root, const char* executable_path,
-                         const char* package_path, const SignedPolicy& policy);
+                         const char* package_path, const SignedPolicy& policy,
+                         u8* expected_sha256 = nullptr);

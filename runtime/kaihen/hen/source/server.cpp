@@ -23,6 +23,7 @@ bool hasBuffers(const HipcMetadata& meta) {
 HenServer::HenServer() = default;
 
 HenServer::~HenServer() {
+    ounce::closeHandle(&reload_shell_);
     ounce::closeHandle(&fs_root_);
     ounce::closeHandle(&sm_session_);
     if (settings_ready_) {
@@ -44,6 +45,8 @@ HenServer::~HenServer() {
 }
 
 Result HenServer::initialize() {
+    reload_instance_ = randomGet64();
+    if (!reload_instance_) reload_instance_ = armGetSystemTick() | 1;
     status_.protocol_version = HEN_PROTOCOL_VERSION;
     Result rc = svcGetProcessId(&status_.process_id, CUR_PROCESS_HANDLE);
     if (R_SUCCEEDED(rc)) {
@@ -98,6 +101,7 @@ Result HenServer::run() {
         if (R_FAILED(serve_result)) {
             return serve_result;
         }
+        advanceReload();
     }
 }
 
@@ -124,6 +128,7 @@ void HenServer::collectWaits(WaitList& waits) const {
 
 /// Advances game arming between incoming requests.
 void HenServer::stepBetweenRequests() {
+    advanceReload();
     game_.step();
     svcSleepThread(IdleSleepNs);
 }
@@ -274,6 +279,20 @@ void HenServer::serveControlCommand(const ReceivedRequest& request, CommandReply
     const Handle* handles = request.copy_handles;
 
     switch (request.command_id) {
+    case HenControlCommand_ConfigurePluginReload:
+        if (copies == 1 && request.data_size >= sizeof(HenPluginLaunchConfig) && !reload_configured_) {
+            HenPluginLaunchConfig config;
+            std::memcpy(&config, request.data, sizeof(config));
+            if (config.program_id && config.storage_id == NcmStorageId_BuiltInSystem &&
+                !config.reserved[0] && !config.reserved[1] && !config.reserved[2]) {
+                reload_shell_ = handles[0];
+                reload_spec_ = {config.program_id, config.flags, config.storage_id, {0, 0, 0}};
+                reload_configured_ = true;
+                reply.result = 0;
+                reply.keeps_request_handles = true;
+            }
+        }
+        break;
     case HenControlCommand_ConfigureGame:
         if (!copies && request.data_size >= sizeof(HenGameConfig)) {
             HenGameConfig configuration;
@@ -364,6 +383,54 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
     }
 
     switch (request.command_id) {
+    case HenHomebrewCommand_GetReloadCapabilities: {
+        HenReloadCapabilities caps = {1, reload_configured_ ? HEN_PLUGIN_RELOAD_AVAILABLE : 0,
+                                      reload_instance_, reload_journal_.active};
+        if (reload_journal_.active) caps.flags |= HEN_PLUGIN_RELOAD_BUSY;
+        if (reload_journal_.blocked) caps.flags |= HEN_PLUGIN_RELOAD_BLOCKED;
+        reply.result = 0;
+        reply.setData(caps);
+        break;
+    }
+    case HenHomebrewCommand_GetPluginInfo: {
+        HenPluginName name;
+        if (request.data_size < sizeof(name)) break;
+        std::memcpy(&name, request.data, sizeof(name));
+        HenPluginInfo info = {};
+        reply.result = getPluginInfo(name, info);
+        if (R_SUCCEEDED(reply.result)) reply.setData(info);
+        break;
+    }
+    case HenHomebrewCommand_ReloadPlugin: {
+        HenPluginReloadRequest input;
+        if (request.data_size < sizeof(input)) break;
+        std::memcpy(&input, request.data, sizeof(input));
+        HenPluginReloadStatus output = {};
+        reply.result = submitReload(index, input, output);
+        if (R_SUCCEEDED(reply.result)) reply.setData(output);
+        break;
+    }
+    case HenHomebrewCommand_GetPluginReloadStatus: {
+        u64 id = 0;
+        if (request.data_size < sizeof(id)) break;
+        std::memcpy(&id, request.data, sizeof(id));
+        advanceReload();
+        auto* entry = reload_journal_.find(id);
+        reply.result = entry ? 0 : reload::Expired;
+        if (entry) reply.setData(entry->status);
+        break;
+    }
+    case HenHomebrewCommand_GetPluginReloadDiagnostics: {
+        u64 id = 0;
+        if (request.data_size < sizeof(id)) break;
+        std::memcpy(&id, request.data, sizeof(id));
+        // Only copy the snapshot published by advanceReload. In particular,
+        // never probe the gate or issue RO/FS IPC from the query thread.
+        const auto* entry = reload_journal_.find(id);
+        reply.result = entry ? 0 : reload::Expired;
+        if (entry) reply.setData(entry->diagnostics);
+        break;
+    }
     case HenHomebrewCommand_GetFilesystemRoot:
         if (fs_root_ == INVALID_HANDLE) {
             reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
@@ -522,6 +589,12 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
         if (std::strcmp(plugins_[index].name.name, name.name)) {
             continue;
         }
+        if (plugins_[index].operation_id) {
+            const auto* operation = reload_journal_.find(plugins_[index].operation_id);
+            if ((operation && (operation->status.flags & (HEN_PLUGIN_RELOAD_BUSY | HEN_PLUGIN_RELOAD_BLOCKED))) ||
+                plugins_[index].control_session == INVALID_HANDLE) return reload::Busy;
+        }
+        if (plugins_[index].control_session == INVALID_HANDLE) return reload::Busy;
         Service control = {};
         serviceCreate(&control, plugins_[index].control_session);
         control.own_handle = false;
@@ -531,6 +604,10 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
         );
         // The plugin closed its control session, so it no longer serves.
         if (rc == KERNELRESULT(ConnectionClosed)) {
+            if (plugins_[index].operation_id || game_.processExists(plugins_[index].process_id)) {
+                ounce::closeHandle(&plugins_[index].control_session);
+                return rc;
+            }
             removePlugin(index);
             return MAKERESULT(Module_Libnx, LibnxError_NotFound);
         }
@@ -553,8 +630,111 @@ void HenServer::removePlugin(u32 index) {
 /// the two can still name a plugin that exits in the meantime.
 void HenServer::removeExitedPlugins() {
     for (u32 index = plugin_count_; index > 0; index--) {
-        if (!game_.processExists(plugins_[index - 1].process_id)) {
+        if (!plugins_[index - 1].operation_id && !game_.processExists(plugins_[index - 1].process_id)) {
             removePlugin(index - 1);
         }
     }
+}
+
+HenServer::PluginRecord* HenServer::findPlugin(const char* name) {
+    for (u32 index = 0; index < plugin_count_; ++index)
+        if (!std::strcmp(plugins_[index].name.name, name)) return &plugins_[index];
+    return nullptr;
+}
+
+Result HenServer::getPluginInfo(const HenPluginName& name, HenPluginInfo& out) {
+    if (!reload::validName(name.name)) return reload::Invalid;
+    advanceReload();
+    removeExitedPlugins();
+    out = {};
+    out.instance_id = reload_instance_;
+    // Explicit successful absence is the ONLY new-client fallback signal.
+    auto* plugin = findPlugin(name.name);
+    if (!plugin) return 0;
+    out.process_id = plugin->process_id;
+    out.generation = plugin->generation;
+    out.operation_id = plugin->operation_id;
+    out.flags = reload_configured_ ? HEN_PLUGIN_RELOAD_AVAILABLE : 0;
+    if (auto* entry = reload_journal_.find(plugin->operation_id)) {
+        out.phase = entry->status.phase;
+        out.flags |= entry->status.flags;
+    }
+    return 0;
+}
+
+Result HenServer::submitReload(u32 caller, const HenPluginReloadRequest& request, HenPluginReloadStatus& out) {
+    advanceReload();
+    u64 caller_pid = 0;
+    R_TRY(svcGetProcessId(&caller_pid, homebrew_processes_[caller]));
+    reload::Journal::Entry* entry = nullptr;
+    R_TRY(reload_journal_.lookup(caller_pid, request, &entry));
+    if (entry) { out = entry->status; return 0; }
+    if (!reload_configured_) return reload::Capability;
+    if (request.instance_id != reload_instance_) return reload::Stale;
+    auto* plugin = findPlugin(request.name);
+    if (!plugin || !plugin->process_id || plugin->process_id != request.expected_process_id ||
+        plugin->generation != request.expected_generation || plugin->generation == UINT64_MAX ||
+        plugin->control_session == INVALID_HANDLE) return reload::Stale;
+    PluginLaunchContext context = {};
+    if (!game_.acquireReloadLease(context)) return reload::Busy;
+    Handle fs = INVALID_HANDLE, sm = INVALID_HANDLE;
+    Result rc = cmifCloneCurrentObject(fs_root_, &fs);
+    if (R_SUCCEEDED(rc)) rc = sm_proxy_.openSession(&sm);
+    if (R_SUCCEEDED(rc)) rc = reload_journal_.begin(caller_pid, request, &entry);
+    if (R_FAILED(rc)) {
+        ounce::closeHandle(&fs);
+        ounce::closeHandle(&sm);
+        game_.releaseReloadLease();
+        return rc;
+    }
+    plugin->operation_id = entry->status.operation_id;
+    const PluginReload::Input input = {context, reload_spec_, request, reload_shell_, plugin->control_session, sm, fs,
+                                      plugin->package_operation_id};
+    rc = reload_.start(input, entry->status);
+    if (R_FAILED(rc)) {
+        ounce::closeHandle(&fs);
+        ounce::closeHandle(&sm);
+        entry->status.result = rc;
+        entry->diagnostics.primary_result = rc;
+        entry->status.phase = HenPluginReloadPhase_Failed;
+        reload_journal_.finish(entry->status.operation_id, false);
+        game_.releaseReloadLease();
+    }
+    out = entry->status;
+    // A reserved ticket remains queryable even if creating its worker failed.
+    return 0;
+}
+
+void HenServer::advanceReload() {
+    if (!reload_journal_.active) return;
+    auto* entry = reload_journal_.find(reload_journal_.active);
+    if (!entry) return;
+    const bool complete = reload::completedSnapshot(reload_, entry->status);
+    entry->diagnostics = reload_.diagnostics();
+    if (!complete) return;
+    auto* plugin = findPlugin(entry->request.name);
+    bool quarantine = reload_.quarantined();
+    if (reload::publishable(entry->status, reload_.succeeded(), quarantine) &&
+        plugin && plugin->generation != UINT64_MAX) {
+        ounce::closeHandle(&plugin->control_session);
+        plugin->control_session = reload_.takeControl();
+        plugin->process_id = entry->status.new_process_id;
+        plugin->package_operation_id = entry->status.operation_id;
+        ++plugin->generation;
+        entry->status.generation = plugin->generation;
+        entry->status.phase = HenPluginReloadPhase_Complete;
+        entry->status.result = 0;
+    } else if (reload_.succeeded()) {
+        // An impossible registry/generation conflict cannot turn a healthy
+        // but unpublished process into an untracked writer.
+        quarantine = true;
+        entry->status.phase = HenPluginReloadPhase_Quarantined;
+        entry->status.result = reload::Stale;
+    }
+    if (entry->status.phase != HenPluginReloadPhase_Complete &&
+        (entry->status.flags & HEN_PLUGIN_RELOAD_OLD_EXITED)) {
+        if (plugin) { ounce::closeHandle(&plugin->control_session); plugin->process_id = 0; }
+    }
+    reload_journal_.finish(entry->status.operation_id, quarantine);
+    if (!quarantine) game_.releaseReloadLease();
 }

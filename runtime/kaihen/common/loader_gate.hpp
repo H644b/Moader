@@ -105,9 +105,21 @@ enum GateStep : u32 {
     GateStep_RestoreReceiptSeen = 0x1010,
     GateStep_RestoreParentMoved = 0x1110,
     GateStep_RestoreTimeout = 0xe30,
+    // Additive steps for the resident-only asynchronous park entry point.
+    GateStep_ParkInspect = 0x1300,
+    GateStep_ParkPublishWait = 0x1301,
+    GateStep_ParkCancelWorkers = 0x1302,
 };
 
-template <MemoryWriter Writer>
+// Default clock preserves native behavior. Host fixtures supply a controlled
+// clock while exercising the real gate and RetainedMemory implementation.
+struct LoaderGateClock {
+    static u64 now() { return armGetSystemTick(); }
+    static u64 toNs(u64 ticks) { return armTicksToNs(ticks); }
+    static u64 toTicks(u64 ns) { return armNsToTicks(ns); }
+};
+
+template <MemoryWriter Writer, typename Clock = LoaderGateClock>
 class LoaderGate {
   public:
     using ProgressCallback = void (*)(void*, u32);
@@ -125,6 +137,26 @@ class LoaderGate {
         if (R_SUCCEEDED(rc)) rc = replaceWaitForPark();
         if (R_SUCCEEDED(rc)) rc = cancelWorkersForPark();
         if (R_SUCCEEDED(rc)) rc = emptyStepForPark();
+        return rc;
+    }
+
+    // Dedicated resident-reload path. The established park() entry point and
+    // its synchronous bootstrap/GameArm behavior remain unchanged.
+    Result beginPark() {
+        markStep(GateStep_ParkInspect);
+        R_TRY(inspectForPark());
+        markStep(GateStep_ParkPublishWait);
+        R_TRY(replaceWaitForPark());
+        markStep(GateStep_ParkCancelWorkers);
+        R_TRY(cancelWorkersForPark());
+        return beginStep(true);
+    }
+
+    Result pollPark(bool& complete) {
+        complete = false;
+        R_UNLESS(step_empty_, UnexpectedState);
+        const Result rc = pollStep(nullptr, complete);
+        if (R_SUCCEEDED(rc) && complete) park_established_ = true;
         return rc;
     }
 
@@ -191,7 +223,7 @@ class LoaderGate {
 
         step_active_ = true;
         step_empty_ = empty;
-        step_started_tick_ = armGetSystemTick();
+        step_started_tick_ = Clock::now();
         step_next_tick_ = 0;
         step_observations_ = 0;
         R_SUCCEED();
@@ -205,7 +237,7 @@ class LoaderGate {
                     bool fail_after_injection = false) {
         complete = false;
         R_UNLESS(step_active_, UnexpectedState);
-        const u64 now = armGetSystemTick();
+        const u64 now = Clock::now();
         if (step_next_tick_ && now < step_next_tick_) R_SUCCEED();
 
         const u32 attempt = step_observations_++;
@@ -246,11 +278,11 @@ class LoaderGate {
                           allow_injection, fail_after_injection));
 
         step_last_action_ = diagnostic_step_;
-        if (armTicksToNs(armGetSystemTick() - step_started_tick_) >= StepDeadlineNs) {
+        if (Clock::toNs(Clock::now() - step_started_tick_) >= StepDeadlineNs) {
             markStep(GateStep_StepDeadline);
             return KERNELRESULT(TimedOut);
         }
-        step_next_tick_ = armGetSystemTick() + armNsToTicks(StepPollNs);
+        step_next_tick_ = Clock::now() + Clock::toTicks(StepPollNs);
         R_SUCCEED();
     }
 
@@ -308,6 +340,7 @@ class LoaderGate {
     }
 
     u32 diagnosticStep() const { return diagnostic_step_; }
+    LoaderGateProbe cachedProbe() const { return cached_probe_; }
     u32 failureStep() const {
         return diagnostic_step_ == GateStep_StepDeadline ? step_last_action_ : diagnostic_step_;
     }
@@ -424,6 +457,7 @@ class LoaderGate {
         if (knownWaiter(view.parent)) {
             markStep(GateStep_ObserveEpoch + attempt);
             R_TRY(memory_.read(view.parent + EpochOffset, &epoch, sizeof(epoch)));
+            cached_probe_.epoch = epoch;
         }
 
         markStep(GateStep_ObserveHeader + attempt);
@@ -522,19 +556,34 @@ class LoaderGate {
     }
 
     Result inspectIdentity(LoaderSessionView& view) {
-        R_TRY(memory_.read(config_.server, &view, sizeof(view)));
+        const Result rc = memory_.read(config_.server, &view, sizeof(view));
+        cached_probe_.read_result = rc;
+        if (R_FAILED(rc)) return rc;
+        cached_probe_.parent = view.parent;
+        cached_probe_.wait = view.wait;
+        cached_probe_.receive = view.receive;
+        cached_probe_.state = view.state;
+        cached_probe_.receive_result = view.receive_result;
         R_UNLESS(sessionIdentityMatches(view), UnexpectedState);
         R_SUCCEED();
     }
 
     Result isSelected(bool& selected) {
         alignas(8) u8 bytes[6 * WaiterStride + sizeof(u64)];
-        R_TRY(memory_.read(config_.waiters[0] + SelectionOffset, bytes, sizeof(bytes)));
+        const Result rc = memory_.read(config_.waiters[0] + SelectionOffset, bytes, sizeof(bytes));
+        if (R_FAILED(rc)) {
+            cached_probe_.read_result = rc;
+            return rc;
+        }
         selected = false;
+        cached_probe_.waiter_mask = 0;
         for (u32 i = 0; i < 7; i++) {
             u64 address;
             __builtin_memcpy(&address, bytes + i * WaiterStride, sizeof(address));
-            if (address == config_.server) selected = true;
+            if (address == config_.server) {
+                selected = true;
+                cached_probe_.waiter_mask |= 1u << (i + 8);
+            }
         }
         R_SUCCEED();
     }
@@ -759,6 +808,7 @@ class LoaderGate {
     u32 diagnostic_step_ = 0;
     ProgressCallback progress_callback_ = nullptr;
     void* progress_context_ = nullptr;
+    LoaderGateProbe cached_probe_ = {.read_result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized)};
 };
 
 } // namespace ounce

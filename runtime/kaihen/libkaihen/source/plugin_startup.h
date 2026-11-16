@@ -7,6 +7,7 @@
 
 enum PluginStartupCommand : u32 {
     PluginStartupCommand_AdoptHandles = 1,
+    PluginStartupCommand_GetIdentity = 2,
 };
 
 /// The version of the plugin runtime's AdoptHandles reply. A later version
@@ -14,7 +15,8 @@ enum PluginStartupCommand : u32 {
 /// Versions 0 and 1 did not exist as such: the first runtime replied with a
 /// "publishes a service" flag in this word, and sent the third handle only
 /// when the flag was 1.
-constexpr u32 PluginRuntimeVersion = 2;
+// Version 3 adds GetIdentity; AdoptHandles data/handle layout stays unchanged.
+constexpr u32 PluginRuntimeVersion = 3;
 
 /// Sends the plugin copies of the SM session and the FS root. The reply has
 /// the release event (writable), the ready event (readable) and the client

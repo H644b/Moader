@@ -163,6 +163,7 @@ Mod Library::import_zip(const std::string& title, const std::string& id,
                         const std::string& archive, const std::string& display_name) {
     std::unique_lock<std::mutex> operation(operation_mutex_, std::try_to_lock);
     require(operation.owns_lock() && !importing_, "An import or another library operation is in progress. Try again when it finishes.");
+    require(!quiescing(), "The resident service is reloading. Reconnect when it finishes.");
     auto mods = cached_inventory();
     require(mods.size() < 512, "The library supports at most 512 mods.");
     const auto destination = mod_path(title, id);

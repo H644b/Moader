@@ -34,11 +34,11 @@ Upstream warns that receiving a blacklist update can prevent Civilization VII fr
 
 ## HEN changes and Civ7 entrypoint adaptations
 
-Moader's [kaiHEN modification disclosure](KAIHEN_CHANGES.md) identifies exactly four changed source files against upstream `e897f991524590833b82fbe8d63a3c6775fb8101`: `common/control.h`, `hen/source/game_arm.cpp`, `hen/source/game_arm.hpp` and `hen/source/server.cpp`. That disclosure provides the complete patch, source and shipped HEN hash.
+Moader's [kaiHEN modification disclosure](KAIHEN_CHANGES.md) records the exact source patch against upstream `e897f991524590833b82fbe8d63a3c6775fb8101`. The current patch includes the pending-launch fix, read-only trace query and cooperative reload, with a matched HEN/bootstrap build. This is separate from Civ7's host adaptation.
 
-The upstream Civ7 port also describes a target-specific thread-handle adaptation: Civ7 uses tagged thread handles and needs a try-wait adapter. That entrypoint adaptation has its own scope and validation requirements, separate from Moader's four-file HEN patch. [Upstream porting notes](https://github.com/s8n/civ7-fs-kaihen/blob/51a804cbce09216e1a42e65929644fd436b4c8bf/README.md#porting-notes).
+The upstream Civ7 port also describes a target-specific thread-handle adaptation: Civ7 uses tagged thread handles and needs a try-wait adapter. That entrypoint adaptation has its own scope and validation requirements, separate from Moader's kaiHEN source patch. [Upstream porting notes](https://github.com/s8n/civ7-fs-kaihen/blob/51a804cbce09216e1a42e65929644fd436b4c8bf/README.md#porting-notes).
 
-A target shim can change the bootstrap image loaded into memory while preserving the original `bootstrap.bin` file and HEN binary hash. File identity alone therefore does not describe every runtime adaptation. The experimental host profile has separate implementation checks and hardware acceptance; neither is replaced by the HEN file hashes.
+A target shim can change the bootstrap image loaded into memory while preserving the pinned `bootstrap.bin` file and HEN binary hash. File identity alone therefore does not describe every runtime adaptation. The experimental host profile has separate implementation checks and hardware acceptance; neither is replaced by the HEN file hashes.
 
 ## Initial admitted host profile
 

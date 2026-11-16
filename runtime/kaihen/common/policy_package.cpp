@@ -88,7 +88,7 @@ Result saveSignedPolicy(Handle fs_root, const char* path, const SignedPolicy& po
 }
 
 Result writeExeFsPackage(Handle fs_root, const char* executable_path,
-                         const char* package_path, const SignedPolicy& policy) {
+                         const char* package_path, const SignedPolicy& policy, u8* expected_sha256) {
     if (!policy.size || policy.size > SignedPolicy::Capacity) return InvalidPackage;
     SdReader reader;
     u64 main_size = 0;
@@ -101,6 +101,13 @@ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
     SdWriter writer;
     rc = writer.begin(fs_root, package_path, package_size);
     if (R_FAILED(rc)) return rc;
+
+    Sha256Context sha;
+    if (expected_sha256) sha256ContextCreate(&sha);
+    const auto write = [&](const void* bytes, size_t size) {
+        if (expected_sha256) sha256ContextUpdate(&sha, bytes, size);
+        return writer.write(bytes, size);
+    };
 
     u8 header[HeaderSize] = {};
     std::memcpy(header, "PFS0", 4);
@@ -115,7 +122,7 @@ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
     std::memcpy(header + 48, &policy_size, sizeof(policy_size));
     std::memcpy(header + 56, &policy_name_offset, sizeof(policy_name_offset));
     std::memcpy(header + 64, "main\0main.npdm\0", names_size);
-    rc = writer.write(header, sizeof(header));
+    rc = write(header, sizeof(header));
 
     u8 buffer[CopyChunk];
     u64 remaining = main_size;
@@ -124,16 +131,17 @@ Result writeExeFsPackage(Handle fs_root, const char* executable_path,
         u64 received = 0;
         rc = reader.read(buffer, wanted, &received);
         if (R_SUCCEEDED(rc) && received != wanted) rc = InvalidPackage;
-        if (R_SUCCEEDED(rc)) rc = writer.write(buffer, wanted);
+        if (R_SUCCEEDED(rc)) rc = write(buffer, wanted);
         remaining -= received;
     }
     reader.close();
 
     if (R_SUCCEEDED(rc) && policy_offset > main_size) {
         const u8 padding[0x20] = {};
-        rc = writer.write(padding, policy_offset - main_size);
+        rc = write(padding, policy_offset - main_size);
     }
-    if (R_SUCCEEDED(rc)) rc = writer.write(policy.bytes, policy.size);
+    if (R_SUCCEEDED(rc)) rc = write(policy.bytes, policy.size);
     if (R_SUCCEEDED(rc)) rc = writer.finish();
+    if (R_SUCCEEDED(rc) && expected_sha256) sha256ContextGetHash(&sha, expected_sha256);
     return rc;
 }

@@ -135,6 +135,11 @@ Result serveBootstrapRequest(Handle session, Handle* release_event, bool* adopte
     if (ounce::isQueryPointerBufferSize(request)) {
         ounce::writePointerBufferSizeReply(message);
         rc = 0;
+    } else if (request.valid && request.command_id == PluginStartupCommand_GetIdentity &&
+               request.hipc.meta.type == CmifCommandType_Request && ounce::hasOnlyInlineData(request)) {
+        const Handle self = CUR_PROCESS_HANDLE;
+        ounce::writeReply(message, 0, nullptr, 0, &self, 1);
+        rc = 0;
     } else if (isAdoptHandles(request)) {
         rc = adoptHandles(message, request, &reply, release_event);
         *adopted = R_SUCCEEDED(rc);

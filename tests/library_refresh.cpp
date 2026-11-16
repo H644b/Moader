@@ -139,12 +139,13 @@ int main(int argc, char** argv) {
     const bool settings_ready = settings.wait_for(500ms) == std::future_status::ready;
     const bool change_ready = changing.wait_for(500ms) == std::future_status::ready;
     const bool still_importing = importing.wait_for(0ms) == std::future_status::timeout;
+    const bool refused_shutdown = !library.begin_quiesce() && !library.quiescing();
     const bool rescan_busy = !library.rescan();
     initial_card = false;
     const bool withdrew_during_import = library.refresh_availability() && !backend.offered[0].requested;
     const bool withdrawal_kept_import_paused = importing.wait_for(0ms) == std::future_status::timeout;
     { std::lock_guard<std::mutex> lock(decode_mutex); decode_release = true; } decode_cv.notify_all();
-    assert(read_ready && settings_ready && change_ready && still_importing && rescan_busy && withdrew_during_import && withdrawal_kept_import_paused);
+    assert(read_ready && settings_ready && change_ready && still_importing && refused_shutdown && rescan_busy && withdrew_during_import && withdrawal_kept_import_paused);
     auto during = reading.get(); settings.get();
     assert(during.mods.size() == 1 && during.generation == good.generation);
     assert(changing.get().find("in progress") != std::string::npos);
@@ -205,5 +206,26 @@ int main(int argc, char** argv) {
     rejects([&] { gated.set_game_source(title, static_cast<moader::GameSource>(3)); });
     moader::Library reopened(root + "/gated", gated_backend);
     assert(reopened.game_source(title) == moader::GameSource::Cartridge);
+    // Draining reserves the existing writer without withdrawing its catalogue
+    // or changing on-disk requests. No later mutation can restart that writer.
+    const auto before_shutdown = gated.snapshot();
+    const auto before_publications = gated_backend.publications;
+    assert(gated.begin_quiesce() && gated.quiescing());
+    assert(gated.begin_quiesce());
+    assert(!gated.rescan() && !gated.refresh_availability());
+    assert(gated.snapshot().generation == before_shutdown.generation);
+    assert(gated.snapshot().mods.size() == before_shutdown.mods.size());
+    assert(rejects([&] { gated.synchronize(); }).find("reloading") != std::string::npos);
+    assert(rejects([&] { gated.set_enabled(title, "card-mod", false); }).find("reloading") != std::string::npos);
+    assert(rejects([&] { gated.remove(title, "card-mod"); }).find("reloading") != std::string::npos);
+    assert(rejects([&] { gated.import_zip(title, "another", argv[2], "Another"); }).find("reloading") != std::string::npos);
+    assert(rejects([&] { gated.set_game_source(title, moader::GameSource::Digital); }).find("reloading") != std::string::npos);
+    assert(rejects([&] { gated.set_preferences(gated.preferences()); }).find("reloading") != std::string::npos);
+    assert(gated_backend.publications == before_publications);
+    assert(fs::exists(root + "/gated/library/" + title + "/card-mod/.enabled"));
+    gated.cancel_quiesce();
+    assert(!gated.quiescing() && gated_backend.publications == before_publications);
+    gated.set_preferences(gated.preferences());
+    assert(gated.rescan());
     std::cout << "PASS: cached polling, retained inventories on stat/open/read faults, initial unavailability, nonblocking import/settings, busy writes, coherent generations and game-availability publication gate\n";
 }

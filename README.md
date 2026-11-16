@@ -1,5 +1,7 @@
 # Moader
 
+> Unreleased development source: the complete game/reload lifecycle has failed device acceptance with system error 2011-0102, including a fresh-boot test before invoking Reload. Installation/startup passed with the corrected installer; the game-launch failure remains under investigation. Do not use this development source as an accepted update. Published releases do not contain the new reload implementation. [Detailed validation](docs/VALIDATION.md).
+
 **Manage Switch 2 mods from your controller or a browser.**
 
 Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable controls and native debug output. Its resident backend keeps the web interface available while you play or close the Moader app. The browser interface is served by your Switch; no cloud account is needed.
@@ -14,12 +16,12 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-Start with **[v0.1.0-dev.4 — library recovery and game-card checks](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)**. The rebuilt app and resident keep complete library snapshots available during imports, retain the list after failed SD scans, and separate control errors from filesystem errors. A new **Settings → Game copy** choice guards cartridge and game-key games. This also includes the earlier ZIP fix. HEN and the native filesystem runtime are unchanged. The new app/resident have host validation only; see [Validation](docs/VALIDATION.md).
+The published prerelease is **[v0.1.0-dev.4](https://github.com/H644b/Moader/releases/tag/v0.1.0-dev.4)**. Use its [matching installation guide](https://github.com/H644b/Moader/blob/v0.1.0-dev.4/docs/INSTALLATION.md). It can incorrectly block Z-A even with the matching cartridge inserted. This branch contains the correction and an unreleased plugin-reload candidate; the failed reload and offline repair are recorded in [Validation](docs/VALIDATION.md).
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) | The console app and matching resident plugin |
-| [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip) | Backend setup kit with precompiled HEN; pinned dependencies are fetched at first use |
+| [Moader-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip) | The published console app and matching resident plugin |
+| [Moader-backend-v0.1.0-dev.4.zip](https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-backend-v0.1.0-dev.4.zip) | Published backend setup kit; pinned dependencies are fetched at first use |
 
 This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 
@@ -72,7 +74,7 @@ This is a bounded test of one loose RomFS replacement. Game caches, new/resized 
 
 - [Wiki](https://github.com/H644b/Moader/wiki) — browse all user guides
 - [Installation](docs/INSTALLATION.md) — app copy, both backend setup routes and updates
-- [kaiHEN modifications](docs/KAIHEN_CHANGES.md) — exact four-file patch, upstream base and binary hash
+- [kaiHEN modifications](docs/KAIHEN_CHANGES.md) — complete source patch, reload protocol, upstream base and HEN/bootstrap hashes
 - [CivSwitch / Civilization VII](docs/CIV7.md) — experimental entrypoint, exact source pin and validation limits
 - [Usage](docs/USAGE.md) — controller controls, pairing, ZIP layout and settings
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — connection, apply-state and recovery help

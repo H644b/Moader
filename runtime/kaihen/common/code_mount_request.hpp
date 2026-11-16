@@ -34,6 +34,11 @@ struct CodeMountRequest {
     CodeMountArguments arguments;
 };
 
+inline bool matchesCodeMount(const CodeMountRequest& request, u64 program_id, u8 storage_id) {
+    return request.open_code && request.arguments.content_attributes == 1 &&
+           request.arguments.program_id == program_id && request.arguments.storage_id == storage_id;
+}
+
 /// The fsp-ldr command that opens a program's code file system.
 constexpr u32 FsProxyForLoaderCommand_OpenCodeFileSystem = 0;
 

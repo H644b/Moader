@@ -29,11 +29,15 @@ class NativePackage {
             u64 program_id;
         } request = {FsContentAttributes_None, FsFileSystemType_ApplicationPackage, 0};
 
+        // SDK's response parser forms all raw output-handle addresses even
+        // for None attributes; object replies still need non-null storage.
+        Handle unused_handles[8] = {};
         Result rc = serviceDispatchIn(&root_, 10, request,
             .buffer_attrs = {SfBufferAttr_HipcPointer | SfBufferAttr_In},
             .buffers = {{package_path, sizeof(package_path)}},
             .out_num_objects = 1,
-            .out_objects = &filesystem_.s);
+            .out_objects = &filesystem_.s,
+            .out_handles = unused_handles);
         if (R_FAILED(rc)) return rc;
         opened_ = true;
 

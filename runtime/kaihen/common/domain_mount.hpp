@@ -40,13 +40,7 @@ class DomainMount {
         if (R_FAILED(rc) || !decoded.open_code) {
             return rc;
         }
-        const CodeMountArguments& arguments = decoded.arguments;
-        if (arguments.content_attributes != 1 ||
-            arguments.storage_id != NcmStorageId_BuiltInSystem ||
-            arguments.program_id != config_.title) {
-            return UnexpectedState;
-        }
-        mount = true;
+        mount = matchesCodeMount(decoded, config_.title, NcmStorageId_BuiltInSystem);
         return 0;
     }
 

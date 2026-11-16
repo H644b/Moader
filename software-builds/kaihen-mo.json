@@ -1,11 +1,26 @@
 {
+  "schema": 2,
   "base_commit": "e897f991524590833b82fbe8d63a3c6775fb8101",
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "hen_sha256": "e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c",
+  "patch_sha256": "161131cbdc7c90d2b83f2a769506bab5cec4463e7cc99613104d754d14ae55d3",
+  "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
+  "source_tree_sha256": "4a489bee87f3189dd5a367ec949bdb783952f29bffbcef46d32175282e6eca73",
+  "protocol_version": 7,
+  "hen_sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86",
+  "components": {
+    "hen/main": {
+      "bytes": 130961,
+      "sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86"
+    },
+    "bootstrap.bin": {
+      "bytes": 30080,
+      "sha256": "df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801"
+    }
+  },
   "native_build_passed": true,
-  "console_retest_passed": true,
-  "reason": "Keep unsupported active applications from permanently faulting first-launch policy capture; add read-only GameTrace query.",
-  "validation_scope": "The patched HEN and Moader resident/FS integration passed device checks, including native diagnostics and a bounded MK8 live texture enable/disable/removal test. See docs/VALIDATION.md for scope."
+  "console_retest_passed": false,
+  "reason": "Cooperative reload with timed Loader polling, cached diagnostics, donor identity tracking through host exit, and retained SM-proxy thread ownership on failed cleanup; paired with guarded app exit and matching-card correction.",
+  "validation_scope": "The ownership-repair HEN/bootstrap pair passed the final SDK build, host sanitizer checks and a fresh console installation/startup using the aad061b host restoration adapter. Checked Loader receipt, bootstrap gate/channel restoration, protocol-7 HEN, resident/FS diagnostics and the authenticated 11-entry browser library passed. The subsequent Minecraft/hbmenu host-exit lifecycle failed with 2011-0102 before any service reload was invoked. The repeated-reload lifecycle and missing-card withdrawal remain unpassed. The older 9d9ab58 pair completed two reloads but its subsequent normal Minecraft launch also caused 2011-0102. The earlier 0xEA01/restoration 0x1759 failure remains separate. The allocating server and fatal cause are unconfirmed. Unreleased and not accepted; see docs/VALIDATION.md."
 }

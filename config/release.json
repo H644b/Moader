@@ -1,26 +1,31 @@
 {
   "name": "Moader",
   "version": "0.1.0-dev",
-  "tag": "v0.1.0-dev.4",
+  "tag": "v0.1.0-dev.5",
   "prerelease": true,
   "repository": "H644b/Moader",
   "binaries": {
     "Moader.nro": {
       "source": "dist/Moader.nro",
-      "bytes": 1920952,
-      "sha256": "cddca13b10cd12c421fef51e604f89a330f626e8b36d5e89c1a10577c197ff5b"
+      "bytes": 1937336,
+      "sha256": "3876999ecff3675c660c6b0cae08be95db43e8359f77f846e3ce48ad3236f331"
     },
     "moader.nso": {
       "source": "dist/moader.nso",
-      "bytes": 681566,
-      "sha256": "85e95283970b0e22e2817303bdcf91a79c18e6aa341b3bfbe93f7925a42c2b33"
+      "bytes": 683176,
+      "sha256": "f444e0fb1185da1b95655d89510b3efa931883b13b2997d8a9db6b805480137a"
     }
   },
   "patched_hen": {
     "source": "vendor/kaihen-mo/hen/main",
-    "bytes": 78060,
-    "sha256": "e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c"
+    "bytes": 130961,
+    "sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86"
   },
   "validation": "docs/VALIDATION.md",
-  "appAndResidentHardwareTested": false
+  "appAndResidentHardwareTested": false,
+  "patched_bootstrap": {
+    "source": "vendor/kaihen-mo/bootstrap.bin",
+    "bytes": 30080,
+    "sha256": "df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801"
+  }
 }

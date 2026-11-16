@@ -27,6 +27,7 @@ struct Fake {
     unsigned control_reads = 0;
     unsigned ns_init = 0, ns_exit = 0, ncm_init = 0, ncm_exit = 0;
     unsigned record_reads = 0, insertion_reads = 0, card_reads = 0, count_reads = 0, page_reads = 0;
+    unsigned card_failure_at = 0;
     unsigned db_open = 0, db_close = 0, cs_open = 0, cs_close = 0, program_reads = 0, has_reads = 0;
     std::vector<NcmStorageId> storages;
 } fake;
@@ -43,6 +44,10 @@ void blocked(Source source, const char* fragment, const char* title = "010012345
     }
 }
 void noncard() { fake.rows[0].storageID = NcmStorageId_SdCard; }
+void no_content_queries() {
+    assert(fake.count_reads == 0 && fake.page_reads == 0 && fake.ncm_init == 0 && fake.ncm_exit == 0);
+    assert(fake.db_open == 0 && fake.cs_open == 0 && fake.program_reads == 0 && fake.has_reads == 0);
+}
 }
 
 extern "C" Result nsInitialize(void) { ++fake.ns_init; return result("ns_init"); }
@@ -82,7 +87,7 @@ extern "C" Result nsIsGameCardInserted(bool* out) {
 extern "C" Result nsListApplicationIdOnGameCard(u64* ids, s32 capacity, s32* actual) {
     ++fake.card_reads;
     assert(capacity == 64);
-    if (result("card_ids")) return Error;
+    if (result("card_ids") || fake.card_reads == fake.card_failure_at) return Error;
     if (fake.card_count != -999) { *actual = fake.card_count; return 0; }
     const auto& values = fake.card_reads > 1 && !fake.later_card_ids.empty() ? fake.later_card_ids : fake.card_ids;
     *actual = values.size();
@@ -143,9 +148,23 @@ extern "C" Result ncmContentStorageHas(NcmContentStorage*, bool* out, const NcmC
 
 int main() {
     reset(); assert(lookup().load_allowed);
-    assert(fake.ns_init == 1 && fake.ns_exit == 1 && fake.ncm_init == 1 && fake.ncm_exit == 1);
-    assert(fake.db_open == fake.db_close && fake.cs_open == fake.cs_close && fake.has_reads == 1 && fake.card_reads == 2);
+    assert(fake.ns_init == 1 && fake.ns_exit == 1 && fake.card_reads == 2);
+    no_content_queries();
     reset(); assert(lookup(Source::Cartridge).load_allowed);
+    no_content_queries();
+    // Physical admission is current-card presence, independent of the shape
+    // or availability of installed-content inventory and Program probes.
+    for (Source source : {Source::Unspecified, Source::Cartridge}) {
+        reset(); fake.rows.clear(); assert(lookup(source).load_allowed); no_content_queries();
+        reset(); fake.rows[0].meta_type = NcmContentMetaType_Patch;
+        assert(lookup(source).load_allowed); no_content_queries();
+        reset(); fake.rows[0].storageID = NcmStorageId_None;
+        assert(lookup(source).load_allowed); no_content_queries();
+        reset(); fake.program = false; assert(lookup(source).load_allowed); no_content_queries();
+        for (const char* unused_stage : {"count", "page", "ncm_init", "db_open", "key", "program", "cs_open", "has"}) {
+            reset(); fake.fail = unused_stage; assert(lookup(source).load_allowed); no_content_queries();
+        }
+    }
     reset(); noncard(); assert(lookup().load_allowed); // Downloaded key-card base still requires matching card.
     reset(); noncard(); fake.insertion = {false}; blocked(Source::Cartridge, "Insert this game's cartridge");
     assert(fake.ncm_init == 0 && fake.record_reads == 0);
@@ -156,6 +175,8 @@ int main() {
     // Digital source selection deliberately does not query the unrelated card slot.
     reset(); noncard(); fake.fail = "inserted"; assert(lookup(Source::Digital).load_allowed);
     assert(fake.insertion_reads == 0 && fake.card_reads == 0 && fake.storages == std::vector<NcmStorageId>{NcmStorageId_SdCard});
+    assert(fake.ncm_init == 1 && fake.ncm_exit == 1 && fake.has_reads == 1);
+    assert(fake.db_open == fake.db_close && fake.cs_open == fake.cs_close);
     reset(); noncard(); fake.rows[0].storageID = NcmStorageId_BuiltInUser; assert(lookup(Source::Digital).load_allowed);
     reset(); blocked(Source::Digital, "no available installed base Program"); assert(fake.ncm_init == 0);
     reset(); noncard(); fake.rows.push_back(fake.rows[0]); fake.rows.back().storageID = NcmStorageId_GameCard;
@@ -164,30 +185,32 @@ int main() {
         reset(); noncard(); fake.rows[0].meta_type = meta;
         blocked(Source::Digital, "Update data alone"); assert(fake.ncm_init == 0);
     }
-    reset(); fake.rows.clear(); blocked(Source::Cartridge, "base game Program is unavailable");
-    reset(); fake.program = false; blocked(Source::Cartridge, "base game Program is unavailable");
+    reset(); fake.rows.clear(); blocked(Source::Digital, "no available installed base Program");
+    reset(); noncard(); fake.program = false; blocked(Source::Digital, "no available installed base Program");
     for (u8 install : {u8(NcmContentInstallType_FragmentOnly), u8(NcmContentInstallType_Unknown)}) {
-        reset(); fake.install_type = install; blocked(Source::Cartridge, "full installation"); assert(fake.program_reads == 0);
+        reset(); noncard(); fake.install_type = install; blocked(Source::Digital, "full installation"); assert(fake.program_reads == 0);
     }
-    reset(); fake.key_type = NcmContentMetaType_Patch; blocked(Source::Cartridge, "inconsistent");
-    reset(); ++fake.key_id; blocked(Source::Cartridge, "inconsistent");
-    reset(); ++fake.key_version; blocked(Source::Cartridge, "inconsistent");
-    reset(); ++fake.rows[0].application_id; blocked(Source::Cartridge, "owner does not match");
-    reset(); fake.rows[0].rights_check = 255; assert(lookup().load_allowed); // Opaque flags are not interpreted.
+    reset(); noncard(); fake.key_type = NcmContentMetaType_Patch; blocked(Source::Digital, "inconsistent");
+    reset(); noncard(); ++fake.key_id; blocked(Source::Digital, "inconsistent");
+    reset(); noncard(); ++fake.key_version; blocked(Source::Digital, "inconsistent");
+    reset(); noncard(); ++fake.rows[0].application_id; blocked(Source::Digital, "owner does not match");
+    reset(); noncard(); fake.rows[0].rights_check = 255; assert(lookup(Source::Digital).load_allowed); // Opaque flags are not interpreted.
     reset(); fake.insertion = {true, false}; blocked(Source::Cartridge, "changed during verification");
     reset(); fake.insertion = {true, true, false}; blocked(Source::Cartridge, "changed during verification");
+    reset(); fake.insertion = {true, true, true, false}; blocked(Source::Cartridge, "changed during verification");
     reset(); fake.later_card_ids = {Id + 1}; blocked(Source::Cartridge, "changed during verification");
-    reset(); fake.change_content = true; blocked(Source::Cartridge, "content changed");
-    reset(); fake.change_count = true; blocked(Source::Cartridge, "content changed");
+    reset(); fake.card_failure_at = 2; blocked(Source::Cartridge, "0x00005010"); assert(fake.ns_exit == 1);
+    reset(); noncard(); fake.change_content = true; blocked(Source::Digital, "content changed");
+    reset(); noncard(); fake.change_count = true; blocked(Source::Digital, "content changed");
     for (int count : {-1, 0, 65}) {
         reset(); fake.card_count = count; blocked(Source::Cartridge, "incomplete or invalid count");
     }
     reset(); fake.card_ids = {0}; blocked(Source::Cartridge, "invalid identity");
     for (int count : {-1, 257}) {
-        reset(); fake.content_count = count; blocked(Source::Cartridge, "verification bound");
+        reset(); noncard(); fake.content_count = count; blocked(Source::Digital, "verification bound");
     }
     for (int count : {-1, 0, 2}) {
-        reset(); fake.page_count = count; blocked(Source::Cartridge, "incomplete or invalid count");
+        reset(); noncard(); fake.page_count = count; blocked(Source::Digital, "incomplete or invalid count");
     }
     for (int count : {-1, 33}) {
         reset(); fake.record_count = count; blocked(Source::Cartridge, "invalid count");
@@ -205,22 +228,32 @@ int main() {
     reset(); fake.records = {Id, Id + 1}; blocked(Source::Cartridge, "ambiguous", "0400123456780001");
     reset(); blocked(Source::Cartridge, "No supported record-backed", "0400123456780002");
     reset(); fake.records.assign(512, Id + 1); blocked(Source::Cartridge, "scan reached its limit"); assert(fake.record_reads == 16);
-    reset(); fake.id = fake.key_id = 0x0100F43008C44000ull;
-    fake.records = fake.card_ids = {fake.id}; fake.rows[0].application_id = fake.id;
-    assert(lookup(Source::Cartridge, "0400F43008C44001").load_allowed && fake.control_reads == 1);
+    for (Source source : {Source::Unspecified, Source::Cartridge}) for (bool patch_only : {false, true}) {
+        reset(); fake.id = fake.key_id = 0x0100F43008C44000ull;
+        fake.records = fake.card_ids = {fake.id}; fake.rows[0].application_id = fake.id;
+        if (patch_only) fake.rows[0].meta_type = NcmContentMetaType_Patch;
+        else fake.rows.clear();
+        assert(lookup(source, "0400F43008C44001").load_allowed && fake.control_reads == 1);
+        assert(fake.card_reads == 2 && fake.ns_exit == 1); no_content_queries();
+    }
     reset(); fake.records.assign(32, Id + 1); fake.records.push_back(Id); assert(lookup().load_allowed && fake.record_reads == 2);
     for (const char* title : {"", "0", "0000000000000000", "0500123456780000", "010012345678000g", "01001234567800000", "0100000000000001"}) {
         reset(); blocked(Source::Digital, "Invalid game Title ID", title); assert(fake.ns_init == 0);
     }
     reset(); blocked(static_cast<Source>(99), "Invalid Game copy"); assert(fake.ns_init == 0);
-    for (const char* stage : {"ns_init", "records", "inserted", "card_ids", "count", "page", "ncm_init", "db_open", "key", "program", "cs_open", "has"}) {
+    for (const char* stage : {"ns_init", "records", "inserted", "card_ids"}) {
         reset(); fake.fail = stage; blocked(Source::Cartridge, "0x00005010");
+        assert(fake.ns_exit == (std::strcmp(stage, "ns_init") != 0));
+        no_content_queries();
+    }
+    for (const char* stage : {"ns_init", "records", "count", "page", "ncm_init", "db_open", "key", "program", "cs_open", "has"}) {
+        reset(); noncard(); fake.fail = stage; blocked(Source::Digital, "0x00005010");
         assert(fake.ns_exit == (std::strcmp(stage, "ns_init") != 0));
         assert(fake.ncm_exit == (fake.ncm_init && std::strcmp(stage, "ncm_init") != 0));
         assert(fake.db_open == fake.db_close && fake.cs_open == fake.cs_close);
     }
     // More than one bounded status page; non-Application rows never enter NCM.
-    reset(); auto patch = fake.rows[0]; patch.meta_type = NcmContentMetaType_Patch;
-    fake.rows.insert(fake.rows.begin(), 40, patch); assert(lookup().load_allowed && fake.page_reads == 4 && fake.has_reads == 1);
-    std::cout << "Game availability: source policy, real SDK calls/layouts, base Program presence, snapshots, bounds, NX/Ounce/Edition identities and cleanup passed.\n";
+    reset(); noncard(); auto patch = fake.rows[0]; patch.meta_type = NcmContentMetaType_Patch;
+    fake.rows.insert(fake.rows.begin(), 40, patch); assert(lookup(Source::Digital).load_allowed && fake.page_reads == 4 && fake.has_reads == 1);
+    std::cout << "Game availability: matching-card admission without installed-content probes, digital base proof, snapshots, bounds, NX/Ounce/Edition identities and cleanup passed.\n";
 }

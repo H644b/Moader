@@ -46,9 +46,10 @@ u32 faultCause(u32 point, u32 value) {
 }
 
 bool containsEntry(const ounce::DomainEntry entries[ounce::MaxDomainEntries], u32 count,
-                   u64 address) {
+                   const ounce::DomainEntry& expected) {
     for (u32 index = 0; index < count; index++) {
-        if (entries[index].address == address) {
+        if (entries[index].address == expected.address && entries[index].object == expected.object &&
+            entries[index].metadata == expected.metadata) {
             return true;
         }
     }
@@ -191,6 +192,7 @@ void GameArm::fault(Result result) {
 }
 
 void GameArm::step() {
+    if (reload_leased_) return;
     Result rc = 0;
     switch (state_) {
     case State::Inactive:
@@ -241,6 +243,16 @@ void GameArm::step() {
     if (R_FAILED(rc)) {
         fault(rc);
     }
+}
+
+bool GameArm::acquireReloadLease(PluginLaunchContext& out) {
+    if (!started_ || reload_leased_ || !memory_ || !gate_ || step_started_ ||
+        bootstrap_restore_pending_ || gate_->pendingRestoreWithReceipt() ||
+        (state_ != State::WaitForInput && state_ != State::WaitExit)) return false;
+    reload_leased_ = true;
+    out = {memory_config_, gate_config_, mount_config_, reader_session_,
+           filesystem_process_, filesystem_root_, loader_root_, monitor_};
+    return true;
 }
 
 Result GameArm::openPackage() {
@@ -468,7 +480,7 @@ Result GameArm::receiveGameMount() {
     trace_.write(GameTracePoint_SecondSnapshotDone, rc, after_count);
     if (R_FAILED(rc)) return restoreGate(rc);
 
-    if (status_.mounts == 1 && !containsEntry(after, after_count, first_.address)) {
+    if (status_.mounts == 1 && !containsEntry(after, after_count, first_)) {
         first_closed_ = true;
     }
     bool matching = false;
@@ -514,8 +526,17 @@ Result GameArm::receiveGameMount() {
         // restored, the pending title can continue on its stock CodeFS.
         return restoreGate(rc, State::WaitProcess);
     }
-    rc = mount_->exchange(code_);
+    rc = exchangeGameCode();
     return restoreGate(rc, R_SUCCEEDED(rc) ? State::WaitProcess : State::Fault);
+}
+
+Result GameArm::exchangeGameCode() {
+    const Result rc = mount_->exchange(code_);
+    // The entry now holds the package's donor, not the original stock
+    // CodeFS object. Track that identity until host exit; an address alone
+    // can be recycled by unrelated plugin/package allocations.
+    if (R_SUCCEEDED(rc)) code_.object = current_mount_.donor_object;
+    return rc;
 }
 
 Result GameArm::waitForProcess() {
@@ -566,9 +587,9 @@ Result GameArm::capturePolicy() {
     if (R_FAILED(rc)) return rc;
     if (program_id != active_title_) return UnexpectedState;
 
-    const u64 now = armGetSystemTick();
+    const u64 now = GameClock::now();
     if (capture_next_tick_ && now < capture_next_tick_) return 0;
-    capture_next_tick_ = now + armNsToTicks(CaptureIntervalNs);
+    capture_next_tick_ = now + GameClock::toTicks(CaptureIntervalNs);
     capture_attempts_++;
     trace_.write(GameTracePoint_PolicyCaptureAttempt, 0, capture_attempts_);
 
@@ -622,7 +643,7 @@ Result GameArm::pollProcessExit() {
         u32 count = 0;
         GameMount final_mount(*memory_, mount_config_);
         R_TRY(final_mount.snapshot(entries, count));
-        if (containsEntry(entries, count, code_.address)) return 0;
+        if (containsEntry(entries, count, code_)) return 0;
     }
     if (package_) package_->close();
     package_.reset();

@@ -5,6 +5,7 @@
 #include "../../common/control.h"
 #include "game_arm.hpp"
 #include "sm_proxy.hpp"
+#include "plugin_reload.hpp"
 #include "../../libkaihen/source/cmif_server.hpp"
 
 /// HEN's IPC server. It serves the mig:usr control port, on which the
@@ -84,6 +85,9 @@ class HenServer {
         HenPluginName name = {};
         u64 process_id = 0;
         Handle control_session = INVALID_HANDLE;
+        u64 generation = 1;
+        u64 operation_id = 0;
+        u64 package_operation_id = 0;
     };
 
     // The loop
@@ -112,6 +116,10 @@ class HenServer {
     Result openPlugin(const HenPluginName& name, Handle* out_session);
     void removePlugin(u32 index);
     void removeExitedPlugins();
+    Result getPluginInfo(const HenPluginName& name, HenPluginInfo& out);
+    Result submitReload(u32 caller, const HenPluginReloadRequest& request, HenPluginReloadStatus& out);
+    void advanceReload();
+    PluginRecord* findPlugin(const char* name);
 
     Handle port_ = INVALID_HANDLE;
     Handle fs_root_ = INVALID_HANDLE;
@@ -127,4 +135,10 @@ class HenServer {
     u32 plugin_count_ = 0;
     HenStatus status_ = {};
     GameArm game_ = {};
+    PluginReload reload_;
+    reload::Journal reload_journal_;
+    Handle reload_shell_ = INVALID_HANDLE;
+    PluginLaunchSpec reload_spec_ = {};
+    bool reload_configured_ = false;
+    u64 reload_instance_ = 0;
 };

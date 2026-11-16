@@ -49,6 +49,10 @@ bool isCreateSession(const ounce::CmifRequest& request) {
 Result createClientSession(PluginService* service, Handle* out_client) {
     Result rc = MAKERESULT(Module_Libnx, LibnxError_OutOfMemory);
     mutexLock(&service->sessions_lock);
+    if (__atomic_load_n(&service->stopping, __ATOMIC_ACQUIRE)) {
+        mutexUnlock(&service->sessions_lock);
+        return KAIHEN_PLUGIN_LIFECYCLE_BUSY;
+    }
     for (u32 slot = 0; slot < MaxSessions; slot++) {
         if (service->sessions[slot] == INVALID_HANDLE) {
             rc = svcCreateSession(&service->sessions[slot], out_client, false, 0);
@@ -71,6 +75,26 @@ Result serveControlRequest(PluginService* service) {
     Result rc = MAKERESULT(Module_Libnx, LibnxError_BadInput);
     if (isCreateSession(request))
         rc = createClientSession(service, &client);
+    else if (request.valid && request.hipc.meta.type == CmifCommandType_Request &&
+             request.command_id == KAIHEN_PLUGIN_CONTROL_LIFECYCLE &&
+             ounce::hasOnlyInlineData(request) &&
+             request.data_size >= sizeof(KaihenPluginLifecycleRequest) && service->lifecycle_handler) {
+        KaihenPluginLifecycleRequest input;
+        __builtin_memcpy(&input, request.data, sizeof(input));
+        KaihenPluginLifecycleReply reply = {};
+        rc = input.reserved || input.command > KaihenPluginLifecycle_Health
+            ? MAKERESULT(Module_Libnx, LibnxError_BadInput)
+            : service->lifecycle_handler(&input, &reply, service->lifecycle_context);
+        ounce::closeRequestHandles(request);
+        ounce::writeReply(message, rc, R_SUCCEEDED(rc) ? &reply : nullptr,
+                          R_SUCCEEDED(rc) ? sizeof(reply) : 0);
+        const Result sent = ounce::sendReply(service->control_session);
+        if (R_SUCCEEDED(rc) && R_SUCCEEDED(sent) && input.command == KaihenPluginLifecycle_Commit) {
+            input.command = KaihenPluginLifecycle_CommitAcknowledged;
+            service->lifecycle_handler(&input, &reply, service->lifecycle_context);
+        }
+        return sent;
+    }
     ounce::closeRequestHandles(request);
 
     if (R_SUCCEEDED(rc))
@@ -263,20 +287,27 @@ void workerThread(void* argument) {
     closeAllClientSessions(service);
 }
 
-Result startThread(PluginService* service, Thread* thread, ThreadFunc entry) {
+Result startThread(PluginService* service, Thread* thread, ThreadFunc entry, PluginServiceThreadState& state) {
     Result rc = threadCreate(thread, entry, service, nullptr, ThreadStackSize, ThreadPriority, -2);
     if (R_FAILED(rc))
         return rc;
-
+    state.created = true;
     rc = threadStart(thread);
-    if (R_FAILED(rc))
-        threadClose(thread);
+    if (R_SUCCEEDED(rc)) state.started = true;
     return rc;
 }
 
-void stopThread(Thread* thread) {
-    threadWaitForExit(thread);
-    threadClose(thread);
+Result stopThread(Thread* thread, PluginServiceThreadState& state) {
+    if (!state.created || state.closed) return 0;
+    if (state.started && !state.exited) {
+        Result rc = threadWaitForExit(thread);
+        if (R_FAILED(rc)) return rc;
+        state.exited = true;
+    }
+    Result rc = threadClose(thread);
+    if (R_FAILED(rc)) return rc;
+    state.closed = true;
+    return 0;
 }
 
 void closeEvents(PluginService* service) {
@@ -290,6 +321,12 @@ void closeEvents(PluginService* service) {
 
 Result pluginServiceStart(PluginService* service, Handle control_session,
                           PluginServiceHandler handler, void* context) {
+    return pluginServiceStartWithLifecycle(service, control_session, handler, context, nullptr, nullptr);
+}
+
+Result pluginServiceStartWithLifecycle(PluginService* service, Handle control_session,
+                          PluginServiceHandler handler, void* context,
+                          PluginLifecycleHandler lifecycle, void* lifecycle_context) {
     if (!service || !handler || control_session == INVALID_HANDLE)
         return MAKERESULT(Module_Libnx, LibnxError_BadInput);
 
@@ -297,6 +334,8 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
     service->control_session = control_session;
     service->handler = handler;
     service->context = context;
+    service->lifecycle_handler = lifecycle;
+    service->lifecycle_context = lifecycle_context;
     mutexInit(&service->sessions_lock);
 
     Result rc = svcCreateEvent(&service->stop_write, &service->stop_read);
@@ -307,21 +346,23 @@ Result pluginServiceStart(PluginService* service, Handle control_session,
     if (R_FAILED(rc))
         goto fail_events;
 
-    rc = startThread(service, &service->worker_thread, workerThread);
+    rc = startThread(service, &service->worker_thread, workerThread, service->worker_thread_state);
     if (R_FAILED(rc))
         goto fail_events;
 
-    rc = startThread(service, &service->control_thread, controlThread);
+    rc = startThread(service, &service->control_thread, controlThread, service->control_thread_state);
     if (R_FAILED(rc))
-        goto fail_worker;
+        goto fail_events;
 
     service->started = true;
     return 0;
 
-fail_worker:
-    svcSignalEvent(service->stop_write);
-    stopThread(&service->worker_thread);
 fail_events:
+    service->started = service->worker_thread_state.created || service->control_thread_state.created;
+    if (service->started) {
+        pluginServiceStop(service);
+        if (service->started) return rc; // retain events/contexts on uncertainty
+    }
     closeEvents(service);
     return rc;
 }
@@ -330,14 +371,17 @@ Result pluginServiceStop(PluginService* service) {
     if (!service || !service->started)
         return MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
 
+    __atomic_store_n(&service->stopping, true, __ATOMIC_RELEASE);
     Result rc = svcSignalEvent(service->stop_write);
     if (R_FAILED(rc))
         return rc;
 
     // Stop the control thread first, so that no session is added while the
     // worker closes them.
-    stopThread(&service->control_thread);
-    stopThread(&service->worker_thread);
+    rc = stopThread(&service->control_thread, service->control_thread_state);
+    if (R_FAILED(rc)) return rc;
+    rc = stopThread(&service->worker_thread, service->worker_thread_state);
+    if (R_FAILED(rc)) return rc;
     closeEvents(service);
     service->started = false;
 

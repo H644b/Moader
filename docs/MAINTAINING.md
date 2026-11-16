@@ -1,45 +1,48 @@
 # Maintaining the release inputs
 
-Release preparation must preserve the link between public source, tested HEN, portable runtime manifest, host kit and SD app/plugin ZIP. Use a clean staging directory. Never package the working checkout wholesale: `research/`, `state/`, `evidence/`, mac2jb run folders, captured policies, local journals, developer SDKs and prepared installer snapshots can contain machine or device state.
+Release preparation must preserve the link between public source, qualified HEN/bootstrap pair, portable runtime manifest, host kit and SD app/plugin ZIP. Use a clean staging directory. Never package the working checkout wholesale: `research/`, `state/`, `evidence/`, mac2jb run folders, captured policies, local journals, developer SDKs and prepared installer snapshots can contain machine or device state.
 
-The public source includes Moader source, tests, scripts, documentation, licensing, `runtime/kaihen` source and the shipped portable runtime assets. Keep the sanitized `software-builds/kaihen-mo.json` and corresponding `.patch` as the public HEN provenance record. Preserve the base revision, release base, patch reference, toolchain and tested HEN hash; do not publish private evidence paths or session identifiers.
+The public source includes Moader source, tests, scripts, documentation, licensing, `runtime/kaihen` source and the shipped portable runtime assets. Keep the sanitized `software-builds/kaihen-mo.json` and corresponding `.patch` as the public HEN provenance record. Preserve the base revision, release base, patch reference, toolchain and HEN/bootstrap digests with their validation scope; do not publish private evidence paths or session identifiers.
 
 ## Release layout
 
-Use the explicit prerelease tag `v0.1.0-dev.4`. GitHub's `releases/latest` endpoint can skip prereleases, so download links must target `/releases/download/v0.1.0-dev.4/…` or the tag page.
+The planned prerelease tag is `v0.1.0-dev.5`; it is **not published**. Keep PR #7 in draft until the failed device reload is resolved and the repaired build is accepted on hardware. The published release remains v0.1.0-dev.4. GitHub's `releases/latest` endpoint can skip prereleases, so a future release's download links must target its explicit tag.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.0-dev.4.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.0-dev.4.zip` | Public host source plus exactly three binaries: `dist/Moader.nro`, `dist/moader.nso`, tested `vendor/kaihen-mo/hen/main`; outer `Moader-backend-v0.1.0-dev.4` folder includes `START_HERE.txt` |
-| `Moader.nro`, `moader.nso` | Standalone copies of the tested app and resident |
+| `Moader-v0.1.0-dev.5.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.1.0-dev.5.zip` | Public host source plus exactly four binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.1.0-dev.5` folder includes `START_HERE.txt` |
+| `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
 **Omit the ns2jb and Civ7 source dependencies from public source and host kits unless explicit redistribution terms are located and reviewed.** The setup helper fetches the exact upstream revision directly for each user. The default profile selects the kurumuz engine; `civ7-s8n` selects its engine, Civ7 target tables and acquisition bridge, as pinned by [config/civ7-provider.json](../config/civ7-provider.json). Do not invent a license or infer redistribution permission from a public repository. Preserve upstream attribution separately from license claims.
 
-The minimal host kit has no `research/` content and does not bundle the full official kaiHEN ZIP, other upstream binaries or OunceShell. First-run setup fetches the pinned archive and extracts only `ro/main`, `game/main`, `bootstrap.bin` and `hbmenu.nro`, while retaining the kit's patched `hen/main`. It creates `vendor/kaihen-mo/programs` empty. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private captures, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
+The minimal host kit has no `research/` content and does not bundle the full official kaiHEN ZIP, other upstream binaries or OunceShell. First-run setup fetches the pinned archive and extracts only `ro/main`, `game/main` and `hbmenu.nro`, while retaining the kit's patched `hen/main` and `bootstrap.bin`. It creates `vendor/kaihen-mo/programs` empty. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private captures, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
 
-`tools/setup-backend.py` hard-pins the official archive, engine tree and tested HEN. An optional `release/backend-inputs.json` may provide checksum-qualified app ZIP and raw patched HEN download URLs for provisioning a source checkout without compiling:
+`tools/setup-backend.py` hard-pins the official archive and engine tree, and verifies the reviewed HEN/bootstrap proof. An optional `release/backend-inputs.json` may provide checksum-qualified app ZIP and raw patched HEN/bootstrap download URLs for provisioning a source checkout without compiling:
 
 ```json
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.4/Moader-v0.1.0-dev.4.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.1.0-dev.5/Moader-v0.1.0-dev.5.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
     "url": "REPLACE_WITH_EXPLICIT_HTTPS_RAW_HEN_ASSET_URL"
+  },
+  "patched_bootstrap": {
+    "url": "REPLACE_WITH_EXPLICIT_HTTPS_RAW_BOOTSTRAP_ASSET_URL"
   }
 }
 ```
 
-This descriptor is optional for the populated host kit and for `--build`. Do not publish placeholders as a working manifest. The HEN URL cannot override the helper's fixed tested digest. Update code, source provenance and docs together when intentionally qualifying another release; never weaken a hash check to accommodate unexplained differences.
+This descriptor is optional for the populated host kit and for `--build`. Do not publish placeholders as a working manifest. Component URLs cannot override the digests in the reviewed proof. Update code, source provenance and docs together when intentionally qualifying another release; never weaken a hash check to accommodate unexplained differences.
 
 ## Package the committed public source
 
-`config/release.json` records the version/tag, exact app/resident/HEN sizes and SHA-256 digests, and the validation document. Its `appAndResidentHardwareTested` flag records whether the exact app/resident pair has console validation. The v0.1.0-dev.4 pair is rebuilt for library recovery and game-card checks and has host validation only; HEN retains its existing tested digest. A fresh source rebuild can have different app/resident hashes because of debug paths. Record an intentional build and its validation boundary before updating pins; do not replace them merely to make packaging pass.
+`config/release.json` records the version/tag, exact app/resident/HEN/bootstrap sizes and SHA-256 digests, and the validation document. Its `appAndResidentHardwareTested` flag records whether the exact app/resident pair has console validation. The v0.1.0-dev.5 app/resident and HEN/bootstrap pair are rebuilt for the physical-card correction and plugin reload. Read the build proof and validation document for exact host/device scope; do not inherit the old HEN's console-tested claim. A fresh source rebuild can have different app/resident hashes because of debug paths. Record an intentional build and its validation boundary before updating pins; do not replace them merely to make packaging pass.
 
 Finish the intended build and checks, audit the public source, and commit all release source/documentation/config changes before packaging:
 
@@ -47,11 +50,11 @@ Finish the intended build and checks, audit the public source, and commit all re
 python3 tools/package-release.py
 ```
 
-The release packager exports committed public source from `HEAD`, adds only the three exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.4.zip`, `Moader-backend-v0.1.0-dev.4.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
+The release packager exports committed public source from `HEAD`, adds only the four exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.0-dev.5.zip`, `Moader-backend-v0.1.0-dev.5.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
 
 ## Native changes
 
-The supported SDK bootstrap is Apple Silicon macOS with the pins documented in [BUILDING.md](BUILDING.md). Use a fresh checkout and `python3 tools/setup-backend.py --build` for isolated HEN/app compilation. A rebuilt HEN must reproduce the tested bytes before provisioning. The app's debug information can encode its build directory, so distinguish successful builds from byte reproducibility.
+The supported SDK bootstrap is Apple Silicon macOS with the pins documented in [BUILDING.md](BUILDING.md). Use a fresh checkout and `python3 tools/setup-backend.py --build` for isolated HEN/bootstrap/app compilation. The HEN/bootstrap pair must reproduce the source-qualified proof before provisioning. The app's debug information can encode its build directory, so distinguish successful builds from byte reproducibility.
 
 Changes to `runtime/modloader/native` or a source listed in its prebuilt manifest require Zig 0.15.2 and a maintainer rebuild:
 
@@ -68,7 +71,7 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 
 1. Run `python3 tools/test-setup-backend.py` and the relevant host tests. Native tests that use SDK headers need the pinned SDK; `make check` itself is not SDK-free.
 2. Inspect the public export and both ZIP inventories for forbidden private paths and missing license/source files. Scan text for personal paths, accounts, credentials and captured session identifiers. Keep release checksums for the final bytes.
-3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries except the patched HEN, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the patched HEN is unchanged, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
+3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries except the patched HEN, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the patched HEN/bootstrap pair matches the reviewed proof, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
 4. Run `python3 tools/setup-backend.py --check --node /absolute/path/to/node24` twice. It must not download, compile or change files. Run the local installer `--check` with that same Node executable and confirm it prints a unique `build/install/prepared-*/manifest.json`, validates both programs and performs no console connection.
 5. Exercise the direct ns2jb wrapper with `--run-dir PATH --node node` and separately the existing mac2jb status-command route. Both must preserve the selected Node 24, execute local Moader scripts only, create a unique local snapshot and print a matching `--prepared` install command. The wrapper never performs installation itself. `python3 tools/test-ns2jb-host.py --online --node node` checks real precompiled-kit preparation with public inputs and transport calls blocked; it does not acquire FS or install on a console.
 6. Exercise `--host-profile civ7-s8n` separately: `python3 tools/test-civ7-host.py --online --node node` checks the upstream source/materialization and native ABI; `node tools/test-civ7-host.cjs` checks synthetic held sessions against the actual provider; `python3 tools/test-ns2jb-host.py --online --node node --host-profile civ7-s8n` checks real precompiled-kit preparation with endpoint/process calls blocked. These establish host behavior only.

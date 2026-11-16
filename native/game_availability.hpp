@@ -146,10 +146,10 @@ inline moader::GameAvailability decide(u64 id, moader::GameSource source, const 
             return {false, source == moader::GameSource::Cartridge
                 ? "The inserted cartridge is for a different game. Insert this game's cartridge."
                 : "The inserted cartridge does not match. Insert this game's cartridge, or choose your actual digital copy in Game copy."};
+        return {true, {}};
     }
-    if (!observation.base_present) return {false, source == moader::GameSource::Digital
-        ? "The selected digital copy has no available installed base Program. Update data alone is insufficient."
-        : "The base game Program is unavailable. Update data alone is insufficient."};
+    if (!observation.base_present) return {false,
+        "The selected digital copy has no available installed base Program. Update data alone is insufficient."};
     return {true, {}};
 }
 inline moader::GameAvailability query(u64 id, moader::GameSource source) {
@@ -166,21 +166,26 @@ inline moader::GameAvailability query(u64 id, moader::GameSource source) {
     const auto identity = game_names_detail::metadata_identity(id);
     if (identity.acd_index == 1)
         (void)game_names_detail::read_name(identity.application_id, 1);
-    // Use the existing bounded record-backed mapping and validated Edition
-    // control fields, then test the base owner's card and Program. An ACD
-    // selector is never reused as a Program id-offset.
+    // Resolve the base owner using the existing bounded mapping and validated
+    // Edition fields. An ACD selector is never a Program id-offset.
     id = identity.application_id;
-    if (source != moader::GameSource::Digital &&
-            std::find(observation.card.applications.begin(), observation.card.applications.end(), id) == observation.card.applications.end())
+    if (source != moader::GameSource::Digital) {
+        if (std::find(observation.card.applications.begin(), observation.card.applications.end(), id) == observation.card.applications.end())
+            return decide(id, source, observation);
+        if (!(observation.card == read_card()))
+            throw std::runtime_error("Game card changed during verification; try again");
+        // This is a matching-current-card presence guard. Installed-content
+        // registration is not a prerequisite for a live physical card. The
+        // platform/original FS mount still enforces actual game dependencies.
         return decide(id, source, observation);
+    }
     const auto before = read_content(id);
     std::vector<NsApplicationContentMetaStatus> candidates;
     for (const auto& row : before) {
         if (row.meta_type != NcmContentMetaType_Application) continue;
         if (row.application_id != id) throw std::runtime_error("Base application owner does not match the exact game identity");
         const bool noncard = row.storageID == NcmStorageId_BuiltInUser || row.storageID == NcmStorageId_SdCard;
-        if (noncard || (source != moader::GameSource::Digital && row.storageID == NcmStorageId_GameCard))
-            candidates.push_back(row);
+        if (noncard) candidates.push_back(row);
     }
     if (!candidates.empty()) {
         NcmSession ncm;
@@ -189,8 +194,6 @@ inline moader::GameAvailability query(u64 id, moader::GameSource source) {
     }
     if (!same_content(before, read_content(id)))
         throw std::runtime_error("Application content changed during verification; try again");
-    if (source != moader::GameSource::Digital && !(observation.card == read_card()))
-        throw std::runtime_error("Game card changed during verification; try again");
     return decide(id, source, observation);
 }
 }

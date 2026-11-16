@@ -99,6 +99,25 @@ int main(int argc,char** argv){
     assert(s.local_input(ActivateInput,0)==0&&!s.port_edit);
     s=fixture();s.view=View::Advanced;s.advanced_row=1;assert(s.local_input(ActivateInput,0)==RefreshEvents&&s.view==View::Debug&&s.debug_return==View::Advanced);capture(dir/"advanced-runtime-720.ppm",s);
     assert(s.local_input(BackInput,0)==0&&s.view==View::Advanced);
+    // Same production controller input path: reload is gated independently of
+    // preferences and cannot emit a second submission while in flight.
+    s=fixture();s.view=View::Advanced;s.advanced_row=4;s.reload_available=true;
+    s.summary.flags=moader::ipc::WebRunning|moader::ipc::BackendConnected;s.summary.applied_generation=s.summary.generation;
+    s.events={"SYNTHETIC HOST FIXTURE", "FS accepted the current routing."};
+    s.reload_detail="Reload restarts the resident plugin and checks the new process before reconnecting.";
+    assert(s.local_input(ActivateInput,0)==ReloadService);capture(dir/"advanced-reload-ready-720.ppm",s);
+    s.reload_busy=true;s.connected=false;s.inventory_refresh_pending=true;s.reload_detail="Draining service";
+    assert(s.local_input(ActivateInput,0)==0);capture(dir/"advanced-reload-progress-720.ppm",s);
+    s.advanced_row=2;assert(s.local_input(ActivateInput,0)==SaveReport);
+    s.advanced_row=3;assert(s.local_input(ActivateInput,0)==SaveScreenshot);
+    s.local_input(DebugInput,12);assert(s.view==View::Debug);assert(s.local_input(ActivateInput,12)==SaveReport);
+    s=fixture();s.view=View::Advanced;s.advanced_row=4;s.reload_detail="Install the new kaiHEN build to reload the resident service.";
+    assert(s.local_input(ActivateInput,0)==0&&s.message_error);s.message.clear();capture(dir/"advanced-reload-legacy-720.ppm",s);
+    s.connected=false;s.reload_error=true;s.inventory_refresh_pending=true;s.reload_detail="Reload failed. Result 0x00001234; restoration 0x00005678.";
+    capture(dir/"advanced-reload-failed-720.ppm",s);
+    s.reload_shutdown_required=true;s.reload_detail="Loader recovery is unverified. Save Debug and a screen, then hold POWER for 20 seconds to shut down.";
+    capture(dir/"advanced-reload-shutdown-720.ppm",s);
+    s.view=View::Debug;assert(s.local_input(ActivateInput,0)==SaveReport);capture(dir/"debug-reload-shutdown-720.ppm",s);
     s=fixture();s.preferences.flags|=moader::ipc::ReducedMotion;Renderer motion;std::vector<uint32_t> initial(1280*720),settled(initial.size());s.view=View::Settings;
     motion.draw(initial.data(),1280,720,1280*4,s,1.f/60);s.settings_row=4;motion.draw(initial.data(),1280,720,1280*4,s,1.f/60);for(int i=0;i<30;++i)motion.draw(settled.data(),1280,720,1280*4,s,1.f/60);assert(initial==settled);
     s=fixture();s.events.assign(30,"Synthetic follow-log event");Renderer follow;const unsigned latest=follow.scroll_limit(s,View::Debug);s.local_input(DebugInput,latest);assert(s.debug_first==latest&&!s.log_paused);s.local_input(UpInput,latest);assert(s.debug_first==latest-3&&s.log_paused);s.local_input(DownInput,latest);assert(!s.log_paused);
