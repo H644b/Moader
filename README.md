@@ -1,6 +1,6 @@
 # Moader
 
-> Unreleased development branch: the cartridge correction passed a device check and the repaired plugin reload completed twice, but the next normal Minecraft launch caused system error 2011-0102. HOME recovered after restarting. Do not install this branch for reload; [PR #7](https://github.com/H644b/Moader/pull/7) remains a draft while the failed lifecycle check is investigated. Published releases do not contain this reload implementation.
+> Unreleased development source: the complete game/reload lifecycle has failed device acceptance with system error 2011-0102, including a fresh-boot test before invoking Reload. Installation/startup passed with the corrected installer; the game-launch failure remains under investigation. Do not use this development source as an accepted update. Published releases do not contain the new reload implementation. [Detailed validation](docs/VALIDATION.md).
 
 **Manage Switch 2 mods from your controller or a browser.**
 

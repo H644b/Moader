@@ -2,7 +2,7 @@
 
 Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload alongside the earlier pending-launch fix and read-only game trace. The application, resident service and FS hook have separate roles and validation records.
 
-**Development branch:** two repaired reload transactions completed, but the subsequent normal Minecraft launch caused system error 2011-0102. The additional ownership changes described below passed installation/startup after the host restoration correction; the complete game/reload lifecycle remains unverified and unreleased. See [Validation](VALIDATION.md).
+**Development branch:** two repaired reload transactions completed, but the subsequent normal Minecraft launch caused system error 2011-0102. The additional ownership changes described below passed installation/startup after the host restoration correction; a subsequent fresh-boot game-launch check failed with no Reload command invoked. The complete lifecycle is not accepted and remains unreleased. See [Validation](VALIDATION.md).
 
 | Record | Value |
 | --- | --- |
