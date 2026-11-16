@@ -23,7 +23,7 @@ The current release is **[v0.1.1](https://github.com/H644b/Moader/releases/tag/v
 | [Moader-v0.1.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-v0.1.1.zip) | The published console app and matching resident plugin |
 | [Moader-backend-v0.1.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-backend-v0.1.1.zip) | Published backend setup kit; pinned dependencies are fetched at first use |
 
-This is a development prerelease for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
+Use the matching backend kit for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 
 **After updating:** run the matching resident from this release, then select a game and open **Settings → Game copy**. Cartridge/game-key copies need their matching card. For an actual digital copy, choose **My digital copy**. The default checks the inserted card and blocks uncertain availability; it does not infer ownership from downloaded data. [Game-card checks and limits](docs/CARTRIDGES.md).
 
