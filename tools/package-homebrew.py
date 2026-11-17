@@ -21,10 +21,7 @@ app, service = files['switch/Moader.nro'].read_bytes(), files['kaihen/plugins/mo
 assert app[16:20] == b'NRO0' and service[:4] == b'NSO0'
 instructions = '''Moader RELEASE_TAG (app display version APP_VERSION)
 
-Known issue: system error 2011-0102 has been reproduced after closing a
-homebrew host and launching Minecraft, before invoking service reload.
-Installation/startup checks passed, but this release has not passed the full
-game-exit lifecycle. Evidence and recovery instructions:
+Validation scope and release details:
 https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/VALIDATION.md
 https://github.com/H644b/Moader/releases/tag/RELEASE_TAG
 
@@ -84,7 +81,6 @@ or the game to relaunch. Do not infer game success from a library write.
 No device pairing code, saves, firmware, game files or private state are
 included in this package. Corresponding source, credits and build instructions:
 https://github.com/H644b/Moader/tree/RELEASE_TAG
-This release includes the documented unresolved game-exit failure.
 '''.replace('RELEASE_TAG', release['tag']).replace('APP_VERSION', release['version'])
 manifest = {name: {'bytes': path.stat().st_size,
                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}

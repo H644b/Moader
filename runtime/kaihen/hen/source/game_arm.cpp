@@ -559,10 +559,7 @@ Result GameArm::waitForProcess() {
             return rc;
         }
         if (!allow_bridge_process_ && !isApplicationProgram(title)) {
-            // An R press may precede HOME closing SmileBASIC, or may launch a
-            // Switch 1 title. Neither is a native homebrew target. Keep the
-            // pending native launch armed instead of permanently faulting HEN.
-            return 0;
+            return UnexpectedState;
         }
         active_title_ = title;
     }

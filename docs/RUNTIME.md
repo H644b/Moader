@@ -63,16 +63,16 @@ The game was then fully closed and reopened normally without rebooting the conso
 
 This validates the described fixture/workflow, not universal hot swapping or every game/mod type. No original-game whole-file hash comparison or same-open-file byte-for-byte original/mod/original sequence is claimed. Game assets and the test replacement are not distributed with Moader. See the [public validation summary](VALIDATION.md) for the complete tested scope and host/hardware distinction.
 
-## Lifetimes, reboot and crashes
+## Lifetimes, reboot and service failures
 
 The resident service is a separate process with its own service/filesystem sessions. Closing the console app, closing the browser or normally relaunching the game does not intentionally stop it. The running backend is **until reboot**; saved mods/preferences remain on SD, but the next boot needs the supported backend setup again. Copying a new NSO onto SD does not hot-reload the current process.
 
-A normal **game-only** software error is expected to leave the resident service and FS runtime available: disable/remove the offending mod in the browser, then relaunch the game. **Deliberate game-crash recovery was not tested.** A crash in FS, HEN or the system, or a console reboot, can invalidate the backend context and require fresh setup. Process separation is not a guarantee that every malformed mod is isolated from privileged filesystem code.
+A normal **game-only** software error is expected to leave the resident service and FS runtime available: disable/remove the offending mod in the browser, then relaunch the game. **Recovery after a forced game error was not tested.** A failure in FS, HEN or the system, or a console reboot, can invalidate the backend context and require fresh setup. Process separation is not a guarantee that every malformed mod is isolated from privileged filesystem code.
 
 ## For contributors
 
 The catalogue/receipt checks, retained routing objects and snapshot diagnostics have host regression coverage, including sanitizer tests. Host checks complement the bounded hardware validation above; they do not establish compatibility with an untested console environment or mod.
 
-See [Building](BUILDING.md) for the toolchain/tests and [Maintaining](MAINTAINING.md) for backend/release maintenance. End users can use the matched precompiled [release downloads](https://github.com/H644b/Moader/releases/tag/v0.1.1).
+See [Building](BUILDING.md) for the toolchain/tests and [Maintaining](MAINTAINING.md) for backend/release maintenance. End users can use the matched precompiled [release downloads](https://github.com/H644b/Moader/releases/tag/v0.1.2).
 
-The v0.1.1 release includes the later cache, game-card and reload changes. Its exact new app/resident build has host validation only, and the shared game/host-exit path still has a reproduced system fatal. See [Validation](VALIDATION.md) and [v0.1.1 notes](releases/v0.1.1.md).
+The v0.1.2 release retains the cache, game-card and reload features while refreshing the custom HEN source build. New component bytes require their own qualification; earlier hardware results remain scoped to their original binaries. See [Validation](VALIDATION.md) and [v0.1.2 notes](releases/v0.1.2.md).

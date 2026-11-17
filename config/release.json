@@ -1,25 +1,25 @@
 {
   "name": "Moader",
-  "version": "0.1.1",
-  "tag": "v0.1.1",
+  "version": "0.1.2",
+  "tag": "v0.1.2",
   "prerelease": false,
   "repository": "H644b/Moader",
   "binaries": {
     "Moader.nro": {
       "source": "dist/Moader.nro",
       "bytes": 1937336,
-      "sha256": "328a6e9cd704e1bc8f8548d7f39a568a6150720e662e5b98bcc6c0278623a469"
+      "sha256": "e251020bcd550afc72982ac80bf54a1060ff6aca8b3ffdb401a36c01c44ae9eb"
     },
     "moader.nso": {
       "source": "dist/moader.nso",
-      "bytes": 683047,
-      "sha256": "c4d283c5ed978166bc2f699598375d8e10d474b4031e21bf839554a0cd61bb2b"
+      "bytes": 683053,
+      "sha256": "4e17afa1c1f04f172fd91c9411e239e95eaf9c6067492921b769cda794ed13a0"
     }
   },
   "patched_hen": {
     "source": "vendor/kaihen-mo/hen/main",
-    "bytes": 130961,
-    "sha256": "edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86"
+    "bytes": 130965,
+    "sha256": "621b8e4a373b8cef7c84cb07af8889d961f5bceb7b4566e3305c2dd38c021a24"
   },
   "validation": "docs/VALIDATION.md",
   "appAndResidentHardwareTested": false,

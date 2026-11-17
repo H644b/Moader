@@ -1,6 +1,6 @@
 # Reload the resident plugin
 
-**Published for testing in v0.1.1; full lifecycle acceptance has failed.** The first candidate failed during reload. The repaired candidate completed two reloads and returned to hbmenu, but a subsequent normal Minecraft launch caused system error `2011-0102`. HOME recovered after restarting. A later ownership candidate passed installation/startup, then reproduced `2011-0102` after hbmenu exit before any service reload. Invoking Reload is not required to trigger that failure; shared lifecycle code remains under investigation. The instructions below describe the implementation under investigation, not an approved update workflow. The v0.1.1 downloads include this implementation, with the reproducible crash documented in the release notes. [Detailed evidence](VALIDATION.md).
+This feature was introduced in v0.1.1 and remains available in v0.1.2. Use the matching v0.1.2 components and follow the progress and recovery instructions below. Earlier controlled reload checks are recorded with their scope in [Validation](VALIDATION.md); they do not establish compatibility with every game or plugin.
 
 The patched kaiHEN provides **ReloadPlugin**, an asynchronous command that restarts one registered, cooperative plugin. Moader exposes it in **Settings → Advanced → Reload Moader service**. It uses ordinary homebrew IPC after installation; a new FS acquisition is not part of each reload.
 

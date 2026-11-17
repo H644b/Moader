@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the recorded prerelease from committed source and pinned binaries."""
+"""Package the recorded release from committed source and pinned binaries."""
 from pathlib import Path, PurePosixPath
 import argparse
 import datetime

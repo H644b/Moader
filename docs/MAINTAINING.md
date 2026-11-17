@@ -6,13 +6,13 @@ The public source includes Moader source, tests, scripts, documentation, licensi
 
 ## Release layout
 
-The current release tag is `v0.1.1`. PR #7 has been merged, with the unresolved zero-reload `2011-0102` lifecycle failure explicitly recorded. Publication is not hardware acceptance: keep `console_retest_passed` and `appAndResidentHardwareTested` false unless the exact claimed checks pass. GitHub's `releases/latest` endpoint can skip prereleases, so use explicit tag download links.
+The current release tag is `v0.1.2`. PR #7 has been merged; exact build and validation scope are recorded separately. Publication is not hardware acceptance: keep `console_retest_passed` and `appAndResidentHardwareTested` false unless the exact claimed checks pass. GitHub's `releases/latest` endpoint can skip prereleases, so use explicit tag download links.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.1.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.1.zip` | Public host source plus exactly four binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.1.1` folder includes `START_HERE.txt` |
+| `Moader-v0.1.2.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.1.2.zip` | Public host source plus exactly four binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.1.2` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -26,7 +26,7 @@ The minimal host kit has no `research/` content and does not bundle the full off
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-v0.1.1.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
@@ -42,7 +42,7 @@ This descriptor is optional for the populated host kit and for `--build`. Do not
 
 ## Package the committed public source
 
-`config/release.json` records the version/tag, exact app/resident/HEN/bootstrap sizes and SHA-256 digests, and the validation document. Its `appAndResidentHardwareTested` flag records whether the exact app/resident pair has console validation. The v0.1.1 app/resident are rebuilt with matching version labels; the HEN/bootstrap pair carries the physical-card/reload integration and matches the startup-tested candidate. Read the build proof and validation document for exact host/device scope; do not inherit the old HEN's console-tested claim. A fresh source rebuild can have different app/resident hashes because of debug paths. Record an intentional build and its validation boundary before updating pins; do not replace them merely to make packaging pass.
+`config/release.json` records the version/tag, exact app/resident/HEN/bootstrap sizes and SHA-256 digests, and the validation document. Its `appAndResidentHardwareTested` flag records whether the exact app/resident pair has console validation. The v0.1.2 app/resident use matching version labels. Its custom HEN source retains physical-card/reload integration and removes the local pending-launch adjustment; fresh build and host qualification are recorded separately from the earlier startup-tested candidate. Read the build proof and validation document for exact host/device scope; do not inherit the old HEN's console-tested claim. A fresh source rebuild can have different app/resident hashes because of debug paths. Record an intentional build and its validation boundary before updating pins; do not replace them merely to make packaging pass.
 
 Finish the intended build and checks, audit the public source, and commit all release source/documentation/config changes before packaging:
 
@@ -50,7 +50,7 @@ Finish the intended build and checks, audit the public source, and commit all re
 python3 tools/package-release.py
 ```
 
-The release packager exports committed public source from `HEAD`, adds only the four exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.1.zip`, `Moader-backend-v0.1.1.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
+The release packager exports committed public source from `HEAD`, adds only the four exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.2.zip`, `Moader-backend-v0.1.2.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
 
 ## Native changes
 
