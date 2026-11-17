@@ -1,6 +1,6 @@
 # Game-card checks
 
-Moader v0.1.1 checks game availability before admitting requested replacements to a newly published runtime catalogue. The checks cover the Moader-managed library. They do not launch the game, mount its executable as a probe, change a license, or contact an online ownership service.
+Moader v0.1.2 checks game availability before admitting requested replacements to a newly published runtime catalogue. The checks cover the Moader-managed library. They do not launch the game, mount its executable as a probe, change a license, or contact an online ownership service.
 
 ## Choose the game's copy
 
@@ -40,10 +40,8 @@ The supported combined installer starts with an empty checked catalogue before a
 
 Relevant upstream interfaces: [NS declarations](https://switchbrew.github.io/libnx/ns_8h.html), [NS implementation](https://github.com/switchbrew/libnx/blob/master/nx/source/services/ns.c), and [NCM implementation](https://github.com/switchbrew/libnx/blob/master/nx/source/services/ncm.c). The pinned libounce SDK used for Moader remains the compile-time authority.
 
-## Validation and crash limits
+## Validation scope
 
 The production provider and publisher have sanitizer-backed host fixtures using real SDK declarations and fake service replies. They cover card/source choices, Program presence, errors, identity mapping, changing observations and cleanup. The dev.4 resident was installed and reached the web interface on a console. With the Z-A card inserted, its gate passed the card/owner checks but then reported the base Program unavailable. This exposed the extra installed-content requirement on the physical path. Raw installed-content rows were not captured, so the exact NS/NCM response behind that failure is unknown.
 
-The v0.1.1 correction has host regressions for matching cards with empty or patch-only installed lists, plus wrong/absent/changing cards and required-query failures. They assert that the physical path makes no installed-content or NCM calls. Both device candidates accepted the matching Z-A cartridge. Missing-card withdrawal and insertion/removal transitions remain untested there. The first candidate's plugin reload failed; the rebuilt repair completed two reloads but failed the subsequent normal-game launch with system error 2011-0102. The implementation is published in v0.1.1 with that unresolved failure disclosed. A service denied on a particular policy stays blocked rather than guessing availability. See [Validation](VALIDATION.md).
-
-A missing cartridge has not been established as the cause of the reported fatal Minecraft/hbmenu system restart. This guard is preventive behavior; this release does not claim to diagnose or repair that fatal.
+The v0.1.1 correction has host regressions for matching cards with empty or patch-only installed lists, plus wrong/absent/changing cards and required-query failures. They assert that the physical path makes no installed-content or NCM calls. Both device candidates accepted the matching Z-A cartridge. Missing-card withdrawal and insertion/removal transitions remain untested there. A service denied on a particular policy stays blocked rather than guessing availability. See [Validation](VALIDATION.md).

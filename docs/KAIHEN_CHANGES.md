@@ -1,8 +1,6 @@
 # How Moader modifies kaiHEN
 
-Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload alongside the earlier pending-launch fix and read-only game trace. The application, resident service and FS hook have separate roles and validation records.
-
-**v0.1.1 release:** two repaired reload transactions completed, but the subsequent normal Minecraft launch caused system error 2011-0102. The additional ownership changes described below passed installation/startup after the host restoration correction; a subsequent fresh-boot game-launch check failed with no Reload command invoked. The complete lifecycle is not accepted; publication does not establish a fix. See [Validation](VALIDATION.md).
+Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload and the read-only game trace. The application, resident service and FS hook have separate roles and validation records.
 
 | Record | Value |
 | --- | --- |
@@ -14,9 +12,11 @@ Moader publishes the full modified source and the complete patch against the pin
 | Source, patch and HEN/bootstrap digests | [kaihen-mo.json](../software-builds/kaihen-mo.json) |
 | Shipping app/resident and HEN/bootstrap sizes and hashes | [release.json](../config/release.json) |
 
-## Pending homebrew launch
+## v0.1.2 source selection
 
-An R-button press can occur while SmileBASIC is still active or before opening a Switch 1 game. In `hen/source/game_arm.cpp`, the unsupported-application branch returns success while keeping the native launch pending. It preserves the native target eligibility checks and waits for a suitable application, rather than permanently faulting the pending launch.
+Official kaiHEN [`20261117.1`](https://github.com/ouncebrew/kaihen/releases/tag/20261117.1) was inspected. Its [released `waitForProcess` implementation](https://github.com/ouncebrew/kaihen/blob/3695f364f9270686aa72cc39627bb1281752b2d3/hen/source/game_arm.cpp) still returns `UnexpectedState` when an observed title is outside the native application range and the bridge-process exception is inactive. It does not contain a replacement for Moader's removed local workaround. This is a source/history finding, not a Switch 1 gameplay test.
+
+Moader retains the qualified `20261114c` / `e897f991524590833b82fbe8d63a3c6775fb8101` base. The newer official command 23 is `GetLoaderRoot`, while Moader's retained ABI assigns that number to plugin information; the newer release is not integrated. Use the matched Moader components rather than mixing these protocol-7 implementations. The v0.1.2 native rebuild, complete patch replay, source/component checks and host regressions passed. Exact source, patch and component identities are recorded in the linked build proof and release descriptor; new hardware validation remains separate.
 
 ## Read-only game trace
 
@@ -32,13 +32,13 @@ The worker stages the selected fixed-path executable and prepares its package be
 
 Deadlines record uncertainty; they do not cancel native IPC or prove a process exited. Restoration errors remain separate from the primary failure. Unproved cleanup quarantines the operation and retains its resources instead of allowing another writer or launch attempt. [Usage and recovery](PLUGIN_RELOAD.md).
 
-The offline repair uses elapsed-time polling for reload's initial empty park and subsequent real Loader requests. It preserves the established synchronous Bootstrap/GameArm parking entry points and all gate invariant/receipt checks. Progress reporting uses a lock-free atomic store; it adds no service call between waiter selection and cancellation. Diagnostics retain primary gate steps before restoration changes them, and command 27 returns cached state without probing Loader. RO memory requests also provide valid output-handle storage to the SDK response parser. These changes address weaknesses reproduced in host fixtures; they do not establish the exact cause of the earlier device failure.
+The offline repair uses elapsed-time polling for reload's initial empty park and subsequent real Loader requests. It preserves the established synchronous Bootstrap/GameArm parking entry points and all gate invariant/receipt checks. Progress reporting uses a lock-free atomic store; it adds no service call between waiter selection and cancellation. Diagnostics retain primary gate steps before restoration changes them, and command 27 returns cached state without probing Loader. RO memory requests also provide valid output-handle storage to the SDK response parser. These changes address timing and reply-layout cases reproduced in host fixtures; their device scope is recorded separately.
 
-The subsequent ownership repair tracks the donor object actually installed in a game's CodeFS entry and compares its address, object and metadata during host-exit cleanup. An entry address reused for another object no longer keeps the old package pinned. The SM proxy also retains session context and partial join state when a thread wait or close fails, including an unstarted thread that could not be closed. Package-open replies now supply the SDK's required output-handle storage. None of these changes is established as the cause or complete fix for the later `2011-0102` fatal. Full address/object/metadata reuse and the stock server's actual allocation budget remain outside the host fixture's proof.
+The package ownership checks track the donor object actually installed in a game's CodeFS entry and compares its address, object and metadata during process cleanup. An entry address reused for another object no longer keeps the old package pinned. The SM proxy also retains session context and partial join state when a thread wait or close fails, including an unstarted thread that could not be closed. Package-open replies now supply the SDK's required output-handle storage. Full address/object/metadata reuse and the stock server's actual allocation budget remain outside the host fixture's proof.
 
 The bootstrap now transfers a retained PM launch capability and the donor launch specification to HEN through an additive control command. Its host input layout stays unchanged. This needs a **matching modified HEN and bootstrap pair**, plus the rebuilt plugin runtime and cooperative resident. Updating a file cannot add commands to an older running HEN.
 
-The host installer also has a separate Loader-restoration adapter: [loader-restoration.cjs](../tools/loader-restoration.cjs) uses a checked receive acknowledgment, observed through [loader-observer.cjs](../tools/loader-observer.cjs), before clearing its parking event. The observer uses the already verified diagnostic RO and closes before that process is retired. This changes the installation procedure, not the HEN/bootstrap binary pair or either pinned acquisition provider. The failed pre-HEN installation and the adapter's validation limits are recorded in [Validation](VALIDATION.md).
+The host installer also has a separate Loader-restoration adapter: [loader-restoration.cjs](../tools/loader-restoration.cjs) uses a checked receive acknowledgment, observed through [loader-observer.cjs](../tools/loader-observer.cjs), before clearing its parking event. The observer uses the already verified diagnostic RO and closes before that process is retired. This changes the installation procedure, not the HEN/bootstrap binary pair or either pinned acquisition provider. The adapter's validation limits are recorded in [Validation](VALIDATION.md).
 
 ## Source changes
 

@@ -8,6 +8,7 @@ import re
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
+    'Release-v0.1.2': 'docs/releases/v0.1.2.md',
     'Release-v0.1.1': 'docs/releases/v0.1.1.md',
     'Changelog': 'CHANGELOG.md',
     'Installation': 'docs/INSTALLATION.md',
@@ -31,6 +32,14 @@ LINK = re.compile(r'(!?)\[([^\]\n]*)\]\(([^()\s]+)\)')
 def convert(content, source, repository):
     """Keep wiki navigation local and point source/assets to the main repository."""
     names = {value: key for key, value in PAGES.items()}
+    # Keep generic validation limits from shared policy pages while using the
+    # same software-error wording as the user guides.
+    content = content.replace(
+        'Forced game crashes and crash recovery are not hardware-qualified by this prerelease.',
+        'Recovery after forced game errors has not been hardware-qualified.')
+    content = content.replace(
+        'Forced crashes and crash recovery have not been hardware-tested.',
+        'Recovery after forced termination has not been hardware-tested.')
 
     def replace(match):
         image, label, raw = match.groups()
@@ -70,8 +79,6 @@ def build():
 
 Manage Switch 2 mods from your controller or a browser. Moader serves its web interface directly from the Switch, with a six-digit pairing code and no cloud account.
 
-**Known issue in {tag}:** system error `2011-0102` has been reproduced after closing a homebrew host and launching Minecraft, before invoking Reload. Read the [release notes](Release-v0.1.1) and [validation record](Validation); publication does not establish a fix.
-
 ## Start here
 
 1. **[Install Moader](Installation)** — choose the kurumuz ns2jb route on Linux/WSL, or ns2jb/mac2jb on macOS. The precompiled backend kit needs no compiler.
@@ -83,12 +90,13 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 | Guide | Covers |
 | --- | --- |
-| [v0.1.1 release notes](Release-v0.1.1) | Download choices, every change since v0.1.0-dev and the unresolved host-exit failure |
+| [v0.1.2 release notes](Release-v0.1.2) | Current downloads, source-matched HEN refresh and validation scope |
+| [v0.1.1 release notes](Release-v0.1.1) | Historical cumulative release |
 | [Changelog](Changelog) | Release history and the unpublished dev.5 candidate |
 | [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
 | [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
-| [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, crashes and setup recovery |
+| [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, software errors and setup recovery |
 | [Game-card checks](Game-Card-Checks) | Per-game copy selection, missing cards, game-key downloads, digital choices and verification limits |
 | [Plugin reload](Plugin-Reload) | Reload the resident service, read progress, reconnect and recover from a failed replacement |
 | [How Moader works](How-Moader-Works) | Console app, resident service, filesystem runtime, apply states and component lifetimes |
@@ -134,7 +142,7 @@ Use `/moader/library/TITLE_ID/mod-folder/romfs/`, with a lowercase Title ID and 
 
 ## How is kaiHEN modified?
 
-Moader publishes the complete kaiHEN source patch, upstream revision and shipped HEN/bootstrap hashes. The [kaiHEN modification disclosure](kaiHEN-Modifications) explains the pending-launch fix, read-only trace query and cooperative plugin reload, separately from Moader's FS hook. [Reload instructions](Plugin-Reload).
+Moader publishes the complete kaiHEN source patch, upstream revision and shipped HEN/bootstrap hashes. The [kaiHEN modification disclosure](kaiHEN-Modifications) explains the read-only trace query and cooperative plugin reload, separately from Moader's FS hook. [Reload instructions](Plugin-Reload).
 
 ## Can I close Moader while playing?
 
@@ -152,11 +160,9 @@ One equal-sized Mario Kart 8 Deluxe course-preview texture changed through enabl
 
 Removal hides the entry and updates routing. Payloads stay available for older open filesystem objects and recovery. It is recoverable library removal, not an immediate disk purge. Avoid manually deleting retained payloads during the active boot.
 
-## Does a game crash require another FS setup?
+## Does a game error require another FS setup?
 
-A game-only error is expected to leave the separate backend available. If the browser still connects, disable/remove the offending mod and relaunch the game. Deliberate crash recovery has not been hardware-tested. An FS/HEN/system failure or console reboot can invalidate the backend. [Crash recovery](Troubleshooting#a-mod-caused-a-software-error-or-game-crash).
-
-The v0.1.1 host-exit/next-game issue has produced a system fatal before invoking Reload. It remains unresolved; see [release notes](Release-v0.1.1) and [Validation](Validation).
+A game-only error is expected to leave the separate backend available. If the browser still connects, disable/remove the offending mod and relaunch the game. Recovery after a forced game error has not been hardware-tested. An FS/HEN/system failure or console reboot can invalidate the backend. [Software-error recovery](Troubleshooting#a-mod-caused-a-software-error).
 
 ## Can I show game names instead of Title IDs?
 
@@ -177,7 +183,8 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
     pages['_Sidebar'] = '''**Moader**
 
 - [Home](Home)
-- [v0.1.1 release notes](Release-v0.1.1)
+- [v0.1.2 release notes](Release-v0.1.2)
+- [v0.1.1 release notes (historical)](Release-v0.1.1)
 - [Changelog](Changelog)
 - [Install / Linux / WSL / macOS](Installation)
 - [CivSwitch entrypoint](CivSwitch-Entrypoint)

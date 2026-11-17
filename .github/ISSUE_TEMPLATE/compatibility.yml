@@ -12,8 +12,8 @@ body:
     id: version
     attributes:
       label: Moader version
-      description: Release tag or source commit; v0.1.1 has an unresolved game-exit crash.
-      placeholder: v0.1.1
+      description: Release tag or source commit used for this report (for example, v0.1.2).
+      placeholder: v0.1.2
     validations:
       required: true
   - type: input

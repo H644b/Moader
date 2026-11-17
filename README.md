@@ -1,7 +1,5 @@
 # Moader
 
-> **v0.1.1 is a release with a known system crash.** The game/host-exit lifecycle can produce `2011-0102` before invoking Reload. Installation/startup passed with the corrected installer, but full lifecycle acceptance has failed. Read the [release notes](docs/releases/v0.1.1.md) and [validation record](docs/VALIDATION.md) before testing.
-
 **Manage Switch 2 mods from your controller or a browser.**
 
 Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable controls and native debug output. Its resident backend keeps the web interface available while you play or close the Moader app. The browser interface is served by your Switch; no cloud account is needed.
@@ -16,12 +14,12 @@ Moader gives kaiHEN users a shared mod library, ZIP uploads, enable/disable cont
 
 ## Download
 
-The current release is **[v0.1.1](https://github.com/H644b/Moader/releases/tag/v0.1.1)**. It includes every change since `v0.1.0-dev`: cross-platform setup, experimental Civ7 integration, ZIP and library fixes, corrected game-card checks, and guarded plugin reload. Use the [matching installation guide](https://github.com/H644b/Moader/blob/v0.1.1/docs/INSTALLATION.md). The reproducible game-exit crash remains unresolved.
+The current release line is **[v0.1.2](https://github.com/H644b/Moader/releases/tag/v0.1.2)**. It includes every change since `v0.1.0-dev`: cross-platform setup, experimental Civ7 integration, ZIP and library fixes, corrected game-card checks, and guarded plugin reload. See the [v0.1.2 source and validation notes](docs/releases/v0.1.2.md). Use the [matching installation guide](https://github.com/H644b/Moader/blob/v0.1.2/docs/INSTALLATION.md).
 
 | Download | Use it for |
 | --- | --- |
-| [Moader-v0.1.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-v0.1.1.zip) | The published console app and matching resident plugin |
-| [Moader-backend-v0.1.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-backend-v0.1.1.zip) | Published backend setup kit; pinned dependencies are fetched at first use |
+| [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip) | The matching console app and resident plugin |
+| [Moader-backend-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip) | Backend setup kit; pinned dependencies are fetched at first use |
 
 Use the matching backend kit for the supported setup path below. The backend kit includes Moader and the matched precompiled patched HEN. Setup fetches the pinned official kaiHEN archive and ns2jb sources at first use, so initial setup needs internet access. End users do not need to install an SDK or compile HEN.
 

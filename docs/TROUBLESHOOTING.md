@@ -4,7 +4,7 @@ Start with the message in Moader's **ZL debug view** or browser debug panel. Not
 
 ## The library lags or temporarily disappears
 
-The v0.1.1 release includes the v0.1.0-dev.4 inventory fixes; its game-exit crash remains unresolved. Keep app and resident versions matched using the [update instructions](INSTALLATION.md#updating). These fixes keep cached complete inventories available during import and remove recursive payload scans from ordinary state polling. A busy import rejects another library change with an explanation.
+The v0.1.2 release retains the inventory fixes introduced in v0.1.0-dev.4. Keep app and resident versions matched using the [update instructions](INSTALLATION.md#updating). These fixes keep cached complete inventories available during import and remove recursive payload scans from ordinary state polling. A busy import rejects another library change with an explanation.
 
 If an SD scan fails, the last complete list remains visible with a separate inventory warning. Check SD access, then use **Refresh** in the browser. The resident also retries in its background loop. A successful empty list and an unreadable library are different states; do not erase library folders or saved preferences to troubleshoot an unreadable scan.
 
@@ -20,7 +20,7 @@ If routing withdrawal failed or is awaiting acknowledgement, the detail says so;
 
 ## A red runtime indicator after another operation failed
 
-In v0.1.0-dev.4, runtime status uses the filesystem's result, and a stale selection or failed interface operation has its own error message. A failed scan has a separate inventory warning. A genuine nonzero runtime result remains visible. Read the result and per-mod details instead of treating all three as a backend crash.
+In v0.1.0-dev.4, runtime status uses the filesystem's result, and a stale selection or failed interface operation has its own error message. A failed scan has a separate inventory warning. A genuine nonzero runtime result remains visible. Read the result and per-mod details instead of treating all three as a backend failure.
 
 ## The app works, but the browser stops when I close it
 
@@ -36,7 +36,7 @@ Copying `Moader.nro` installs the app. Copying `moader.nso` only stages a plugin
 - Check whether a guest network, client isolation or VPN is separating the devices.
 - If the console rebooted, its previously running backend is gone; use the supported fresh setup for the new boot.
 
-A connection failure alone does not identify a crash, sleep state or changed address. Keep the last error rather than assuming which component stopped. Use the app's reconnect prompt if available.
+A connection failure alone does not identify a stopped process, sleep state or changed address. Keep the last error rather than assuming which component stopped. Use the app's reconnect prompt if available.
 
 ## The pairing code is rejected
 
@@ -81,11 +81,11 @@ Use matching components from the current release. The product reads closed nativ
 
 Check whether the runtime is connected, whether backend setup completed, and whether native rows update after a management request. Preserve the displayed error if snapshots are unavailable rather than changing the live writer file or replaying setup.
 
-## A mod caused a software error or game crash
+## A mod caused a software error
 
-For a **game-only** crash, the separate resident service/FS runtime is expected to remain available. If the browser still connects, disable/remove the offending mod and relaunch the game. A normal game-only error should not itself require reacquiring FS.
+For a **game-only** error, the separate resident service/FS runtime is expected to remain available. If the browser still connects, disable/remove the offending mod and relaunch the game. A normal game-only error should not itself require reacquiring FS.
 
-Deliberate crash recovery was not tested. FS, HEN or system crashes—and a console reboot—can invalidate the backend context and require fresh qualified setup. If the service is unavailable, preserve the error/report and establish the current console state before choosing recovery.
+Recovery after a forced game error was not tested. FS, HEN or system failures—and a console reboot—can invalidate the backend context and require fresh qualified setup. If the service is unavailable, preserve the error/report and establish the current console state before choosing recovery.
 
 ## Direct ns2jb never reaches the held FS-ready state
 

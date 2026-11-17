@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-This source builds the **v0.1.1 release**. It includes protocol-7 service reload, the cartridge correction and the checked host installer. A fresh-boot Minecraft/hbmenu exit test still produced `2011-0102` before invoking Reload; the cause is unresolved. The v0.1.1 app/resident carry matching version labels and have host validation only. The HEN/bootstrap pair and native FS executable hook match the most recent startup-tested candidate. See [Validation](VALIDATION.md) and the [release notes](releases/v0.1.1.md) for the exact limits.
+This source targets the **v0.1.2 release**. It retains protocol-7 service reload, corrected cartridge checks and the checked host installer while removing Moader's local pending-launch adjustment from the custom HEN source. The qualified official input remains `20261114c` at source base `e897f991524590833b82fbe8d63a3c6775fb8101`. Fresh native build and host qualification are pending; prior hardware records do not transfer automatically to the rebuilt components. See [Validation](VALIDATION.md) and the [release notes](releases/v0.1.2.md).
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 

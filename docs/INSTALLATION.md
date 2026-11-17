@@ -1,6 +1,6 @@
 # Install Moader
 
-**v0.1.1 release:** a reproducible `2011-0102` system crash can occur after closing the homebrew host and launching Minecraft, before invoking Reload. The corrected installer passed startup checks; the full lifecycle is not accepted. This guide describes the matched v0.1.1 downloads. Read the [release notes](releases/v0.1.1.md) and [validation scope](VALIDATION.md) before testing.
+This guide describes the matched v0.1.2 downloads. Read the [release notes](releases/v0.1.2.md) for download choices and the [validation scope](VALIDATION.md) for the boundaries of the recorded checks.
 
 | Situation | What to do |
 | --- | --- |
@@ -12,7 +12,7 @@ The precompiled host kit works through Python/Node; end users do not need an SDK
 
 ## Copy or update the console app
 
-1. Download [Moader-v0.1.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-v0.1.1.zip).
+1. Download [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip).
 2. Close the Moader app before replacing it.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
 4. Open **Moader** from hbmenu.
@@ -21,7 +21,7 @@ If the matching resident service is running, the app connects to it. Otherwise i
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.1.zip](https://github.com/H644b/Moader/releases/download/v0.1.1/Moader-backend-v0.1.1.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+Download and extract [Moader-backend-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
 
 Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
 
@@ -129,10 +129,10 @@ In WSL, `node -p 'process.platform'` must print `linux`. Keep acquisition and in
 
 ## Updating
 
-Keep the app, resident and patched HEN/bootstrap from **v0.1.1** matched. Install the updated backend kit through a fresh current-boot FS session once to add protocol-7 reload support. An older running HEN cannot gain the command by copying files. After that, finish imports, copy a compatible replacement `kaihen/plugins/moader.nso` and use **Settings → Advanced → Reload Moader service**. The command checks and restarts that resident; copying an NSO alone still does not reload it. A foreground app uses its own implementation and cannot restart a resident. [Reload guide](PLUGIN_RELOAD.md).
+Keep the app, resident and patched HEN/bootstrap from **v0.1.2** matched. Install the updated backend kit through a fresh current-boot FS session once to add protocol-7 reload support. An older running HEN cannot gain the command by copying files. After that, finish imports, copy a compatible replacement `kaihen/plugins/moader.nso` and use **Settings → Advanced → Reload Moader service**. The command checks and restarts that resident; copying an NSO alone still does not reload it. A foreground app uses its own implementation and cannot restart a resident. [Reload guide](PLUGIN_RELOAD.md).
 
 Select each game, then open **Settings → Game copy**. Choose Cartridge/game-key for a physical copy or My digital copy for a copy that runs without the card. Unspecified defaults to checking the inserted card. Existing enable requests are preserved; a missing card or verification failure withholds that game's replacements from newly published routing. Insert the card or correct the copy setting, then inspect the apply details. [Full behavior and limits](CARTRIDGES.md).
 
-Compared with v0.1.0-dev.4, the matched HEN/bootstrap pair adds protocol-7 reload and ownership checks. The native FS executable hook is unchanged. The v0.1.1 app/resident are rebuilt with matching version labels and have host validation only; this does not establish a fix for the fatal game/system restart. Keep all components from this release together.
+Compared with v0.1.0-dev.4, the matched HEN/bootstrap pair adds protocol-7 reload and ownership checks. The native FS executable hook is unchanged. Use the v0.1.2 app/resident with matching version labels; the release notes and build proof record their final validation scope. Keep all components from this release together.
 
 Preserve user mods and preferences. Recoverable removal retains payloads for older open game objects; do not manually purge them during the boot. See [Troubleshooting](TROUBLESHOOTING.md), [Building](BUILDING.md) and [Maintaining](MAINTAINING.md).

@@ -34,7 +34,7 @@ Upstream warns that receiving a blacklist update can prevent Civilization VII fr
 
 ## HEN changes and Civ7 entrypoint adaptations
 
-Moader's [kaiHEN modification disclosure](KAIHEN_CHANGES.md) records the exact source patch against upstream `e897f991524590833b82fbe8d63a3c6775fb8101`. The current patch includes the pending-launch fix, read-only trace query and cooperative reload, with a matched HEN/bootstrap build. This is separate from Civ7's host adaptation.
+Moader's [kaiHEN modification disclosure](KAIHEN_CHANGES.md) records the exact source patch against upstream `e897f991524590833b82fbe8d63a3c6775fb8101`. The current patch includes the read-only trace query and cooperative reload, with a matched HEN/bootstrap build. This is separate from Civ7's host adaptation.
 
 The upstream Civ7 port also describes a target-specific thread-handle adaptation: Civ7 uses tagged thread handles and needs a try-wait adapter. That entrypoint adaptation has its own scope and validation requirements, separate from Moader's kaiHEN source patch. [Upstream porting notes](https://github.com/s8n/civ7-fs-kaihen/blob/51a804cbce09216e1a42e65929644fd436b4c8bf/README.md#porting-notes).
 
@@ -48,7 +48,7 @@ An already-current **FS-only held session** from the exact s8n revision is a can
 
 ## Prepare the local dependencies
 
-Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.1** backend kit or a matching source checkout. The app and browser identify the release as `0.1.1`; the known lifecycle failure is documented in [Validation](VALIDATION.md).
+Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.2** backend kit or a matching source checkout. Keep the app, resident and backend from the same release; [Validation](VALIDATION.md) records the scope of their checks.
 
 To fetch or verify only the pinned host source, without Node/SDK setup, acquisition or console contact:
 
@@ -72,7 +72,7 @@ These commands fetch/check the pinned source and inputs locally; they do not lau
 
 ## Experimental setup
 
-This experimental workflow has passed host checks using pinned upstream sources and synthetic sessions. Its privileged installation and console handoff remain unverified on hardware. Use the v0.1.1 backend kit or a matching checkout.
+This experimental workflow has passed host checks using pinned upstream sources and synthetic sessions. Its privileged installation and console handoff remain unverified on hardware. Use the v0.1.2 backend kit or a matching checkout.
 
 ### 1. Keep an existing session, or acquire FS separately
 
