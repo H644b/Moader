@@ -4,7 +4,17 @@
 
 The source removes Moader's local pending-launch workaround while retaining the existing reload, cartridge and setup features. Official kaiHEN `20261117.1` was checked; this release keeps the qualified `20261114c` / `e897f991524590833b82fbe8d63a3c6775fb8101` base because the newer command-23 interface conflicts with Moader's reload ABI. [Source disclosure](KAIHEN_CHANGES.md).
 
-The HEN, bootstrap, app, resident and diagnostic app compiled from an isolated source snapshot with the selected SDK14 toolchain. The complete patch replay reproduces the current native source. Component hashes, NSO bounds and section hashes, decompressed privacy checks, NACP version metadata and unchanged FS prebuilt qualification passed. The full `make check` suite passed with AddressSanitizer/UndefinedBehaviorSanitizer, alongside installer, resident-control, setup and both host-profile qualification regressions. Independent review found matching source inputs and artifact descriptors. These are build and host checks with scripted kernel boundaries; no new console or gameplay validation is claimed. The earlier records below retain their original component and workflow boundaries. See [v0.1.2 release notes](releases/v0.1.2.md).
+The HEN, bootstrap, app, resident and diagnostic app compiled from an isolated source snapshot with the selected SDK14 toolchain. The complete patch replay reproduces the current native source. Component hashes, NSO bounds and section hashes, decompressed privacy checks, NACP version metadata and unchanged FS prebuilt qualification passed. The full `make check` suite passed with AddressSanitizer/UndefinedBehaviorSanitizer, alongside installer, resident-control, setup and both host-profile qualification regressions. Independent review found matching source inputs and artifact descriptors. These were the publication-time build and host checks with scripted kernel boundaries. A later independent owner report records the three functional checks below. The earlier historical records retain their original component and workflow boundaries. See [v0.1.2 release notes](releases/v0.1.2.md).
+
+### Independent owner test — 2026-11-17
+
+After publication, the project owner independently tested the release identified as **v0.1.2** and reported **“v0.1.2 — all three passed”**. The three checks were:
+
+- Z-A was allowed with its physical cartridge inserted.
+- Z-A was blocked when the physical cartridge was absent.
+- **Settings → Advanced → Reload Moader service** succeeded and reconnected.
+
+This is owner-reported functional acceptance of those three checks. No agent-run console or RPC actions accompanied this documentation update. Installed component hashes, diagnostic reports/logs and PID/generation captures were not supplied. The report does not establish an extended reload count, new gameplay validation or a Civ7 result. Release artifacts and publication-time metadata remain unchanged.
 
 ## v0.1.1 release
 
