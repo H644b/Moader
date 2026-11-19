@@ -54,8 +54,7 @@ python3 tools/setup-backend.py --host-profile seedsow-malev0 --node "$MOADER_NOD
 python3 tools/setup-backend.py --check --host-profile seedsow-malev0 --node "$MOADER_NODE24"
 export MOADER_AARCH64_OBJCOPY="$PWD/vendor/devkitpro/devkitA64/bin/aarch64-none-elf-objcopy"
 ```
-
-Set the assembler before starting the GUI. On macOS use `export MOADER_AARCH64_CLANG="$(xcrun --find clang)"`; on Linux or WSL2 use `export MOADER_AARCH64_CLANG="$(command -v clang)"`.
+### On macOS use `export MOADER_AARCH64_CLANG="$(xcrun --find clang)"` and on Linux or WSL2 use `export MOADER_AARCH64_CLANG="$(command -v clang)"`
 
 The first command installs the local SDK used by the live helper. The second validates the ZIP's prebuilt matched components, extracts the complete official kaiHEN programs and fetches the pinned Seedsow source closure. It does not compile Moader. The third checks the prepared inputs and should report `hostProfile: "seedsow-malev0"` and `readyForInstallerCheck: true`. Keep the two tool paths set in the terminal that starts the GUI.
 
