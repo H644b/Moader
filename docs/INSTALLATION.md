@@ -19,7 +19,7 @@ The backend has two parts. The resident service keeps managing the library after
 | --- | --- | --- |
 | [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | v0.1.2 backend ZIP |
 | [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | v0.1.2 backend ZIP |
-| [Seedsow Lullaby Demo](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | Current repository source |
+| [Seedsow Lullaby Demo](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v0.1.3 source release](https://github.com/H644b/Moader/releases/tag/v0.1.3) |
 | [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | v0.1.2 backend ZIP |
 
 ### Before either SmileBASIC method

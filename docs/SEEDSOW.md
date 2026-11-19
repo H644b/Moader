@@ -1,6 +1,6 @@
 # Install Moader through Seedsow Lullaby Demo
 
-Use the Seedsow Lullaby Demo method with Moader's current source and the [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen). Choose the computer you're using below. This method builds its own matched app, resident and kaiHEN components outside the v0.1.2 download.
+Seedsow Lullaby Demo support is available in the [v0.1.3 source release](https://github.com/H644b/Moader/releases/tag/v0.1.3). This method builds its own matched app, resident and kaiHEN components for use with the [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen).
 
 One Demo installation on firmware 23.0.1 was verified from macOS. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
 

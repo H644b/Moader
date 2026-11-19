@@ -4,7 +4,7 @@ Moader manages Switch 2 mods from a controller or a web browser. Import mods, tu
 
 The **Moader app** opens from hbmenu, the homebrew launcher. It can manage the library while open. The **backend** loads mods into games and keeps browser access running after you close the app. Set up the backend once after each full reboot.
 
-## Download v0.1.2
+## Prebuilt downloads for v0.1.2
 
 | I want to… | Download | Start here |
 | --- | --- | --- |
@@ -12,7 +12,7 @@ The **Moader app** opens from hbmenu, the homebrew launcher. It can manage the l
 | Set up the backend for this boot | [Moader-backend-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip) | [Choose a setup method](docs/INSTALLATION.md#start-the-backend-for-this-boot) |
 | Update a compatible running service | [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip) | [Reload the resident service](docs/PLUGIN_RELOAD.md#use-it) |
 
-The release kit includes prebuilt components for SmileBASIC setup. The source tree also has a [Seedsow Lullaby Demo guide](docs/SEEDSOW.md). The [experimental CivSwitch profile](docs/CIV7.md) has host test coverage. See the [release files and checksums](https://github.com/H644b/Moader/releases/tag/v0.1.2).
+The release kit includes prebuilt components for SmileBASIC setup. For Seedsow Lullaby Demo, use the [v0.1.3 source release](https://github.com/H644b/Moader/releases/tag/v0.1.3) and the [Seedsow guide](docs/SEEDSOW.md). The [experimental CivSwitch profile](docs/CIV7.md) has host test coverage. See the [release files and checksums](https://github.com/H644b/Moader/releases/tag/v0.1.2).
 
 ## Use Moader
 

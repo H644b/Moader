@@ -4,7 +4,7 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-The latest published release is **v0.1.2**. Use the [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and its component proof to reproduce that layout. Current `main` has a different matched Seedsow build. Its proof and binaries cannot be used with v0.1.2's recorded digests.
+**v0.1.2** is the latest release with prebuilt downloads. Use the [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and its component proof to reproduce that layout. Current `main` has a different matched Seedsow build. Its proof and binaries cannot be used with v0.1.2's recorded digests.
 
 | Artifact | Contents |
 | --- | --- |
