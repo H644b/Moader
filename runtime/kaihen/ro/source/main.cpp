@@ -41,11 +41,24 @@ class RoServer {
             }
 
             Handle port = INVALID_HANDLE;
-            Result rc =
-                smRegisterServiceInSpace(&port, ServicePorts[i].space,
-                                         smEncodeName(ServicePorts[i].name), false, 4);
+            const SmServiceName name = smEncodeName(ServicePorts[i].name);
+            Result rc = smRegisterServiceInSpace(
+                &port, ServicePorts[i].space, name, false, 4);
+            if (R_FAILED(rc) && ServicePorts[i].fs_memory && !dmnt_stale_released_) {
+                // Stock RO's name may survive its process as a dead SM entry.
+                // A fresh boot can also have no stale entry, so a failed
+                // Unregister must never suppress a successful Register.
+                const Result stale = smUnregisterServiceInSpace(ServicePorts[i].space, name);
+                if (R_SUCCEEDED(stale)) {
+                    dmnt_stale_released_ = true;
+                    rc = smRegisterServiceInSpace(
+                        &port, ServicePorts[i].space, name, false, 4);
+                }
+            }
             if (R_SUCCEEDED(rc)) {
                 ports_[i].reset(port);
+                if (ServicePorts[i].fs_memory)
+                    dmnt_stale_released_ = true;
             }
         }
     }
@@ -148,6 +161,7 @@ class RoServer {
     ounce::HandleOwner sessions_[MaxSessions];
     RoSession clients_[MaxSessions] = {};
     bool fs_memory_[MaxSessions] = {};
+    bool dmnt_stale_released_ = false;
 };
 
 RoServer g_server;

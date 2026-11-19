@@ -113,7 +113,10 @@ async function control({Session,packet,argumentsWithPid,protocol:p,state={error:
 }
 function runtimeDependencies(run,state){
  process.env.NS2_RUN_DIR=run;
- const hosts=require('./host-session.cjs'),context=hosts.inferredId(run)==='civ7-s8n'?hosts.qualifyRun(run,'civ7-s8n',ROOT,{retired:true}):null;
+ const hosts=require('./host-session.cjs'),id=hosts.inferredId(run);
+ check(id!=='seedsow-malev0',
+  'Seedsow resident control requires the live Seedsow listener owner; standalone control is not admitted');
+ const context=id==='civ7-s8n'?hosts.qualifyRun(run,'civ7-s8n',ROOT,{retired:true}):null;
  const engine=context?.runtimeRoot||path.join(ROOT,'research/sources/ns2jb/engine'),load=name=>context?hosts.load(context,name):require(path.join(engine,name));
  const rpc=load('shared/rpc.cjs'),endpoint=load('switch2/tools/endpoint.cjs');if(context)require('./host-transport.cjs').install(context,state);else guardTransports({rpc,endpoint},state);
  check(rpc.a?.session===path.basename(run),'RPC configuration belongs to another run; use a fresh process for this run');

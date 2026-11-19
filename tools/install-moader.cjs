@@ -43,9 +43,12 @@ async function main(args=process.argv.slice(2)){
  const prepared=fromSnapshot?await qualifyPrepared(JSON.parse(await fs.readFile(path.resolve(args[1]),'utf8'))):await prepare(selected);
  const profile=hosts.preparedProfile(prepared.hostProfile);check(!selected||selected===profile.id,'Prepared snapshot host profile differs from --host-profile');
  if(args[0]==='--check'){console.log('Prepared read-only local Moader snapshot: '+prepared.manifestFile+'. No console connection opened.');return;}
- const run=path.resolve(fromSnapshot?args[2]:args[0]),session=path.basename(run);check(/^switch2-[A-Za-z0-9]+$/.test(session),'Invalid run directory');
+ const run=path.resolve(fromSnapshot?args[2]:args[0]),session=path.basename(run);
+ check((profile.id==='seedsow-malev0'?/^switch-[A-Za-z0-9]+$/:/^switch2-[A-Za-z0-9]+$/).test(session),'Invalid run directory');
+ check(hosts.inferredId(run)===profile.id,'Prepared host profile and selected run differ');
  require('../runtime/modloader/install.cjs').verifiedRun(run);
- const host=profile.id==='civ7-s8n'?hosts.qualifyRun(run,profile.id):{profile,run,target:'smilebasic',runtimeRoot:profile.sourceDirectory};hosts.bind(host);
+ const host=profile.id===hosts.DEFAULT?{profile,run,target:'smilebasic',runtimeRoot:profile.sourceDirectory}:
+  hosts.qualifyRun(run,profile.id);hosts.bind(host);
  const record={session,started:new Date().toISOString(),status:'preparing',complete:false,manifest:prepared};
  const file=path.join(run,'moader-install.json'),shared=path.join(run,'ns2jb-modloader-install.json');
  await fs.writeFile(file,JSON.stringify(record,null,2)+'\n',{flag:'wx',mode:0o600});
@@ -56,12 +59,16 @@ async function main(args=process.argv.slice(2)){
   record.status='installing-filesystem';await save();
   record.runtime=await require('./install-runtime.cjs').install(run,path.join(project,'state',session),prepared,host);
   record.status='starting-kaihen';await save();
-  await new Promise((resolve,reject)=>{
+  if(profile.id==='seedsow-malev0'){
+   // The held producer and installer must keep one process-wide socket and
+   // uncertainty latch. A child process would lose both ownership guarantees.
+   await require('./install-kaihen.cjs').main([run,prepared.kaihen,prepared.extraFile]);
+  }else await new Promise((resolve,reject)=>{
    const child=spawn(process.execPath,[path.join(__dirname,'install-kaihen.cjs'),run,prepared.kaihen,prepared.extraFile],{stdio:'inherit'});
    child.once('error',reject);child.once('exit',(code,signal)=>code===0?resolve():reject(Error('kaiHEN installation stopped: '+(signal||code))));
   });
   record.status='awaiting-device-tests';record.complete=true;record.finished=new Date().toISOString();await save();
-  console.log('Moader runtime and HEN installed. Keep the '+(profile.target==='civ7'?'Civilization VII':'SmileBASIC')+' session open for the status check. Hardware acceptance tests remain.');
+  console.log('Moader runtime and HEN installed. Keep the '+({civ7:'Civilization VII',seedsow:'Seedsow Lullaby Demo',smilebasic:'SmileBASIC'}[profile.target])+' session open for the status check. Hardware acceptance tests remain.');
  }catch(error){record.status='stopped';record.error=String(error.stack||error);record.inspectBeforeRetry=true;await save();throw error;}
 }
 module.exports={prepare,qualifyPrepared,main};

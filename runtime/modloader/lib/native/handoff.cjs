@@ -31,6 +31,8 @@ async function transition(io,helperPid,journal,save) {
 }
 async function apply(run,{baseline=false,residentDirectory,contextMagic='NS2LFS01'}={}) {
  run=path.resolve(run);const session=path.basename(run),dir=residentDirectory?path.resolve(residentDirectory):path.join(__dirname,'../../state',session);
+ check(require('../../../../tools/host-session.cjs').inferredId(run)!=='seedsow-malev0',
+  'Standalone stock RO handoff is unavailable for the owned Seedsow listener');
  check(path.basename(dir)===session&&['SMODFS01','MKWFS002','NS2LFS01','NS2LFS02'].includes(contextMagic),'Invalid resident handoff context');
  await fs.mkdir(dir,{recursive:true});const file=path.join(dir,'stock-ro-restoration.json');
  const journal={schema:1,session,hardwareValidated:false,baseline,started:new Date().toISOString(),steps:[]};

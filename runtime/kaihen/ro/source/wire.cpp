@@ -5,6 +5,7 @@
 // CMIF server (behaviour only, no code: Request or RequestWithContext, SFCI
 // with version <= 1, raw data at least the header plus the payload).
 #include "wire.h"
+#include "results.h"
 
 #include <cstring>
 #include "switch/sf/hipc.h"
@@ -185,4 +186,25 @@ void roWriteHandleReply(void* base, Result rc, Handle handle) {
 void roWriteJitAliasReply(void* base, Result rc, const KaihenJitAliasInfo* info) {
     const bool send_info = R_SUCCEEDED(rc);
     writeReplyMessage(base, rc, send_info ? info : nullptr, send_info ? sizeof(*info) : 0, 0, INVALID_HANDLE);
+}
+
+void roWriteDiagnosticReply(void* base, Result rc, const void* data, u32 size) {
+    // The largest supported reply is a 128-byte process read plus 56 bytes of
+    // metadata. The special PID header still fits in the 0x100-byte TLS area.
+    if (size > 184 || (size && !data)) {
+        roWriteReply(base, RoResult_BadRequest, 0, false);
+        return;
+    }
+    std::memset(base, 0, MessageSize);
+    HipcRequest hipc = hipcMakeRequestInline(base,
+        .num_data_words = static_cast<u32>((sizeof(CmifOutHeader) + size + 0x10 + 3) / sizeof(u32)),
+        .send_pid = 1,
+    );
+    auto* header = static_cast<CmifOutHeader*>(cmifGetAlignedDataStart(hipc.data_words, base));
+    header->magic = CMIF_OUT_HEADER_MAGIC;
+    header->version = 0;
+    header->result = rc;
+    header->token = RoInterfaceToken;
+    if (size)
+        std::memcpy(header + 1, data, size);
 }

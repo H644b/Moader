@@ -2,6 +2,8 @@
 
 This guide describes the matched v0.1.2 downloads. Read the [release notes](releases/v0.1.2.md) for download choices and the [validation scope](VALIDATION.md) for the boundaries of the recorded checks.
 
+For the separate Apple Silicon source workflow through **Seedsow Lullaby Demo**, use the [Seedsow installation guide](SEEDSOW.md). It is not part of the v0.1.2 backend ZIP.
+
 | Situation | What to do |
 | --- | --- |
 | Matching Moader resident backend is already running this boot | Copy/update the console app |

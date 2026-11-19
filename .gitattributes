@@ -4,6 +4,7 @@ runtime/** -text
 include/moader/runtime*.h -text
 # Unified patches carry empty context lines, including at the patch's EOF.
 software-builds/*.patch whitespace=-blank-at-eol,-blank-at-eof
+integration/*.patch whitespace=-blank-at-eol,-blank-at-eof
 *.png binary
 *.jpg binary
 *.ttf binary

@@ -23,7 +23,8 @@ function materializedFiles(files){
  for(const [dest,source]of Object.entries(mapping)){check(files['targets/civ7/'+source],'Missing Civ7 target artifact');result[dest]=files['targets/civ7/'+source];}return result;
 }
 function resolveProfile(id=DEFAULT,root=ROOT){
- check([DEFAULT,'civ7-s8n'].includes(id),'Unsupported host profile: '+id);
+ check([DEFAULT,'civ7-s8n','seedsow-malev0'].includes(id),'Unsupported host profile: '+id);
+ if(id==='seedsow-malev0')return require('./seedsow-provider.cjs').resolveProfile(root);
  if(id===DEFAULT)return{id,target:'smilebasic',revision:'28f03b5895e5569d8fbc35cbed84906b8f0a65b2',sourceTreeSha256:'7003335a2a426a82156c19653be5e61506a05dd02b5d0490c8bcb4516c5c354a',sourceDirectory:path.join(root,'research/sources/ns2jb/engine'),...require('./host-source-pins.cjs')[DEFAULT]};
  const descriptor=readJson(safeFile(root,'config/civ7-provider.json'));
  check(descriptor.schemaVersion===1&&descriptor.id===id&&descriptor.target==='civ7'&&descriptor.repository==='s8n/civ7-fs-kaihen'&&descriptor.revision==='51a804cbce09216e1a42e65929644fd436b4c8bf'&&descriptor.sourceTreeSha256===CIV_TREE&&descriptor.sourceSha256==='d4bcfcaa1e4debf5dd205a8f99effe38ca272de0d7d9d93d0ef45f7d6c75fe6d'&&descriptor.sourceDirectory==='research/sources/civ7-fs-kaihen','Civ7 provider descriptor differs from the qualified profile');
@@ -58,6 +59,7 @@ function linkedJson(run,file){
  return runJson(run,relative.split(path.sep).join('/'));
 }
 function qualifyRun(run,expected,root=ROOT,{retired=false}={}){
+ if(expected==='seedsow-malev0'||inferredId(run)==='seedsow-malev0')return require('./seedsow-provider.cjs').qualifyRun(run,root,{retired});
  run=path.resolve(run);check(/^switch2-[A-Za-z0-9]+$/.test(path.basename(run)),'Invalid held run directory');
  const result=runJson(run,'result.json');
  const inferred=result.target==='civ7'?'civ7-s8n':DEFAULT,profile=resolveProfile(expected||inferred,root);
@@ -87,12 +89,27 @@ function forRun(run,expected,root=ROOT,options={}){
 }
 function bind(context){
  check(!bound||bound.id===context.profile.id&&(context.profile.id===DEFAULT||bound.run===context.run),'A different host profile/run was imported; use a fresh installer process');
+ if(context.profile.id==='seedsow-malev0'){
+  check(context.loader && context.guard?.error===null && context.runtimeRoot===context.run,
+    'Seedsow source-owned runtime binding is unavailable');
+ }
  bound={id:context.profile.id,run:context.run};
  if(context.profile.id===DEFAULT){process.env.NS2_RUN_DIR=context.run;delete process.env.NS2_TARGET;delete process.env.NS2_TARGET_ROOT;delete process.env.NS2_TARGET_DIR;delete process.env.NS2_PORT_ROOT;return context;}
+ if(context.profile.id==='seedsow-malev0'){
+  process.env.NS2_RUN_DIR=context.run;process.env.NS2_TARGET='seedsow';
+  process.env.NS2_TARGET_ROOT=context.run;
+  delete process.env.NS2_TARGET_DIR;delete process.env.NS2_PORT_ROOT;return context;
+ }
  process.env.NS2_RUN_DIR=context.run;process.env.NS2_TARGET='civ7';process.env.NS2_TARGET_ROOT=context.run;
  delete process.env.NS2_TARGET_DIR;delete process.env.NS2_PORT_ROOT;return context;
 }
 function load(context,relative){
+ if(context.profile.id==='seedsow-malev0'){
+  check(context.guard?.error===null && context.loader && context.loader.run===context.run &&
+    Object.hasOwn(context.profile.runFiles,relative),
+  'Seedsow runtime source is not owned by the held producer');
+  bind(context);return context.loader.load(relative);
+ }
  if(context.profile.id==='civ7-s8n'){
   const current=qualifyRun(context.run,context.profile.id,context.root||ROOT,{retired:!!context.retired});
   check(!context.connectionSha256||context.connectionSha256===current.connectionSha256,'Civ7 connection changed after qualification');
@@ -124,7 +141,9 @@ function privateLoad(context,relative,append=''){
 function compile(context,relative,append){load(context,relative);return privateLoad(context,relative,append);}
 function inferredId(run){
  run=path.resolve(run);const values=[];
+ if(fs.existsSync(path.join(run,'moader-seedsow-session.json')))return'seedsow-malev0';
  for(const name of ['result.json','connection.json','shared/target.json'])if(fs.existsSync(path.join(run,name)))values.push(runJson(run,name));
+ if(values.some(v=>v.target==='seedsow'||v.name==='seedsow'||v.hostProfile?.id==='seedsow-malev0'||v.addresses?.target==='seedsow'||v.addresses?.session==='seedsow'))return'seedsow-malev0';
  return values.some(v=>v.target==='civ7'||v.name==='civ7'||v.addresses?.target==='civ7'||typeof v.token==='string')?'civ7-s8n':DEFAULT;
 }
 module.exports={ROOT,DEFAULT,resolveProfile,qualifySources,binding,preparedProfile,qualifyRun,forRun,load,compile,bind,inferredId,safeFile,runJson,linkedJson,sha,materializedFiles};

@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-This source targets the **v0.1.2 release**. It retains protocol-7 service reload, corrected cartridge checks and the checked host installer while removing Moader's local pending-launch adjustment from the custom HEN source. The qualified official input remains `20261114c` at source base `e897f991524590833b82fbe8d63a3c6775fb8101`. Fresh native build and host qualification are pending; prior hardware records do not transfer automatically to the rebuilt components. See [Validation](VALIDATION.md) and the [release notes](releases/v0.1.2.md).
+The published **v0.1.2 release** retains protocol-7 service reload, corrected cartridge checks and the checked host installer, with the qualified official `20261114c` base at `e897f991524590833b82fbe8d63a3c6775fb8101`. This source branch adds a separately matched Seedsow RO/HEN/bootstrap build. Its clean source build and bounded console installation are recorded in [Validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow); the v0.1.2 release's original binaries and validation scope remain in its [release notes](releases/v0.1.2.md).
 
 The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
 
@@ -47,6 +47,8 @@ Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnos
 
 The bundled SDK setup currently targets **Apple Silicon macOS only**. It provisions devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114. Linux and Intel macOS cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use Node 24 for the later live installation.
 
+The [Seedsow source workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
+
 From a clean checkout of the release source:
 
 ```sh
@@ -62,7 +64,7 @@ The SDK bootstrap downloads the packages pinned in `tools/toolchain-packages.jso
 
 HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/kaihen-mo.json`. Its source-tree/patch digests bind those binaries to the reviewed source, and its console-validation flag is separate. The app and resident are compiled with debug information, so their hashes may vary with the build directory. A successful source build does not establish device behavior; see the release's validation scope.
 
-## Exact external inputs
+## Exact v0.1.2 external inputs
 
 | Input | Pin |
 | --- | --- |
@@ -75,6 +77,8 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Patched HEN SHA-256 | `edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86` |
 | Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
+
+The Seedsow source branch's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json). Its source, GUI and build instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix this pair with the v0.1.2 release kit.
 
 Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.
 

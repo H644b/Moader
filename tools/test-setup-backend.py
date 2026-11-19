@@ -64,6 +64,34 @@ class SetupTests(unittest.TestCase):
         self.assertFalse((self.root / 'research/sources/ns2jb/runs').exists())
         before = self.snapshot(); self.assertEqual(backend.setup(self.args())['newFiles'], 0); self.assertEqual(self.snapshot(), before)
 
+    def test_schema3_provisions_exact_ro_hen_bootstrap_set(self):
+        self.put('runtime/kaihen/ro/source/main.cpp', b'qualified RO source')
+        ro = b'NSO0-qualified-ro'; bootstrap = b'qualified-bootstrap'
+        ro_file = self.base / 'ro'; ro_file.write_bytes(ro)
+        bootstrap_file = self.base / 'bootstrap'; bootstrap_file.write_bytes(bootstrap)
+        components = {name: {'bytes': len(data), 'sha256': backend.digest(data)} for name, data in
+                      {'ro/main': ro, 'hen/main': self.hen, 'bootstrap.bin': bootstrap}.items()}
+        descriptor = {'schema': 3, 'base_commit': 'e897f991524590833b82fbe8d63a3c6775fb8101',
+                      'release_base': '20261114c', 'patch': 'software-builds/kaihen-mo.patch',
+                      'protocol_version': 7, 'native_build_passed': True,
+                      'console_retest_passed': False,
+                      'source_tree_algorithm': backend.SOURCE_TREE_ALGORITHM,
+                      'source_tree_sha256': backend.kaihen_source_sha(self.root),
+                      'patch_sha256': backend.digest(b'patch'),
+                      'hen_sha256': components['hen/main']['sha256'], 'components': components}
+        self.put('runtime/kaihen/libkaihen/include/kaihen/protocol.h', b'#define HEN_PROTOCOL_VERSION 7\n')
+        descriptor['source_tree_sha256'] = backend.kaihen_source_sha(self.root)
+        self.put('software-builds/kaihen-mo.json', json.dumps(descriptor).encode())
+        args = self.args('--ro-binary', str(ro_file), '--bootstrap-binary', str(bootstrap_file))
+        result = backend.setup(args)
+        self.assertEqual(result['kaihenProofSchema'], 3)
+        self.assertEqual(result['roSha256'], backend.digest(ro))
+        self.assertEqual((self.root / 'vendor/kaihen-mo/ro/main').read_bytes(), ro)
+        descriptor['components'].pop('ro/main')
+        self.put('software-builds/kaihen-mo.json', json.dumps(descriptor).encode())
+        with self.assertRaisesRegex(ValueError, 'RO/HEN/bootstrap'):
+            backend.proof(self.root)
+
     def test_minimal_kit_downloads_only_two_pinned_inputs_and_keeps_hen(self):
         self.put('vendor/kaihen-mo/hen/main', self.hen)
         for name, data in backend.programs(backend.zip_files(self.programs)).items():
@@ -120,6 +148,33 @@ class SetupTests(unittest.TestCase):
         with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'build_inputs', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
             backend.setup(self.args('--check'))
         self.assertEqual(self.snapshot(), before)
+
+    def test_seedsow_setup_and_check_preserve_existing_native_and_other_profile_inputs(self):
+        backend.setup(self.args()); before = self.snapshot()
+        descriptor = json.loads((backend.ROOT / 'config/seedsow-provider.json').read_text())
+        selected = {descriptor['engineRelativePath'] + '/shared/sdk-layout.json': b'{"SDK":1}',
+                    'tools/seedsow-bridge.cjs': b'never import', 'console/n2h_rpc.lua': b'never execute', 'env.txt': b'fixture'}
+        descriptor['files'] = {name: backend.digest(data) for name, data in selected.items()}
+        descriptor['sourceTreeSha256'] = backend.tree_sha(selected)
+        metadata = self.base / 'config/seedsow-provider.json'; metadata.parent.mkdir(); metadata.write_text(json.dumps(descriptor))
+        archive = self.base / 'seedsow.zip'
+        archive.write_bytes(zip_bytes({'seedsow-fs-kaihen-' + backend.SEEDSOW_REV + '/' + name: data for name, data in selected.items()}))
+        with patch.object(backend, 'ROOT', self.base), patch.object(backend, 'SEEDSOW_TREE_SHA', descriptor['sourceTreeSha256']):
+            args = self.args('--host-profile', 'seedsow-malev0', '--engine-archive', str(archive))
+            with patch.object(backend.subprocess, 'run', side_effect=AssertionError()), patch.object(backend, 'download', side_effect=AssertionError()):
+                result = backend.setup(args)
+            self.assertEqual(result['hostProfile'], 'seedsow-malev0'); self.assertFalse(result['consoleConnected'])
+            self.assertTrue(result['readyForInstallerCheck'])
+            self.assertTrue(all(self.snapshot()[name] == value for name, value in before.items()))
+            self.assertEqual(backend.tree_files(self.root / descriptor['sourceDirectory']), selected)
+            saved = self.snapshot()
+            with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
+                backend.setup(self.args('--host-profile', 'seedsow-malev0', '--check'))
+            self.assertEqual(self.snapshot(), saved)
+            self.put(descriptor['sourceDirectory'] + '/console/n2h_rpc.lua', b'changed')
+            with self.assertRaisesRegex(ValueError, 'pinned source tree'):
+                backend.setup(self.args('--host-profile', 'seedsow-malev0', '--check'))
+            self.assertEqual(backend.check_root(self.root)['hostProfile'], 'smilebasic-kurumuz')
 
     def test_imports_do_not_execute_or_create_outputs(self):
         with patch.object(subprocess, 'run', side_effect=AssertionError()), patch.object(pathlib.Path, 'mkdir', side_effect=AssertionError()), patch.object(pathlib.Path, 'write_bytes', side_effect=AssertionError()):
@@ -403,6 +458,165 @@ class Civ7ProvisionTests(unittest.TestCase):
         self.assertIn('bridge/civ_bridge.js', descriptor['files'])
 
 
+class SeedsowProvisionTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='Moader Seedsow sources '); self.addCleanup(self.temp.cleanup)
+        self.base = pathlib.Path(self.temp.name); self.root = self.base / 'kit'; self.root.mkdir()
+        self.engine = 'ns2jb-main/ns2jb-main/engine'
+        self.files = {self.engine + '/shared/sdk-functions.json': b'{"SDK":1}',
+                      self.engine + '/shared/sdk-layout.json': b'{"layout":1}',
+                      self.engine + '/switch2/app/thread-code.json': b'{"code":1}'}
+        self.files.update({'tools/' + name + '.cjs': b'never import ' + name.encode() for name in
+                          ('seedsow-bridge', 'console-rpc', 'console-host', 'console-http', 'refresh-mounts')})
+        self.files.update({'console/' + name + '.lua': b'never execute ' + name.encode() for name in
+                          ('n2h_rpc', 'n2h_pump', 'reload_rpc', 'n2h_accessor')})
+        self.files['env.txt'] = b'fixture environment'
+        self.descriptor = json.loads((backend.ROOT / 'config/seedsow-provider.json').read_text())
+        self.descriptor['files'] = {name: backend.digest(data) for name, data in self.files.items()}
+        self.descriptor['sourceTreeSha256'] = backend.tree_sha(self.files)
+        self.descriptor['archiveSha256'] = 'a' * 64
+        self.metadata = self.base / 'config/seedsow-provider.json'; self.metadata.parent.mkdir()
+        self.metadata.write_text(json.dumps(self.descriptor))
+        self.archive = self.base / 'seedsow.zip'
+        self.prefix = 'seedsow-fs-kaihen-' + backend.SEEDSOW_REV + '/'
+        self.write_zip()
+        self.addCleanup(patch.stopall)
+        patch.object(backend, 'ROOT', self.base).start()
+        patch.object(backend, 'SEEDSOW_TREE_SHA', self.descriptor['sourceTreeSha256']).start()
+        patch.object(backend, 'SEEDSOW_ARCHIVE_SHA', self.descriptor['archiveSha256']).start()
+        patch.object(backend.urllib.request, 'urlopen', side_effect=AssertionError('No network in Seedsow tests')).start()
+        patch.object(backend.subprocess, 'run', side_effect=AssertionError('No upstream, native or Node execution')).start()
+
+    def write_zip(self, files=None, prefix=None):
+        self.archive.write_bytes(zip_bytes({(self.prefix if prefix is None else prefix) + name: data
+                                           for name, data in (self.files if files is None else files).items()}))
+
+    def args(self, *extra):
+        return backend.parser().parse_args(['--root', str(self.root), '--host-profile', 'seedsow-malev0',
+                                           '--sources-only', '--offline', '--engine-archive', str(self.archive), *extra])
+
+    def selected(self):
+        return self.root / 'research/sources/seedsow-fs-kaihen'
+
+    def snapshot(self):
+        return {p.relative_to(self.root).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns)
+                for p in self.root.rglob('*') if p.is_file()}
+
+    def test_nested_sources_only_are_provisioned_and_other_inputs_preserved(self):
+        private = ('research/sources/ns2jb/engine/private', 'research/sources/civ7-fs-kaihen/engine/private',
+                   'vendor/kaihen-mo/hen/main', 'dist/Moader.nro', 'build/install/prepared-old/manifest.json')
+        for name in private:
+            file = self.root / name; file.parent.mkdir(parents=True, exist_ok=True); file.write_bytes(b'keep')
+        before = self.snapshot()
+        self.write_zip(self.files | {name: b'not source' for name in
+            ('.git/config', 'runs/latest.txt', 'runs/switch-ABCDE/connection.json', 'tools/gui.cjs', 'env.local', 'bridge.pid', 'console-host.txt')})
+        result = backend.setup(self.args())
+        self.assertEqual(result['hostProfile'], 'seedsow-malev0'); self.assertEqual(result['engineFiles'], len(self.files))
+        self.assertFalse(result['consoleConnected']); self.assertNotIn('readyForInstallerCheck', result)
+        self.assertEqual(backend.tree_files(self.selected()), self.files)
+        self.assertTrue(all(self.snapshot()[name] == value for name, value in before.items()))
+        saved = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()):
+            self.assertEqual(backend.setup(self.args())['newFiles'], 0)
+        self.assertEqual(self.snapshot(), saved)
+
+    def test_canonical_tar_requires_byte_and_selected_tree_pins(self):
+        data = io.BytesIO()
+        with tarfile.open(fileobj=data, mode='w:gz') as archive:
+            for name, content in self.files.items():
+                row = tarfile.TarInfo(self.prefix + name); row.size = len(content); archive.addfile(row, io.BytesIO(content))
+        self.archive = self.base / 'seedsow.tar.gz'; self.archive.write_bytes(data.getvalue())
+        with self.assertRaisesRegex(ValueError, 'Archive checksum differs'):
+            backend.setup(self.args())
+        self.assertEqual(self.snapshot(), {})
+        self.descriptor['archiveSha256'] = backend.digest(data.getvalue()); self.metadata.write_text(json.dumps(self.descriptor))
+        with patch.object(backend, 'SEEDSOW_ARCHIVE_SHA', self.descriptor['archiveSha256']):
+            self.assertEqual(backend.setup(self.args())['newFiles'], len(self.files))
+        self.assertEqual(backend.tree_files(self.selected()), self.files)
+
+    def test_missing_tampered_extra_engine_and_wrong_prefix_never_publish(self):
+        variants = [self.files | {self.engine + '/shared/sdk-functions.json': b'tampered'},
+                    {name: data for name, data in self.files.items() if name != 'tools/seedsow-bridge.cjs'},
+                    self.files | {self.engine + '/shared/extra.cjs': b'extra'},
+                    self.files | {self.engine + '/connection.json': b'generated runtime state'}]
+        for files in variants:
+            with self.subTest(files=list(set(files) ^ set(self.files))):
+                self.write_zip(files)
+                with patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'no fallback'):
+                    backend.setup(self.args())
+                self.assertEqual(self.snapshot(), {})
+        for prefix in ('', 'seedsow-fs-kaihen-wrong-revision/', 'civ7-fs-kaihen-' + backend.CIV7_REV + '/'):
+            self.write_zip(prefix=prefix)
+            with patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'no fallback'):
+                backend.setup(self.args())
+
+    def test_full_checkout_is_readonly_and_changed_sources_are_never_replaced(self):
+        backend.setup(self.args())
+        for name in ('README.md', '.git/config', 'runs/latest.txt', 'tools/gui.cjs', 'console-host.txt'):
+            file = self.selected() / name; file.parent.mkdir(parents=True, exist_ok=True); file.write_bytes(b'keep')
+        before = self.snapshot()
+        with patch.object(backend, 'download', side_effect=AssertionError()):
+            self.assertEqual(backend.setup(self.args())['newFiles'], 0)
+        self.assertEqual(self.snapshot(), before)
+        for name, data in ((self.engine + '/shared/sdk-layout.json', b'changed'), ('console/n2h_rpc.lua', None),
+                           (self.engine + '/extra.cjs', b'extra'), (self.engine + '/connection.json', b'live endpoint')):
+            with self.subTest(name=name):
+                file = self.selected() / name; old = file.read_bytes() if file.exists() else None
+                if data is None: file.unlink()
+                else: file.write_bytes(data)
+                saved = self.snapshot()
+                with patch.object(backend, 'download', side_effect=AssertionError()), patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaises(ValueError):
+                    backend.setup(self.args())
+                self.assertEqual(self.snapshot(), saved)
+                if old is None: file.unlink()
+                else: file.write_bytes(old)
+
+    def test_descriptor_identity_and_file_map_tampering_fail_before_publication(self):
+        for field, value in (('revision', 'bad'), ('sourceDirectory', '../escape'), ('archiveSha256', 'b' * 64),
+                             ('sourceTreeAlgorithm', 'other'), ('files', {'../escape': 'a' * 64}),
+                             ('files', {'tools/seedsow-bridge.cjs': 'b' * 64})):
+            with self.subTest(field=field):
+                self.metadata.write_text(json.dumps(self.descriptor | {field: value}))
+                with patch.object(backend, 'publish_new', side_effect=AssertionError()), self.assertRaises(ValueError):
+                    backend.setup(self.args())
+                self.assertEqual(self.snapshot(), {})
+
+    def test_symlink_and_archive_attacks_do_not_publish(self):
+        self.write_zip(self.files | {'../escape': b'bad'})
+        with self.assertRaisesRegex(ValueError, 'Unsafe archive path'): backend.setup(self.args())
+        with zipfile.ZipFile(self.archive, 'w') as archive:
+            row = zipfile.ZipInfo(self.prefix + self.engine + '/link'); row.create_system = 3
+            row.external_attr = (stat.S_IFLNK | 0o777) << 16; archive.writestr(row, 'outside')
+        with self.assertRaisesRegex(ValueError, 'links/special'): backend.setup(self.args())
+        self.write_zip()
+        with patch.object(backend, 'MAX_ARCHIVE', 1), self.assertRaisesRegex(ValueError, 'Source archive exceeds size bound'): backend.engine_files(self.archive, 'seedsow-malev0')
+        with patch.object(backend, 'MAX_ENTRIES', 1), self.assertRaisesRegex(ValueError, 'Too many ZIP entries'): backend.setup(self.args())
+        outside = self.base / 'outside'; outside.mkdir(); self.selected().parent.mkdir(parents=True)
+        self.selected().symlink_to(outside, target_is_directory=True)
+        with patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'symlink'):
+            backend.setup(self.args())
+        self.assertEqual(list(outside.iterdir()), [])
+
+    def test_offline_missing_input_and_source_mode_conflicts_stop_before_work(self):
+        args = self.args(); args.engine_archive = None
+        with self.assertRaisesRegex(ValueError, 'Offline'): backend.setup(args)
+        self.assertEqual(self.snapshot(), {})
+        for flags in (('--check',), ('--build',), ('--node', 'node'), ('--hen-binary', str(self.archive))):
+            with patch.object(backend, 'setup_sources', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'conflicting options'):
+                backend.setup(self.args(*flags))
+
+
+class SeedsowPinTests(unittest.TestCase):
+    def test_real_descriptor_closure_is_independently_pinned(self):
+        profile = backend.source_profile('seedsow-malev0')
+        self.assertEqual(profile['revision'], '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17')
+        self.assertEqual(profile['archiveSha256'], '616660cb65acc703402a212e8691aff84b7f4c228aeedcef80a7763130291976')
+        self.assertEqual(profile['sha256'], '4d4375f2729ca4b95a98348419c1e2b7edffa684bf53316f00a38194c5f4ca7b')
+        self.assertEqual(len(profile['files']), 140)
+        self.assertEqual(sum(name.startswith(profile['engine'] + '/') for name in profile['files']), 130)
+        self.assertEqual(profile['directory'], 'research/sources/seedsow-fs-kaihen')
+
+
 class WrapperTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix='Moader spaces '); self.addCleanup(self.temp.cleanup)
@@ -506,20 +720,32 @@ class DirectRunTests(unittest.TestCase):
             command = self.invoke('--node', str(self.node), '--prepare')
         self.assertEqual(command[0], str(self.node)); self.assertEqual(self.calls[0][0], str(self.node)); self.assertEqual(self.calls[2][0], str(self.node))
 
-    def test_civ7_profile_is_passed_to_local_preparation_and_bound_by_manifest(self):
-        with patch.object(wrapper.shutil, 'which', return_value=str(self.node)), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
-            command = self.invoke('--host-profile', 'civ7-s8n', '--prepare')
-        self.assertEqual(command, [str(self.node), str(self.root / 'tools/install-moader.cjs'), '--prepared', str(self.manifest), str(self.run)])
-        for call in self.calls[1:]:
-            index = call.index('--host-profile'); self.assertEqual(call[index + 1], 'civ7-s8n')
-        self.assertTrue(all(str(self.run) not in call for call in self.calls))
+    def test_nondefault_profiles_are_passed_to_local_preparation_and_bound_by_manifest(self):
+        for profile in ('civ7-s8n', 'seedsow-malev0'):
+            with self.subTest(profile=profile):
+                self.calls.clear()
+                with patch.object(wrapper.shutil, 'which', return_value=str(self.node)), patch.object(wrapper.subprocess, 'run', side_effect=self.execute), patch('sys.stdout', new=io.StringIO()):
+                    command = self.invoke('--host-profile', profile, '--prepare')
+                self.assertEqual(command, [str(self.node), str(self.root / 'tools/install-moader.cjs'), '--prepared', str(self.manifest), str(self.run)])
+                self.assertEqual(len(self.calls), 3)
+                for call in self.calls[1:]:
+                    index = call.index('--host-profile'); self.assertEqual(call[index + 1], profile)
+                self.assertEqual('--offline' in self.calls[1], profile == 'seedsow-malev0')
+                self.assertTrue(all(str(self.run) not in call for call in self.calls))
 
     def test_mac2jb_civswitch_status_is_not_misidentified_as_pinned_s8n(self):
         import shlex
         status = shlex.join([str(self.node), str(self.root / 'rpc.cjs'), str(self.run), 'status'])
-        with patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), patch('sys.stderr', new=io.StringIO()), self.assertRaises(SystemExit) as error:
-            wrapper.main(['--status-command', status, '--host-profile', 'civ7-s8n', '--prepare'])
-        self.assertEqual(error.exception.code, 2)
+        for profile in ('civ7-s8n', 'seedsow-malev0'):
+            with self.subTest(profile=profile), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), patch('sys.stderr', new=io.StringIO()) as stderr, self.assertRaises(SystemExit) as error:
+                wrapper.main(['--status-command', status, '--host-profile', profile, '--prepare'])
+            self.assertEqual(error.exception.code, 2); self.assertIn(profile, stderr.getvalue())
+
+    def test_seedsow_rejects_upstream_attempt_names_without_any_execution(self):
+        for name in ('switch-ABCDE', 'switch2-', 'switch2-ABC_def'):
+            attempt = self.run.parent / name; attempt.mkdir()
+            with self.subTest(name=name), patch.object(wrapper.subprocess, 'run', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'run folder name'):
+                wrapper.main(['--run-dir', str(attempt), '--host-profile', 'seedsow-malev0', '--node', str(self.node), '--prepare'])
 
     def test_relative_run_and_node_paths_use_invoking_directory(self):
         relative_run = self.run.relative_to(self.root).as_posix()

@@ -16,9 +16,10 @@ function selectNotifier(state,proof,notifier){
 class Bridge {
  async open(run,options={}) {
   this.caveOffset=options.caveOffset??CAVE;check([CAVE,0x24d800].includes(this.caveOffset),'Unqualified native cave');
-  this.run=path.resolve(run);this.session=path.basename(this.run);
-  this.dir=path.join(options.directory||path.join(__dirname,'../../state',this.session),'bridge-'+Date.now());await fs.mkdir(this.dir,{recursive:true});
-  this.record={session:this.session,operations:[],resourcesRetained:false};this.journal=path.join(this.dir,'journal.json');await this.save();
+  this.run=path.resolve(run);this.runLabel=path.basename(this.run);
+  this.session=require('../../../../tools/host-session.cjs').inferredId(this.run)==='seedsow-malev0'?'seedsow':this.runLabel;
+  this.dir=path.join(options.directory||path.join(__dirname,'../../state',this.runLabel),'bridge-'+Date.now());await fs.mkdir(this.dir,{recursive:true});
+  this.record={session:this.session,runLabel:this.runLabel,operations:[],resourcesRetained:false};this.journal=path.join(this.dir,'journal.json');await this.save();
   this.c=options.client||await require('./client.cjs').openClient(this.run);check(this.c.record.session===this.session&&!this.c.pending,'Native client is from another session or is busy');this.m=this.c.memory;this.h=options.processHandle??await this.c.fsProcess();
   const current=JSON.parse(await fs.readFile(path.join(this.run,'switch2/fs-execution-current.json')));
   const proof=JSON.parse(await fs.readFile(path.resolve(this.run,current.file)));check(current.verified&&proof.verified&&proof.session===this.session,'Wrong FS proof');

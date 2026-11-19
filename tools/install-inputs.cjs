@@ -45,34 +45,36 @@ function validateKaihenProof(proof,observed={}){
   return{schema:1,protocolVersion:6,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),
    'hen/main':{sha256:LEGACY_HEN_SHA}}};
  }
- check(proof.schema===2,'Unsupported kaiHEN build proof schema');
+ check(proof.schema===2||proof.schema===3,'Unsupported kaiHEN build proof schema');
  check(proof.base_commit==='e897f991524590833b82fbe8d63a3c6775fb8101'&&proof.release_base==='20261114c'&&
   proof.patch==='software-builds/kaihen-mo.patch'&&proof.protocol_version===7,'Unqualified kaiHEN base, patch or protocol');
  check(proof.native_build_passed===true&&typeof proof.console_retest_passed==='boolean','Missing explicit native build/console validation scope');
  check(proof.source_tree_algorithm===SOURCE_TREE_ALGORITHM&&isDigest(proof.source_tree_sha256)&&
   proof.source_tree_sha256===observed.sourceSha256,'kaiHEN source identity differs from build proof');
  check(isDigest(proof.patch_sha256)&&proof.patch_sha256===observed.patchSha256,'kaiHEN patch identity differs from build proof');
- check(proof.components&&Object.keys(proof.components).sort().join(',')==='bootstrap.bin,hen/main','Build proof requires exactly the HEN/bootstrap pair');
- for(const name of ['hen/main','bootstrap.bin']){
+ const names=proof.schema===3?['ro/main','hen/main','bootstrap.bin']:['hen/main','bootstrap.bin'];
+ check(proof.components&&Object.keys(proof.components).sort().join(',')===names.sort().join(','),
+  proof.schema===3?'Build proof requires the RO/HEN/bootstrap set':'Build proof requires exactly the HEN/bootstrap pair');
+ for(const name of names){
   const item=proof.components[name];check(item&&Object.keys(item).sort().join(',')==='bytes,sha256'&&Number.isSafeInteger(item.bytes)&&
    item.bytes>0&&item.bytes<=MAX&&isDigest(item.sha256),'Invalid patched component descriptor: '+name);
  }
  check(proof.hen_sha256===proof.components['hen/main'].sha256,'HEN proof descriptors disagree');
- return{schema:2,protocolVersion:7,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),...proof.components}};
+ return{schema:proof.schema,protocolVersion:7,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),...proof.components}};
 }
 async function qualifyKaihenBuild(root=path.resolve(__dirname,'..')){
  const raw=await regularBytes(path.join(root,'software-builds/kaihen-mo.json')),proof=JSON.parse(raw.toString('utf8'));
  const patch=await regularBytes(path.join(root,'software-builds/kaihen-mo.patch'));
- const observed=proof.schema===2?{sourceSha256:await kaihenSourceDigest(root),patchSha256:digest(patch)}:{};
+ const observed=proof.schema>=2?{sourceSha256:await kaihenSourceDigest(root),patchSha256:digest(patch)}:{};
  const build=validateKaihenProof(proof,observed);
- if(build.schema===2){
+ if(build.schema>=2){
   const protocol=(await regularBytes(path.join(root,'runtime/kaihen/libkaihen/include/kaihen/protocol.h'))).toString('utf8');
   check(/^#define HEN_PROTOCOL_VERSION\s+7\s*$/m.test(protocol),'Native protocol header differs from build proof');
  }
  return{...build,identity:digest(raw)};
 }
 function assertKaihenBinding(manifest,build){
- if(build.schema===2||manifest.kaihenBuild!==undefined)
+ if(build.schema>=2||manifest.kaihenBuild!==undefined)
   check(manifest.kaihenBuild?.schema===build.schema&&manifest.kaihenBuild?.protocolVersion===build.protocolVersion&&
    manifest.kaihenBuild?.identity===build.identity,'Prepared HEN/bootstrap proof identity changed; prepare again after integration');
 }

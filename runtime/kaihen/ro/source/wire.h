@@ -64,3 +64,7 @@ void roWriteHandleReply(void* base, Result rc, Handle handle);
 
 /// Writes the MapJitAlias reply: RO's view of the mapping on success.
 void roWriteJitAliasReply(void* base, Result rc, const KaihenJitAliasInfo* info);
+
+/// Private diagnostic reply with the kernel's server PID and bounded raw data.
+/// The PID is required to bind every process command to the challenged RO.
+void roWriteDiagnosticReply(void* base, Result rc, const void* data, u32 size);

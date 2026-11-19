@@ -15,6 +15,8 @@ globalThis.fetch = deny;
 const gateModule = require('../research/sources/ns2jb/engine/switch2/ro/gate.cjs');
 const BaseGate = gateModule.Gate;
 const {withGateRestoration} = require('./loader-restoration.cjs');
+const {openObserver} = require('./loader-observer.cjs');
+const {createGuard} = require('./seedsow-transport.cjs');
 let passed = 0;
 
 function fixture(options = {}) {
@@ -302,6 +304,35 @@ async function main() {
       assert.equal(f.trace.length, 1);
     }), /already in progress/);
     assert.equal(f.signalCount, 0); assert.equal(f.clearCount, 0);
+  });
+  await test('independent observer latches the first cause through a getter-only transport guard', async () => {
+    const guard = createGuard(), record = {}, memory = {info: {session: 'seedsow'},
+      reportFile: '/synthetic/current-fs-report.json'};
+    let closeCount = 0, saves = 0;
+    const client = {pid: 209n, file: '/synthetic/ro-protocol.json', pending: false,
+      record: {session: 'seedsow', report: memory.reportFile},
+      async fsProcess() { return 27; },
+      async info(handle) {
+        assert.equal(handle, 27);
+        return {result: 0, programId: '0400000000000000', pid: '81'};
+      },
+      async close() { closeCount++; },
+    };
+    const observer = await openObserver({run: '/synthetic/current-run', memory,
+      execution: {pid: '209'}, state: guard, record, save: async () => { saves++; }},
+    {openClient: async () => client});
+    const first = Error('receipt missing'), second = Error('later failure');
+    assert.equal(observer.block(first), first);
+    assert.equal(observer.block(second), first);
+    assert.equal(guard.error, first);
+    assert.equal(first.nativeRequestUncertain, true);
+    assert.equal(observer.uncertain, true);
+    assert.equal(record.resourcesRetained, true);
+    assert.equal(record.unresolved, true);
+    assert.match(record.error, /receipt missing/);
+    await observer.close();
+    assert.equal(closeCount, 0);
+    assert(saves >= 2);
   });
   assert.equal(forbidden, 0);
   console.log(`${passed} offline Loader restoration checks passed.`);

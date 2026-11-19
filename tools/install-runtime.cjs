@@ -5,8 +5,13 @@ const fs=require('node:fs/promises'),path=require('node:path');
 const project=path.resolve(__dirname,'..'),check=(value,text)=>{if(!value)throw Error(text);};
 function guardRuntimeTransports(run,host){
  process.env.NS2_RUN_DIR=path.resolve(run);
- if(!host){const hosts=require('./host-session.cjs');if(hosts.inferredId(run)==='civ7-s8n')host=hosts.qualifyRun(run,'civ7-s8n');}
+ if(!host){const hosts=require('./host-session.cjs'),id=hosts.inferredId(run);if(id!==hosts.DEFAULT)host=hosts.qualifyRun(run,id);}
  const {guardTransports}=require('./ready-kaihen.cjs'),state={error:null};
+ if(host?.target==='seedsow'){
+  check(host.guard?.error===null&&host.loader?.run===path.resolve(run),
+    'Seedsow installer lost its live source-owned transport');
+  return host.guard;
+ }
  if(host?.target==='civ7')return require('./host-transport.cjs').install(host,state);
  // Runtime clients load the selected run's sources; SD staging uses the
  // retained engine. Both must stop after either transport becomes uncertain.
@@ -18,7 +23,7 @@ async function install(run,directory,prepared,host){
  run=path.resolve(run);directory=path.resolve(directory);
  require('../runtime/modloader/install.cjs').verifiedRun(run);
  const hosts=require('./host-session.cjs');
- if(!host){const id=prepared.hostProfile?.id||hosts.inferredId(run);host=id==='civ7-s8n'?hosts.qualifyRun(run,id):{profile:hosts.resolveProfile(),run,target:'smilebasic',runtimeRoot:path.join(project,'research/sources/ns2jb/engine')};}
+ if(!host){const id=prepared.hostProfile?.id||hosts.inferredId(run);host=id===hosts.DEFAULT?{profile:hosts.resolveProfile(),run,target:'smilebasic',runtimeRoot:path.join(project,'research/sources/ns2jb/engine')}:hosts.qualifyRun(run,id);}
  hosts.bind(host);
  await fs.mkdir(directory,{recursive:true});
  const journal=path.join(directory,'moader-runtime.json');

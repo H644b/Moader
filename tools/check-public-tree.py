@@ -35,7 +35,7 @@ IPV6 = re.compile(r'(?i)(?<![\w:])(?:f[cd][0-9a-f]{2}|fe80):[0-9a-f:]+')
 PATTERNS = (
     ('private key material', re.compile(r'-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----')),
     ('credential token', re.compile(r'\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|xox[baprs]-[A-Za-z0-9-]{16,})\b')),
-    ('home or temporary user path', re.compile(r'/(?:Users|home)/[^/\s<>"\']+/|/(?:private/)?var/folders/')),
+    ('home or temporary user path', re.compile(r'/(?:Users|home)/[^/\s<>"\']+/|/(?:private/)?var/folders/[^/\s<>"\']+/')),
     ('session identifier', re.compile(r'\bswitch2-[A-Za-z0-9]{4,}\b')),
     ('cookie value', re.compile(r'(?i)(?:\.ROBLOSECURITY|session_cookie)\s*[=:]\s*["\']?[^\s"\';,<>]{12,}')),
     ('credential in URL', re.compile(r'(?i)https?://[^/\s:@]+:[^/\s@]+@')),

@@ -23,8 +23,9 @@ function options(argv){
  return o;
 }
 function verifiedRun(run){
- if(require('../../tools/host-session.cjs').inferredId(run)==='civ7-s8n'){
-  const host=require('../../tools/host-session.cjs').qualifyRun(run,'civ7-s8n');require('../../tools/host-session.cjs').bind(host);return host.run;
+ const hosts=require('../../tools/host-session.cjs'),id=hosts.inferredId(run);
+ if(id!==hosts.DEFAULT){
+  const host=hosts.qualifyRun(run,id);hosts.bind(host);return host.run;
  }
  const read=f=>JSON.parse(fs.readFileSync(f,'utf8'));const result=read(path.join(run,'result.json'));
  check(result.target===undefined||result.target==='smilebasic','Selected run has an unsupported host target');

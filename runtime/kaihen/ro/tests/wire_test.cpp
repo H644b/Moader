@@ -64,5 +64,24 @@ int main(void) {
     /* Wrong handle count for Initialize: rejected. */
     build(RoCmd_Initialize, &pid_placeholder, sizeof pid_placeholder, 0);
     assert(!roParseRequest(g_words, &out));
+
+    /* Diagnostic replies carry the kernel's server PID descriptor and the
+     * exact challenge data after the CMIF header. The host binds to that PID. */
+    const uint64_t challenge[6] = {0x4558454f5232534eULL, 7, 213, 9, 11, 0};
+    roWriteDiagnosticReply(g_words, 0, challenge, sizeof challenge);
+    assert(g_words[0] == 0 && (g_words[1] & 0x80000000u));
+    assert(g_words[2] == 1); /* Kernel PID flag, no copied handles. */
+    const HipcParsedRequest reply = hipcParseRequest(g_words);
+    const auto* header = static_cast<const CmifOutHeader*>(
+        cmifGetAlignedDataStart(reply.data.data_words, g_words));
+    assert(header->magic == CMIF_OUT_HEADER_MAGIC && header->result == 0);
+    assert(!memcmp(header + 1, challenge, sizeof challenge));
+
+    uint8_t oversized[185] = {};
+    roWriteDiagnosticReply(g_words, 0, oversized, sizeof oversized);
+    const HipcParsedRequest rejected = hipcParseRequest(g_words);
+    const auto* rejection = static_cast<const CmifOutHeader*>(
+        cmifGetAlignedDataStart(rejected.data.data_words, g_words));
+    assert(rejection->result != 0);
     return 0;
 }

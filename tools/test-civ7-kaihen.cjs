@@ -141,6 +141,23 @@ function pinnedSdkThread({plain=false,thread=0x6123456007,states=[1],createResul
   assert.equal(result.pid,'83');assert.equal(result.originalPid,'47');assert.deepEqual(f.calls.slice(1).map(row=>[row.handle,row.id,Buffer.from(row.hex,'hex').readBigUInt64LE().toString()]),[[31,7,'83'],[31,7,'47'],[31,1,'83'],[25,1,'47']]);
   assert(!f.calls.some(row=>row.hex&&Buffer.from(row.hex,'hex').readBigUInt64LE()===11n));const journal=f.journal();assert.equal(journal.complete,true);assert.equal(journal.role,'diagnostic-ro');assert.equal(journal.originalPid,'47');assert.equal(journal.steps.length,4);assert(journal.steps.every(row=>row.pending===false));
  });
+ await test('Seedsow activation passes only the verified diagnostic PID to the source worker path',async()=>{
+  const run=path.join(work,'seedsow-test'+(++serial)),report='current-report';
+  const context={run,profile:{id:'seedsow-malev0'},guard:{error:null},loader:{run}};
+  const execution={verified:true,session:'seedsow',report,pid:'210',programId:'0400000000000037'};
+  const memory={reportFile:report,request:()=>{throw Error('unexpected native request');}},calls=[];
+  const isolated=adapterWithHost({runJson:()=>execution,
+    load:(_context,relative)=>{assert.equal(relative,'switch2/ro/runtime.cjs');return{
+      activate:async(...args)=>{calls.push(args);return{pid:'211',originalPid:String(args[2])};}};}});
+  const launchFile=path.join(run,'switch2/ro/launch.json');
+  assert.deepEqual(await isolated.activate(context,launchFile,210,memory),{pid:'211',originalPid:'210'});
+  assert.deepEqual(calls,[[launchFile,memory,210]]);
+  for(const bad of [{...execution,pid:'168'},{...execution,programId:'bad'},
+    {...execution,report:'stale'}]){
+   const rejected=adapterWithHost({runJson:()=>bad,load:()=>{throw Error('source loaded after failed proof');}});
+   await assert.rejects(()=>rejected.activate(context,launchFile,210,memory));
+  }
+ });
  for(const [name,mutate]of [
   ['wrong diagnostic PID',f=>f.execution.pid='48'],['diagnostic session mismatch',f=>f.execution.session='switch2-Other'],['diagnostic report mismatch',f=>f.execution.report='wrong'],['retired diagnostic',f=>f.execution.verified=false],
   ['same PID roles',f=>f.launch.pid='47'],['invalid launch PID',f=>f.launch.pid='0'],['unaccepted image',f=>f.launch.imageAccepted=false],['unrestored launch',f=>f.launch.restored=false],['wrong launch flags',f=>f.launch.flags=0],['wrong launch session',f=>f.launch.session='switch2-Other']
@@ -166,8 +183,9 @@ function pinnedSdkThread({plain=false,thread=0x6123456007,states=[1],createResul
   const frontend={main:async options=>{originalCalls.push(options);throw Object.assign(Error('synthetic timeout'),{nativeRequestUncertain:true});}},original=frontend.main;
   const table={pthreadHandle:{form:'tagged',tagMask:7,join:'tagged',tryWait:'untagged'},functions:{tryWait:{offset:0x80}}};
   const host={runJson:()=>table,load:(context,relative)=>relative==='switch2/app/session.cjs'?{live:{sdk:Number(f.address)-0x80}}:relative==='switch2/ro/nro.cjs'?frontend:{main:async()=>frontend.main({label:'hen-startup',image:f.image})}};
-  const isolated=adapterWithHost(host);await assert.rejects(()=>isolated.startHen({run:work},'image',bootstrapFile,'game',[]),/synthetic timeout/);assert.equal(originalCalls.length,1);assert.equal(frontend.main,original);
-  f.image[0x80]^=1;await assert.rejects(()=>isolated.startHen({run:work},'image',bootstrapFile,'game',[]),/bootstrap/);assert.equal(originalCalls.length,1);assert.equal(frontend.main,original);
+  const isolated=adapterWithHost(host),context={run:work,profile:{id:'civ7-s8n'}};
+  await assert.rejects(()=>isolated.startHen(context,'image',bootstrapFile,'game',[]),/synthetic timeout/);assert.equal(originalCalls.length,1);assert.equal(frontend.main,original);
+  f.image[0x80]^=1;await assert.rejects(()=>isolated.startHen(context,'image',bootstrapFile,'game',[]),/bootstrap/);assert.equal(originalCalls.length,1);assert.equal(frontend.main,original);
  });
  await test('authentic pinned waitHandle strips only tagged Civ7 low bits without pointer truncation',()=>{
   const f=pinnedSdkThread();assert.equal(f.api.waitHandle(f.thread),0x6123456000);

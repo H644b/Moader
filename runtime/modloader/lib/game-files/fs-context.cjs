@@ -153,7 +153,11 @@ function accessControls(bytes, title) {
 async function registryReader(a) {
   const engine = path.join(a.run, 'switch2');
   const layout = JSON.parse(await fs.readFile(path.join(engine, 'ro', a.live.session + '-layout.json')));
-  const memory = await require(path.join(engine, 'tools/fs-memory.cjs')).connect();
+  const hosts = require('../../../../tools/host-session.cjs');
+  const profileId = hosts.inferredId(a.run);
+  const memory = await (profileId === hosts.DEFAULT
+    ? require(path.join(engine, 'tools/fs-memory.cjs'))
+    : hosts.load(hosts.qualifyRun(a.run, profileId), 'switch2/tools/fs-memory.cjs')).connect();
 
   return { memory, layout };
 }

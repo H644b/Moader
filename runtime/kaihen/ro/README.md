@@ -48,7 +48,12 @@ console. The AArch64 NSO build passes with warnings treated as errors.
   publication, and teardown.
 - `image.cpp`: the existing supported NRO layout.
 - `fs_memory.cpp`: the private `ro:dmnt` endpoint: FS code memory reads and
-  writes for kaiHEN (`../include/ro_dmnt.h`), and RO's diagnostics.
+  writes for kaiHEN (`../include/ro_dmnt.h`), and RO's diagnostics. The
+  Seedsow build also answers a nonce challenge and bounded process commands
+  0x524f0010–0x524f0016 with the kernel's server PID on every reply. The
+  challenge and process commands use the same port as HEN's private FS reader.
+  At startup the replacement registers `ro:dmnt` directly. If stock RO left
+  a stale system-space registration, it releases that entry and retries.
 
 Mapping cleanup remains explicit because unmapping can fail. As in the
 source implementation, a failed partial cleanup retains its ownership

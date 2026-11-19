@@ -1,8 +1,165 @@
+diff --git a/bootstrap/source/launch_mount.hpp b/bootstrap/source/launch_mount.hpp
+new file mode 100644
+index 0000000..ea41161
+--- /dev/null
++++ b/bootstrap/source/launch_mount.hpp
+@@ -0,0 +1,68 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#pragma once
++#include "startup.hpp"
++
++namespace ounce {
++
++// Shared by the bootstrap and its host regression: only the gate/mount
++// transports are substituted in the fixture, never the serving loop.
++template <typename Launch, typename Gate, typename Mount>
++inline void exchangeLaunchMount(Launch* args, Gate& gate, Mount& mount) {
++    for (u32 step = 0; step < 30000 && !args->exchanged; step++) {
++        bool ready = false;
++        args->result = gate.pending(ready);
++        if (R_FAILED(args->result)) {
++            break;
++        }
++        if (!ready) {
++            // Poll completion without calling into the worker's thread
++            // runtime while this loop serves Loader's pending mount.
++            if (__atomic_load_n(&args->pm.completed, __ATOMIC_ACQUIRE) &&
++                R_FAILED(args->pm.result)) {
++                break;
++            }
++            svcSleepThread(1000000);
++            continue;
++        }
++        ounce::DomainEntry before[ounce::MaxDomainEntries], after[ounce::MaxDomainEntries], added;
++        u32 before_count = 0, after_count = 0;
++        args->mark(BootstrapOperation_Mount);
++        args->result = mount.snapshot(before, before_count);
++        if (R_FAILED(args->result)) {
++            break;
++        }
++        alignas(16) u8 request[ounce::LoaderRequestSize];
++        args->result = gate.step(request);
++        if (R_FAILED(args->result)) {
++            break;
++        }
++        args->result = mount.snapshot(after, after_count);
++        if (R_FAILED(args->result)) {
++            break;
++        }
++        bool target = false;
++        args->result = mount.inspectRequest(request, target);
++        if (R_FAILED(args->result)) {
++            break;
++        }
++        if (target) {
++            args->mounts++;
++            args->result = mount.added(
++                before, before_count, after, after_count, added);
++            if (R_FAILED(args->result)) {
++                break;
++            }
++            if (args->mounts == 2) {
++                args->mark(BootstrapOperation_Exchange);
++                args->result = mount.exchange(added);
++                if (R_SUCCEEDED(args->result)) {
++                    args->exchanged = true;
++                }
++                break;
++            }
++        }
++    }
++}
++
++
++} // namespace ounce
 diff --git a/bootstrap/source/main.cpp b/bootstrap/source/main.cpp
-index 6fc0705..d347339 100644
+index 6fc0705..70d0376 100644
 --- a/bootstrap/source/main.cpp
 +++ b/bootstrap/source/main.cpp
-@@ -394,6 +394,17 @@ static void _launchConnectServices(LaunchState* args, bool plugin) {
+@@ -3,6 +3,7 @@
+ #include "../../common/domain_mount.hpp"
+ #include "../../common/loader_gate.hpp"
+ #include "pm_launch.hpp"
++#include "launch_mount.hpp"
+ #include "../../common/package.hpp"
+ #include "policies.hpp"
+ #include "../../common/control.h"
+@@ -84,65 +85,6 @@ static Result _launchOpenProcessReader(LaunchState* args) {
+     );
+ }
+ 
+-static void _launchExchangeMount(LaunchState* args, BootstrapGate& gate,
+-                                 BootstrapMount& mount, ounce::CompilerTlsScope& tls) {
+-    for (u32 step = 0; step < 30000 && !args->exchanged; step++) {
+-        bool ready = false;
+-        args->result = gate.pending(ready);
+-        if (R_FAILED(args->result)) {
+-            break;
+-        }
+-        if (!ready) {
+-            tls.suspend();
+-            u64 finished = args->input.pthread_trywait(args->thread, 0, 0);
+-            tls.resume();
+-            // PM can return the new PID before Loader opens its CodeFS.
+-            // Keep watching the parked gate after a successful PM reply.
+-            if (finished == 1 && R_FAILED(args->pm.result)) {
+-                break;
+-            }
+-            svcSleepThread(1000000);
+-            continue;
+-        }
+-        ounce::DomainEntry before[ounce::MaxDomainEntries], after[ounce::MaxDomainEntries], added;
+-        u32 before_count = 0, after_count = 0;
+-        args->mark(BootstrapOperation_Mount);
+-        args->result = mount.snapshot(before, before_count);
+-        if (R_FAILED(args->result)) {
+-            break;
+-        }
+-        alignas(16) u8 request[ounce::LoaderRequestSize];
+-        args->result = gate.step(request);
+-        if (R_FAILED(args->result)) {
+-            break;
+-        }
+-        args->result = mount.snapshot(after, after_count);
+-        if (R_FAILED(args->result)) {
+-            break;
+-        }
+-        bool target = false;
+-        args->result = mount.inspectRequest(request, target);
+-        if (R_FAILED(args->result)) {
+-            break;
+-        }
+-        if (target) {
+-            args->mounts++;
+-            args->result = mount.added(
+-                before, before_count, after, after_count, added);
+-            if (R_FAILED(args->result)) {
+-                break;
+-            }
+-            if (args->mounts == 2) {
+-                args->mark(BootstrapOperation_Exchange);
+-                args->result = mount.exchange(added);
+-                if (R_SUCCEEDED(args->result)) {
+-                    args->exchanged = true;
+-                }
+-                break;
+-            }
+-        }
+-    }
+-}
+ 
+ static void _launchRequest(LaunchState* args, BootstrapGate& gate,
+                            BootstrapMount& mount, ounce::CompilerTlsScope& tls) {
+@@ -162,7 +104,7 @@ static void _launchRequest(LaunchState* args, BootstrapGate& gate,
+         return;
+     }
+ 
+-    _launchExchangeMount(args, gate, mount, tls);
++    ounce::exchangeLaunchMount(args, gate, mount);
+ }
+ 
+ static void _launchRestoreAndJoin(LaunchState* args, BootstrapGate& gate,
+@@ -394,6 +336,17 @@ static void _launchConnectServices(LaunchState* args, bool plugin) {
      if (R_SUCCEEDED(args->result)) {
          args->result = henAdoptServiceManager(&hen, args->input.sm_session);
      }
@@ -20,6 +177,262 @@ index 6fc0705..d347339 100644
      if (R_SUCCEEDED(args->result)) {
          args->result = henReleaseControlPort(&hen);
      }
+@@ -422,7 +375,7 @@ static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
+     if (args->report) {
+         args->report->process_id = 0;
+     }
+-    args->pm.completed = 0;
++    __atomic_store_n(&args->pm.completed, 0u, __ATOMIC_RELAXED);
+     args->thread = 0;
+     args->mounts = 0;
+     args->exchanged = false;
+@@ -471,7 +424,8 @@ static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
+         args->result = args->pm.result;
+         return;
+     }
+-    if (!args->exchanged || !args->pm.completed) {
++    if (!args->exchanged ||
++        !__atomic_load_n(&args->pm.completed, __ATOMIC_ACQUIRE)) {
+         package.close();
+         args->mark(failed_stage);
+         args->result = MAKERESULT(Module_Libnx, LibnxError_BadInput);
+diff --git a/bootstrap/source/pm_launch.hpp b/bootstrap/source/pm_launch.hpp
+index aca3bd7..0a8dec5 100644
+--- a/bootstrap/source/pm_launch.hpp
++++ b/bootstrap/source/pm_launch.hpp
+@@ -34,7 +34,7 @@ inline void* launchFromSdkThread(void* argument) {
+     // The host owns the borrowed handle. Do not call pmshellExit here.
+     request->pid = pid;
+     request->result = rc;
+-    request->completed = 1;
++    __atomic_store_n(&request->completed, 1u, __ATOMIC_RELEASE);
+     return reinterpret_cast<void*>(static_cast<uintptr_t>(rc));
+ }
+ 
+diff --git a/bootstrap/source/startup.hpp b/bootstrap/source/startup.hpp
+index db2b6af..285c91a 100644
+--- a/bootstrap/source/startup.hpp
++++ b/bootstrap/source/startup.hpp
+@@ -14,6 +14,7 @@ struct BootstrapInput {
+     u32 flags;
+     u8 storage_id;
+     u64 (*pthread_create)(u64*, u64, void*(*)(void*), void*);
++    // Retained ABI slot; the bootstrap does not call it. Hosts may pass null.
+     u64 (*pthread_trywait)(u64, u64, u64);
+     u64 (*pthread_join)(u64, u64*, u64);
+     Handle sm_session;
+diff --git a/bootstrap/test.sh b/bootstrap/test.sh
+new file mode 100644
+index 0000000..7fa1957
+--- /dev/null
++++ b/bootstrap/test.sh
+@@ -0,0 +1,12 @@
++#!/bin/sh
++# SPDX-License-Identifier: GPL-2.0-only
++# Host regression of the production bootstrap mount-serving loop and PM worker.
++set -eu
++cd "$(dirname "$0")"
++nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
++out=${TEST_OUT:-build/tests}
++mkdir -p "$out"
++cxx=${CXX:-g++}
++flags="-std=gnu++20 -pthread -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
++$cxx $flags -I../hen/tests/host -I"$nx/include" -I../libkaihen/include tests/launch_mount_test.cpp -o "$out/launch_mount"
++"$out/launch_mount"
+diff --git a/bootstrap/tests/launch_mount_test.cpp b/bootstrap/tests/launch_mount_test.cpp
+new file mode 100644
+index 0000000..6d0ea76
+--- /dev/null
++++ b/bootstrap/tests/launch_mount_test.cpp
+@@ -0,0 +1,188 @@
++// SPDX-License-Identifier: GPL-2.0-only
++// Actual bootstrap serving loop and PM worker; only gate, mount and SDK calls
++// are simulated. The host pthread runtime must never be re-entered by the loop.
++#include <cassert>
++#include <chrono>
++#include <cstddef>
++#include <cstdio>
++#include <thread>
++#include <switch.h>
++#include "../source/pm_launch.hpp"
++#include "../source/launch_mount.hpp"
++
++namespace fixture {
++constexpr Result Failure = MAKERESULT(Module_Libnx, LibnxError_BadInput);
++alignas(16) thread_local u8 tls[0x200];
++Service shell{};
++Result launch_result;
++unsigned sleeps, trywait_calls;
++ounce::PmLaunchRequest* publish_on_sleep;
++
++u64 forbiddenTryWait(u64, u64, u64) {
++    ++trywait_calls;
++    assert(false && "pthread_trywait re-entered while serving Loader");
++    return 1;
++}
++
++struct Launch {
++    BootstrapInput input{};
++    ounce::PmLaunchRequest pm{};
++    Result result = 0;
++    u64 thread = 7;
++    u32 mounts = 0;
++    bool exchanged = false;
++    BootstrapOperation stage = BootstrapOperation_Launch;
++    void mark(BootstrapOperation operation) { stage = operation; }
++    Launch() {
++        input.pthread_trywait = forbiddenTryWait;
++        pm.shell_session = 42;
++        pm.program_id = 0x040000000000003a;
++        pm.flags = 0x14;
++        pm.storage_id = 3;
++    }
++};
++
++struct Gate {
++    unsigned pending_calls = 0, requests = 0;
++    unsigned delay = 0;
++    bool never_ready = false;
++    Result pending_result = 0;
++    Result step_result = 0;
++    Result pending(bool& ready) {
++        ++pending_calls;
++        ready = !never_ready && pending_calls > delay;
++        return pending_result;
++    }
++    Result step(u8* request) {
++        // An unrelated first request must not count toward the two mounts.
++        request[0] = ++requests > 1;
++        return step_result;
++    }
++};
++
++struct Mount {
++    unsigned snapshots = 0, exchanges = 0;
++    Result snapshot_result = 0, exchange_result = 0;
++    Result snapshot(ounce::DomainEntry* entries, u32& count) {
++        entries[0] = {++snapshots, 2, 3};
++        count = 1;
++        return snapshot_result;
++    }
++    Result inspectRequest(const u8* request, bool& target) {
++        target = request[0];
++        return 0;
++    }
++    Result added(const ounce::DomainEntry*, u32, const ounce::DomainEntry* after,
++                 u32 count, ounce::DomainEntry& out) {
++        assert(count == 1);
++        out = after[0];
++        return 0;
++    }
++    Result exchange(const ounce::DomainEntry& entry) {
++        assert(entry.address == snapshots);
++        ++exchanges;
++        return exchange_result;
++    }
++};
++
++void reset() {
++    sleeps = trywait_calls = 0;
++    launch_result = 0;
++    publish_on_sleep = nullptr;
++}
++} // namespace fixture
++
++extern "C" {
++void* armGetTls() { return fixture::tls; }
++Service* pmshellGetServiceSession() { return &fixture::shell; }
++Result svcSendSyncRequest(Handle handle) {
++    // serviceCreate's optional pointer-buffer query has no simulated server.
++    assert(handle == 42);
++    return fixture::Failure;
++}
++Result pmshellLaunchProgram(u32 flags, const NcmProgramLocation* location, u64* pid) {
++    assert(flags == 0x14 && location->storageID == 3);
++    assert(location->program_id == 0x040000000000003a);
++    *pid = 1234;
++    return fixture::launch_result;
++}
++void svcSleepThread(s64 ns) {
++    assert(ns == 1000000);
++    ++fixture::sleeps;
++    if (fixture::publish_on_sleep && fixture::sleeps == 3)
++        ounce::launchFromSdkThread(fixture::publish_on_sleep);
++}
++}
++
++int main() {
++    using namespace fixture;
++    // These internal request and public host layouts must not drift in this fix.
++    static_assert(sizeof(ounce::PmLaunchRequest) == 48);
++    static_assert(offsetof(ounce::PmLaunchRequest, completed) == 40);
++
++    reset();
++    Launch success;
++    ounce::launchFromSdkThread(&success.pm);
++    assert(__atomic_load_n(&success.pm.completed, __ATOMIC_ACQUIRE) == 1);
++    assert(success.pm.pid == 1234 && success.pm.result == 0);
++    Gate delayed{.delay = 5};
++    Mount mounted;
++    ounce::exchangeLaunchMount(&success, delayed, mounted);
++    // A successful PM reply can precede CodeFS: still serve the second target.
++    assert(success.exchanged && success.mounts == 2 && mounted.exchanges == 1);
++    assert(delayed.requests == 3 && sleeps == 5 && trywait_calls == 0);
++
++    reset();
++    Launch null_trywait;
++    null_trywait.input.pthread_trywait = nullptr;
++    ounce::launchFromSdkThread(&null_trywait.pm);
++    Gate null_delayed{.delay = 2};
++    Mount null_mount;
++    ounce::exchangeLaunchMount(&null_trywait, null_delayed, null_mount);
++    assert(null_trywait.exchanged && null_trywait.mounts == 2 && sleeps == 2);
++
++    reset();
++    Launch failed;
++    launch_result = Failure;
++    publish_on_sleep = &failed.pm;
++    Gate waiting{.never_ready = true};
++    Mount unused;
++    ounce::exchangeLaunchMount(&failed, waiting, unused);
++    // Actual PM worker publication stops waiting, without thread-runtime calls.
++    assert(sleeps == 3 && waiting.pending_calls == 4 && trywait_calls == 0);
++    assert(failed.pm.result == Failure && !failed.exchanged && unused.exchanges == 0);
++
++    reset();
++    Launch unpublished;
++    unpublished.pm.result = Failure; // In-progress fields are not completion.
++    Gate bounded{.never_ready = true};
++    ounce::exchangeLaunchMount(&unpublished, bounded, unused);
++    assert(bounded.pending_calls == 30000 && sleeps == 30000 && !trywait_calls);
++
++    reset();
++    Launch gate_failure;
++    Gate bad_gate{.pending_result = Failure};
++    ounce::exchangeLaunchMount(&gate_failure, bad_gate, unused);
++    assert(gate_failure.result == Failure && !gate_failure.exchanged && !sleeps);
++
++    Launch exchange_failure;
++    Gate ready;
++    Mount bad_mount{.exchange_result = Failure};
++    ounce::exchangeLaunchMount(&exchange_failure, ready, bad_mount);
++    assert(exchange_failure.result == Failure && !exchange_failure.exchanged);
++    assert(exchange_failure.mounts == 2 && bad_mount.exchanges == 1);
++
++    // The actual PM worker publishes PID/result before completion. The caller
++    // observes them only after an acquire, before joining the host test thread.
++    reset();
++    Launch concurrent;
++    std::thread worker([&] { ounce::launchFromSdkThread(&concurrent.pm); });
++    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
++    while (!__atomic_load_n(&concurrent.pm.completed, __ATOMIC_ACQUIRE)) {
++        assert(std::chrono::steady_clock::now() < deadline);
++        std::this_thread::yield();
++    }
++    assert(concurrent.pm.pid == 1234 && concurrent.pm.result == 0);
++    worker.join();
++    std::puts("bootstrap: real Loader serving loop avoids pthread re-entry; PM publication, early success/failure, bounds and transport failures passed");
++}
 diff --git a/common/code_mount_request.hpp b/common/code_mount_request.hpp
 index e270b04..fce3df7 100644
 --- a/common/code_mount_request.hpp
@@ -391,6 +804,23 @@ index 7c3eb44..d3c9f6a 100644
 +            .out_handles = unused_handles,
          );
      }
+ 
+diff --git a/hen/Makefile b/hen/Makefile
+index d18dd69..6253ee7 100644
+--- a/hen/Makefile
++++ b/hen/Makefile
+@@ -15,8 +15,11 @@ CXXFLAGS := $(ARCH) -std=gnu++20 -O2 -Wall -Wextra -Werror \
+     -ffunction-sections -fdata-sections -MMD -MP \
+     -D__SWITCH__ -D__SWITCH2__ \
+     -I$(LIBOUNCE)/include -I$(DEVKITPRO)/libnx/include -I../libkaihen/include -Isource
++# The matched NSO embeds this ELF ID. The default GNU ID changes with the
++# isolated build path even when every loadable segment is identical.
+ LDFLAGS := $(ARCH) -specs=$(OUT)/switch.specs -Wl,--gc-sections \
+-    -Wl,-Map,$(OUT)/hen.map
++    -Wl,-Map,$(OUT)/hen.map \
++    -Wl,--build-id=0x42c1a27a0a85fa58bed657df168e235d3604b351
+ 
+ all: $(OUT)/main
  
 diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
 index 4d2ba21..de6c265 100644
@@ -3960,3 +4390,399 @@ index 874dd9e..533f8ef 100644
      return 0;
  }
  
+diff --git a/ro/README.md b/ro/README.md
+index 7c11d6c..951bb27 100644
+--- a/ro/README.md
++++ b/ro/README.md
+@@ -48,7 +48,12 @@ console. The AArch64 NSO build passes with warnings treated as errors.
+   publication, and teardown.
+ - `image.cpp`: the existing supported NRO layout.
+ - `fs_memory.cpp`: the private `ro:dmnt` endpoint: FS code memory reads and
+-  writes for kaiHEN (`../include/ro_dmnt.h`), and RO's diagnostics.
++  writes for kaiHEN (`../include/ro_dmnt.h`), and RO's diagnostics. The
++  Seedsow build also answers a nonce challenge and bounded process commands
++  0x524f0010–0x524f0016 with the kernel's server PID on every reply. The
++  challenge and process commands use the same port as HEN's private FS reader.
++  At startup the replacement registers `ro:dmnt` directly. If stock RO left
++  a stale system-space registration, it releases that entry and retries.
+ 
+ Mapping cleanup remains explicit because unmapping can fail. As in the
+ source implementation, a failed partial cleanup retains its ownership
+diff --git a/ro/source/fs_memory.cpp b/ro/source/fs_memory.cpp
+index 712ee94..7a39848 100644
+--- a/ro/source/fs_memory.cpp
++++ b/ro/source/fs_memory.cpp
+@@ -131,6 +131,243 @@ bool hasShape(const HipcParsedRequest& request, u32 copy_handles, u32 send_buffe
+            meta.num_recv_buffers == recv_buffers && !meta.num_exch_buffers && !meta.num_recv_statics;
+ }
+ 
++bool hasProbeShape(const HipcParsedRequest& request, bool pid, u32 copies, u32 receives) {
++    const HipcMetadata& meta = request.meta;
++    return meta.type == CmifCommandType_Request && meta.send_pid == pid &&
++           meta.num_copy_handles == copies && !meta.num_move_handles &&
++           !meta.num_send_statics && !meta.num_send_buffers &&
++           meta.num_recv_buffers == receives && !meta.num_exch_buffers &&
++           !meta.num_recv_statics;
++}
++
++void copyMemoryInfo(u64* out, const MemoryInfo& info) {
++    out[0] = info.addr;
++    out[1] = info.size;
++    out[2] = info.type | (static_cast<u64>(info.attr) << 32);
++    out[3] = info.perm | (static_cast<u64>(info.ipc_refcount) << 32);
++    out[4] = info.device_refcount;
++}
++
++Result queryProcess(Handle process, u64 address, MemoryInfo* info) {
++    u32 page = 0;
++    if (process == CUR_PROCESS_HANDLE)
++        return svcQueryMemory(info, &page, address);
++    return svcQueryProcessMemory(info, &page, process, address);
++}
++
++// The process probe reports a free page in both address spaces. Never maps
++// there until a later, separately checked command requests a mapping.
++u64 freeAddress(Handle process, u64 size) {
++    u64 start = 0, extent = 0, alias = 0, alias_size = 0, heap = 0, heap_size = 0;
++    if (R_FAILED(svcGetInfo(&start, InfoType_AslrRegionAddress, process, 0)) ||
++        R_FAILED(svcGetInfo(&extent, InfoType_AslrRegionSize, process, 0)) ||
++        R_FAILED(svcGetInfo(&alias, InfoType_AliasRegionAddress, process, 0)) ||
++        R_FAILED(svcGetInfo(&alias_size, InfoType_AliasRegionSize, process, 0)) ||
++        R_FAILED(svcGetInfo(&heap, InfoType_HeapRegionAddress, process, 0)) ||
++        R_FAILED(svcGetInfo(&heap_size, InfoType_HeapRegionSize, process, 0)) ||
++        !extent || start > UINT64_MAX - extent || alias > UINT64_MAX - alias_size ||
++        heap > UINT64_MAX - heap_size)
++        return 0;
++    const u64 end = start + extent;
++    u64 at = start ? start : PageSize;
++    for (u32 i = 0; i < 256 && at < end && size <= end - at; i++) {
++        MemoryInfo info = {};
++        if (R_FAILED(queryProcess(process, at, &info)) || !info.size ||
++            info.addr > at || info.size > UINT64_MAX - info.addr ||
++            info.addr + info.size <= at)
++            return 0;
++        const u64 next = info.addr + info.size;
++        if (alias_size && at < alias + alias_size && at + size > alias) {
++            at = alias + alias_size;
++            continue;
++        }
++        if (heap_size && at < heap + heap_size && at + size > heap) {
++            at = heap + heap_size;
++            continue;
++        }
++        if (info.type == MemType_Unmapped && size <= next - at)
++            return at;
++        at = next;
++    }
++    return 0;
++}
++
++Result runProbeCommand(u32 command, Handle process, const u64* input, u32 bytes,
++                       u64* out, u32* output_size, void* receive, u64 receive_size) {
++    *output_size = 64;
++    if (bytes < sizeof(RoProcessMemoryRequest) ||
++        (receive_size && command != RoProcessReadCommand))
++        return RoResult_BadRequest;
++    u64 pid = 0, program = 0;
++    const Result pid_rc = svcGetProcessId(&pid, process);
++    const Result program_rc = svcGetInfo(&program, InfoType_ProgramId, process, 0);
++    out[0] = pid;
++    out[1] = program;
++    out[2] = static_cast<u64>(pid_rc) | (static_cast<u64>(program_rc) << 32);
++    if (R_FAILED(pid_rc)) return pid_rc;
++    if (R_FAILED(program_rc)) return program_rc;
++    if (input[0] && input[0] != pid) return RoResult_BadRequest;
++
++    MemoryInfo info = {};
++    const Result queried = queryProcess(process, input[1], &info);
++    out[3] = queried;
++    if (command == 0x524f0010) {
++        copyMemoryInfo(out + 4, info);
++        *output_size = 104;
++        (void)svcGetInfo(&out[9], InfoType_AslrRegionAddress, process, 0);
++        (void)svcGetInfo(&out[10], InfoType_AslrRegionSize, process, 0);
++        out[11] = freeAddress(process, PageSize);
++        out[12] = freeAddress(CUR_PROCESS_HANDLE, PageSize);
++        return queried;
++    }
++    if (!input[0] || R_FAILED(queried))
++        return R_FAILED(queried) ? queried : RoResult_BadRequest;
++
++    if (command == 0x524f0011 || command == RoProcessReadCommand) {
++        const u64 address = input[1], length = input[2];
++        const bool bulk = command == RoProcessReadCommand;
++        const u64 limit = bulk ? MaximumReadSize : 128;
++        if (!length || length > limit || address > UINT64_MAX - length ||
++            address < info.addr || length > info.size || address - info.addr > info.size - length ||
++            (info.type != MemType_CodeStatic && info.type != MemType_CodeMutable) || info.attr ||
++            (bulk && (!receive || length > receive_size)) ||
++            (!bulk && (address & (PageSize - 1)) + length > PageSize))
++            return RoResult_BadRequest;
++        MappedRange range = {};
++        const Result mapped = mapRange(process, address, length, &range);
++        out[4] = mapped;
++        if (R_FAILED(mapped)) return mapped;
++        out[3] = reinterpret_cast<u64>(range.local);
++        void* destination = bulk ? receive : static_cast<void*>(reinterpret_cast<u8*>(out + 7));
++        std::memcpy(destination, range.bytes, length);
++        out[5] = unmapRange(process, range);
++        out[6] = length;
++        *output_size = bulk ? 64 : static_cast<u32>(56 + length);
++        return static_cast<Result>(out[5]);
++    }
++    if (command == 0x524f0012 || command == 0x524f0013) {
++        const u64 source = input[1], destination = input[2], size = input[3];
++        if (((source | destination) & (PageSize - 1)) || size != PageSize)
++            return RoResult_BadRequest;
++        if (command == 0x524f0013)
++            return svcUnmapProcessCodeMemory(process, destination, source, size);
++        if (info.type != MemType_Heap || info.perm != Perm_Rw || info.attr ||
++            source < info.addr || source - info.addr > info.size - size)
++            return RoResult_BadRequest;
++        MemoryInfo target = {};
++        const Result target_rc = queryProcess(process, destination, &target);
++        if (R_FAILED(target_rc) || target.type != MemType_Unmapped ||
++            destination < target.addr || size > target.size || destination - target.addr > target.size - size)
++            return R_FAILED(target_rc) ? target_rc : RoResult_BadRequest;
++        out[3] = svcMapProcessCodeMemory(process, destination, source, size);
++        if (out[3]) return static_cast<Result>(out[3]);
++        out[4] = svcSetProcessMemoryPermission(process, destination, size, Perm_Rx);
++        if (out[4]) out[5] = svcUnmapProcessCodeMemory(process, destination, source, size);
++        return static_cast<Result>(out[4]);
++    }
++    if (command == 0x524f0014) {
++        *output_size = 80;
++        const u64 address = input[1], size = input[2];
++        if (bytes < 64 || size != 16 || (address & 3) ||
++            (address & (PageSize - 1)) + size > PageSize ||
++            !(info.perm & Perm_X) || info.attr || address < info.addr ||
++            size > info.size || address - info.addr > info.size - size)
++            return RoResult_BadRequest;
++        MappedRange range;
++        out[4] = mapRange(process, address, size, &range);
++        if (out[4]) return static_cast<Result>(out[4]);
++        out[9] = reinterpret_cast<u64>(range.local);
++        MemoryInfo alias = {};
++        const Result queried_alias = queryProcess(CUR_PROCESS_HANDLE,
++            reinterpret_cast<u64>(range.local), &alias);
++        out[5] = alias.perm | (static_cast<u64>(alias.attr) << 32);
++        Result rc = queried_alias;
++        if (R_SUCCEEDED(rc) && (alias.perm != Perm_Rw || alias.attr)) rc = RoResult_BadRequest;
++        const u8* expected = reinterpret_cast<const u8*>(input + 4);
++        const u8* replacement = reinterpret_cast<const u8*>(input + 6);
++        if (R_SUCCEEDED(rc)) {
++            out[6] = std::memcmp(range.bytes, expected, size) == 0;
++            if (!out[6]) rc = RoResult_BadRequest;
++        }
++        if (R_SUCCEEDED(rc)) {
++            std::memcpy(range.bytes, replacement, size);
++            armDCacheClean(range.bytes, size);
++            armICacheInvalidate(range.bytes, size);
++            out[7] = std::memcmp(range.bytes, replacement, size) == 0;
++            if (!out[7]) rc = RoResult_BadRequest;
++        }
++        out[8] = unmapRange(process, range);
++        return out[8] ? static_cast<Result>(out[8]) : rc;
++    }
++    if (command == 0x524f0015) {
++        const u64 address = input[1], size = input[2], permission = input[3];
++        if (program != FilesystemProgramId || ((address | size) & (PageSize - 1)) ||
++            !size || size > 0x4000000 ||
++            (info.type != MemType_CodeStatic && info.type != MemType_CodeMutable) || info.attr ||
++            (info.perm != Perm_X && info.perm != Perm_Rx) ||
++            (permission != Perm_X && permission != Perm_Rx) || address < info.addr ||
++            size > info.size || address - info.addr > info.size - size)
++            return RoResult_BadRequest;
++        out[3] = info.perm;
++        out[4] = svcSetProcessMemoryPermission(process, address, size, permission);
++        if (out[4]) return static_cast<Result>(out[4]);
++        MemoryInfo after = {};
++        out[5] = queryProcess(process, address, &after);
++        copyMemoryInfo(out + 6, after);
++        *output_size = 88;
++        return static_cast<Result>(out[5]);
++    }
++    return RoResult_BadRequest;
++}
++
++/// Moader's source-qualified Seedsow proof uses the same private service as
++/// HEN, with a kernel PID descriptor on every diagnostic reply. HEN's older
++/// read/write shape has no incoming PID and keeps its original reply layout.
++bool serveProbe(void* message, const HipcParsedRequest& request) {
++    const CmifInHeader* header = getHeader(message, request, 0);
++    if (!header || header->magic != CMIF_IN_HEADER_MAGIC)
++        return false;
++    const u32 command = header->command_id;
++    if (command == 0x524f0001) {
++        if (!hasProbeShape(request, false, 0, 0) ||
++            !getHeader(message, request, sizeof(u64))) {
++            roWriteDiagnosticReply(message, RoResult_BadRequest, nullptr, 0);
++            return true;
++        }
++        u64 nonce = 0, pid = 0, thread = 0;
++        std::memcpy(&nonce, header + 1, sizeof(nonce));
++        const Result pid_rc = svcGetProcessId(&pid, CUR_PROCESS_HANDLE);
++        const Result thread_rc = svcGetThreadId(&thread, CUR_THREAD_HANDLE);
++        const u64 reply[6] = {0x4558454f5232534eULL, nonce ^ 0x9d7c3a51e6b2048fULL,
++                              pid, thread, svcGetSystemTick(), 0};
++        roWriteDiagnosticReply(message, R_FAILED(pid_rc) ? pid_rc : thread_rc,
++                               reply, sizeof(reply));
++        return true;
++    }
++    if (command < 0x524f0010 || command > RoProcessReadCommand ||
++        (command == RoProcessReadCommand && !request.meta.send_pid))
++        return false;
++    const u32 bytes = command == 0x524f0014 ? 64 : sizeof(RoProcessMemoryRequest);
++    if (!hasProbeShape(request, true, 1, command == RoProcessReadCommand ? 1 : 0) ||
++        !getHeader(message, request, bytes) ||
++        request.data.copy_handles[0] == INVALID_HANDLE) {
++        roWriteDiagnosticReply(message, RoResult_BadRequest, nullptr, 0);
++        return true;
++    }
++    u64 input[8] = {};
++    std::memcpy(input, header + 1, bytes);
++    u64 output[24] = {};
++    u32 size = 64;
++    void* receive = command == RoProcessReadCommand ?
++        hipcGetBufferAddress(&request.data.recv_buffers[0]) : nullptr;
++    const u64 capacity = command == RoProcessReadCommand ?
++        hipcGetBufferSize(&request.data.recv_buffers[0]) : 0;
++    const Result rc = runProbeCommand(command, request.data.copy_handles[0],
++                                      input, bytes, output, &size, receive, capacity);
++    roWriteDiagnosticReply(message, rc, output, size);
++    return true;
++}
++
+ /// Answers RoDiagnosticsCommand, if that is the request.
+ bool serveDiagnostics(void* message, const HipcParsedRequest& request) {
+     const CmifInHeader* header = getHeader(message, request, 0);
+@@ -196,6 +433,11 @@ void roFsMemoryDispatch(void* message) {
+     if (serveDiagnostics(message, request))
+         return;
+ 
++    if (serveProbe(message, request)) {
++        closeRequestHandles(request);
++        return;
++    }
++
+     const Result rc = runMemoryCommand(message, request);
+     closeRequestHandles(request);
+     roWriteReply(message, rc, 0, false);
+diff --git a/ro/source/main.cpp b/ro/source/main.cpp
+index 818c497..f650eb8 100644
+--- a/ro/source/main.cpp
++++ b/ro/source/main.cpp
+@@ -41,11 +41,24 @@ class RoServer {
+             }
+ 
+             Handle port = INVALID_HANDLE;
+-            Result rc =
+-                smRegisterServiceInSpace(&port, ServicePorts[i].space,
+-                                         smEncodeName(ServicePorts[i].name), false, 4);
++            const SmServiceName name = smEncodeName(ServicePorts[i].name);
++            Result rc = smRegisterServiceInSpace(
++                &port, ServicePorts[i].space, name, false, 4);
++            if (R_FAILED(rc) && ServicePorts[i].fs_memory && !dmnt_stale_released_) {
++                // Stock RO's name may survive its process as a dead SM entry.
++                // A fresh boot can also have no stale entry, so a failed
++                // Unregister must never suppress a successful Register.
++                const Result stale = smUnregisterServiceInSpace(ServicePorts[i].space, name);
++                if (R_SUCCEEDED(stale)) {
++                    dmnt_stale_released_ = true;
++                    rc = smRegisterServiceInSpace(
++                        &port, ServicePorts[i].space, name, false, 4);
++                }
++            }
+             if (R_SUCCEEDED(rc)) {
+                 ports_[i].reset(port);
++                if (ServicePorts[i].fs_memory)
++                    dmnt_stale_released_ = true;
+             }
+         }
+     }
+@@ -148,6 +161,7 @@ class RoServer {
+     ounce::HandleOwner sessions_[MaxSessions];
+     RoSession clients_[MaxSessions] = {};
+     bool fs_memory_[MaxSessions] = {};
++    bool dmnt_stale_released_ = false;
+ };
+ 
+ RoServer g_server;
+diff --git a/ro/source/wire.cpp b/ro/source/wire.cpp
+index e9591ef..843eace 100644
+--- a/ro/source/wire.cpp
++++ b/ro/source/wire.cpp
+@@ -5,6 +5,7 @@
+ // CMIF server (behaviour only, no code: Request or RequestWithContext, SFCI
+ // with version <= 1, raw data at least the header plus the payload).
+ #include "wire.h"
++#include "results.h"
+ 
+ #include <cstring>
+ #include "switch/sf/hipc.h"
+@@ -186,3 +187,24 @@ void roWriteJitAliasReply(void* base, Result rc, const KaihenJitAliasInfo* info)
+     const bool send_info = R_SUCCEEDED(rc);
+     writeReplyMessage(base, rc, send_info ? info : nullptr, send_info ? sizeof(*info) : 0, 0, INVALID_HANDLE);
+ }
++
++void roWriteDiagnosticReply(void* base, Result rc, const void* data, u32 size) {
++    // The largest supported reply is a 128-byte process read plus 56 bytes of
++    // metadata. The special PID header still fits in the 0x100-byte TLS area.
++    if (size > 184 || (size && !data)) {
++        roWriteReply(base, RoResult_BadRequest, 0, false);
++        return;
++    }
++    std::memset(base, 0, MessageSize);
++    HipcRequest hipc = hipcMakeRequestInline(base,
++        .num_data_words = static_cast<u32>((sizeof(CmifOutHeader) + size + 0x10 + 3) / sizeof(u32)),
++        .send_pid = 1,
++    );
++    auto* header = static_cast<CmifOutHeader*>(cmifGetAlignedDataStart(hipc.data_words, base));
++    header->magic = CMIF_OUT_HEADER_MAGIC;
++    header->version = 0;
++    header->result = rc;
++    header->token = RoInterfaceToken;
++    if (size)
++        std::memcpy(header + 1, data, size);
++}
+diff --git a/ro/source/wire.h b/ro/source/wire.h
+index 082a3d9..e8d709c 100644
+--- a/ro/source/wire.h
++++ b/ro/source/wire.h
+@@ -64,3 +64,7 @@ void roWriteHandleReply(void* base, Result rc, Handle handle);
+ 
+ /// Writes the MapJitAlias reply: RO's view of the mapping on success.
+ void roWriteJitAliasReply(void* base, Result rc, const KaihenJitAliasInfo* info);
++
++/// Private diagnostic reply with the kernel's server PID and bounded raw data.
++/// The PID is required to bind every process command to the challenged RO.
++void roWriteDiagnosticReply(void* base, Result rc, const void* data, u32 size);
+diff --git a/ro/tests/wire_test.cpp b/ro/tests/wire_test.cpp
+index 75041b7..feaf541 100644
+--- a/ro/tests/wire_test.cpp
++++ b/ro/tests/wire_test.cpp
+@@ -64,5 +64,24 @@ int main(void) {
+     /* Wrong handle count for Initialize: rejected. */
+     build(RoCmd_Initialize, &pid_placeholder, sizeof pid_placeholder, 0);
+     assert(!roParseRequest(g_words, &out));
++
++    /* Diagnostic replies carry the kernel's server PID descriptor and the
++     * exact challenge data after the CMIF header. The host binds to that PID. */
++    const uint64_t challenge[6] = {0x4558454f5232534eULL, 7, 213, 9, 11, 0};
++    roWriteDiagnosticReply(g_words, 0, challenge, sizeof challenge);
++    assert(g_words[0] == 0 && (g_words[1] & 0x80000000u));
++    assert(g_words[2] == 1); /* Kernel PID flag, no copied handles. */
++    const HipcParsedRequest reply = hipcParseRequest(g_words);
++    const auto* header = static_cast<const CmifOutHeader*>(
++        cmifGetAlignedDataStart(reply.data.data_words, g_words));
++    assert(header->magic == CMIF_OUT_HEADER_MAGIC && header->result == 0);
++    assert(!memcmp(header + 1, challenge, sizeof challenge));
++
++    uint8_t oversized[185] = {};
++    roWriteDiagnosticReply(g_words, 0, oversized, sizeof oversized);
++    const HipcParsedRequest rejected = hipcParseRequest(g_words);
++    const auto* rejection = static_cast<const CmifOutHeader*>(
++        cmifGetAlignedDataStart(rejected.data.data_words, g_words));
++    assert(rejection->result != 0);
+     return 0;
+ }

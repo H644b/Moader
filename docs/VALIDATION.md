@@ -1,5 +1,19 @@
 # What has been tested
 
+## Seedsow Lullaby Demo source workflow
+
+One combined installation was observed on a Seedsow Lullaby **Demo** on firmware 23.0.1 using the reviewed `Malev0/seedsow-fs-kaihen` source revision `7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17` and Moader's matched local RO/HEN/bootstrap build. This is a source branch workflow, separate from the published v0.1.2 backend kit and the earlier SmileBASIC and CivSwitch records.
+
+The same boot's private run receipts establish fresh FS memory read/write/restoration, two diagnostic RO/FS instruction challenges, Loader restoration, Moader resident runtime installation with fresh FS code qualification and metadata readback, matched kaiHEN startup (operation 10/result 0), and a borrowed, same-owner HEN inspection. That inspection reported HEN protocol 7/result 0, one published `moader` plugin, a reachable resident service, `backendConnected: true` and current routing generation. The original RO inspection lease remained owned; newly opened inspector handles closed.
+
+The owner entered hbmenu through the documented two-launch hold-R route, opened Moader, and reported native runtime and FS connected in its debug view. The owner paired the console-hosted browser privately, loaded the library and settings, closed Moader with **+**, and reported that the browser still worked. A Mac HTTP check returned 200 from the console-hosted web page both before and after the app closed. The pairing code was neither collected nor published.
+
+The owner also reported that Pokémon Z-A HD texture mods worked. No mod name, same-boot toggle/apply-state sequence, replacement-read trace or visible before/after capture was supplied for this Seedsow run. Treat that statement as an owner observation rather than a measured Seedsow file-routing test.
+
+The GUI process used for this installation incorrectly compared HEN's own status PID with the bootstrap receipt's last launched plugin PID. The native HEN and resident inspection succeeded, but that old host process did not print its final held verification message. The source now uses a same-owner status gate that binds the retained RO startup file, HEN result, published plugin and live resident summary without equating those distinct PIDs. Focused host tests and the saved real receipt pass the corrected gate; a new console run of that final GUI message has not been recorded.
+
+In a temporary clean source copy on Apple Silicon macOS, pinned SDK setup, an offline source build using supplied checksum-pinned Seedsow/kaiHEN archives, and the read-only backend check passed. The build reproduced the exact patched RO, HEN, bootstrap, app and resident hashes. The Apple command line tools `clang` and pinned SDK `objcopy` reproduced the 72-byte helper digest. Fresh online archive downloads were not repeated in this isolated check; the GUI's pinned source provisioning and matched-bundle host checks passed separately. These checks do not establish other firmware, Seedsow Full Game, Windows/Linux host support, or every game/mod file behavior. [Seedsow installation instructions](SEEDSOW.md).
+
 ## v0.1.2 source refresh
 
 The source removes Moader's local pending-launch workaround while retaining the existing reload, cartridge and setup features. Official kaiHEN `20261117.1` was checked; this release keeps the qualified `20261114c` / `e897f991524590833b82fbe8d63a3c6775fb8101` base because the newer command-23 interface conflicts with Moader's reload ABI. [Source disclosure](KAIHEN_CHANGES.md).

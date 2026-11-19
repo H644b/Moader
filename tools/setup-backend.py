@@ -10,7 +10,11 @@ ENGINE_URL = f'https://gitlab.com/kurumuz/ns2jb/-/archive/{NS2JB_REV}/ns2jb-{NS2
 CIV7_REV = '51a804cbce09216e1a42e65929644fd436b4c8bf'
 CIV7_TREE_SHA = 'd83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75'
 CIV7_URL = f'https://github.com/s8n/civ7-fs-kaihen/archive/{CIV7_REV}.tar.gz'
-HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n')
+SEEDSOW_REV = '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17'
+SEEDSOW_TREE_SHA = '4d4375f2729ca4b95a98348419c1e2b7edffa684bf53316f00a38194c5f4ca7b'
+SEEDSOW_ARCHIVE_SHA = '616660cb65acc703402a212e8691aff84b7f4c228aeedcef80a7763130291976'
+SEEDSOW_URL = f'https://github.com/Malev0/seedsow-fs-kaihen/archive/{SEEDSOW_REV}.tar.gz'
+HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n', 'seedsow-malev0')
 KAIHEN_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip'
 KAIHEN_SHA = '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967'
 HEN_SHA = 'e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c'
@@ -26,7 +30,25 @@ def require(ok, message):
 
 
 def source_profile(name='smilebasic-kurumuz'):
-    require(name in HOST_PROFILES, 'Unknown host profile; choose smilebasic-kurumuz or civ7-s8n')
+    require(name in HOST_PROFILES, 'Unknown host profile; choose ' + ', '.join(HOST_PROFILES))
+    if name == 'seedsow-malev0':
+        descriptor = json.loads(regular(ROOT / 'config/seedsow-provider.json').read_text())
+        expected = {'schemaVersion': 1, 'id': name, 'target': 'seedsow', 'repository': 'Malev0/seedsow-fs-kaihen',
+                    'revision': SEEDSOW_REV, 'archiveSha256': SEEDSOW_ARCHIVE_SHA,
+                    'sourceDirectory': 'research/sources/seedsow-fs-kaihen', 'sourceTreeAlgorithm': SOURCE_TREE_ALGORITHM,
+                    'sourceTreeSha256': SEEDSOW_TREE_SHA, 'engineRelativePath': 'ns2jb-main/ns2jb-main/engine'}
+        require(isinstance(descriptor, dict) and all(descriptor.get(key) == value for key, value in expected.items()),
+                'Seedsow provider descriptor differs from pinned source identity')
+        files = descriptor.get('files')
+        require(isinstance(files, dict) and files, 'Missing Seedsow source file closure')
+        for path, sha in files.items():
+            safe_name(path)
+            require(isinstance(sha, str) and re.fullmatch(r'[a-f0-9]{64}', sha), 'Invalid Seedsow source file hash')
+        require(digest(''.join(path + '\0' + sha + '\n' for path, sha in sorted(files.items())).encode()) == SEEDSOW_TREE_SHA,
+                'Seedsow provider file closure differs from pinned source tree')
+        return {'id': name, 'revision': SEEDSOW_REV, 'sha256': SEEDSOW_TREE_SHA, 'url': SEEDSOW_URL,
+                'archiveSha256': SEEDSOW_ARCHIVE_SHA, 'directory': descriptor['sourceDirectory'],
+                'engine': descriptor['engineRelativePath'], 'files': files, 'label': 'Seedsow Malev0 source'}
     if name == 'civ7-s8n':
         return {'id': name, 'revision': CIV7_REV, 'sha256': CIV7_TREE_SHA, 'url': CIV7_URL,
                 'directory': 'research/sources/civ7-fs-kaihen', 'label': 'Civ7 s8n source'}
@@ -87,11 +109,18 @@ def tree_files(root):
 def engine_files(archive, host_profile='smilebasic-kurumuz'):
     selected, total = {}, 0
     profile = source_profile(host_profile)
-    prefixes = ((f'civ7-fs-kaihen-{CIV7_REV}/', '') if host_profile == 'civ7-s8n' else
+    if host_profile == 'seedsow-malev0':
+        require(regular(archive).stat().st_size <= MAX_ARCHIVE, 'Source archive exceeds size bound')
+    prefixes = ((f'seedsow-fs-kaihen-{SEEDSOW_REV}/',) if host_profile == 'seedsow-malev0' else
+                (f'civ7-fs-kaihen-{CIV7_REV}/', '') if host_profile == 'civ7-s8n' else
                 (f'ns2jb-{NS2JB_REV}/engine/', 'engine/', 'research/sources/ns2jb/engine/'))
     if zipfile.is_zipfile(archive):
         entries = zip_files(archive)
     else:
+        if profile.get('archiveSha256'):
+            # The canonical tarball has a byte pin; ZIPs use the same selected
+            # source-tree pin with the explicit revision-rooted layout.
+            checked_archive(archive, profile['archiveSha256'])
         entries = {}
         with tarfile.open(archive, 'r:*') as source:
             rows = source.getmembers(); require(len(rows) <= MAX_ENTRIES, 'Too many source archive entries')
@@ -113,6 +142,8 @@ def engine_files(archive, host_profile='smilebasic-kurumuz'):
             relative = name[len(prefix):]; safe_name(relative)
             if host_profile == 'civ7-s8n' and not (relative.startswith(('engine/', 'targets/civ7/')) or relative == 'bridge/civ_bridge.js'):
                 continue
+            if host_profile == 'seedsow-malev0' and not (relative.startswith(profile['engine'] + '/') or relative in profile['files']):
+                continue
             require(relative not in selected, 'Duplicate pinned engine path')
             selected[relative] = data
     require(selected and tree_sha(selected) == profile['sha256'], 'Pinned ' + profile['label'] + ' content differs; no fallback to another revision')
@@ -121,6 +152,16 @@ def engine_files(archive, host_profile='smilebasic-kurumuz'):
 
 def profile_files(root, profile):
     directory = safe_destination(root, profile['directory'])
+    if profile['id'] == 'seedsow-malev0':
+        # Keep the original nested engine layout. Extra engine files fail the
+        # tree pin; unrelated checkout files are outside this source closure.
+        engine = profile['engine']
+        target = safe_destination(root, profile['directory'] + '/' + engine)
+        result = {engine + '/' + name: data for name, data in tree_files(target).items()}
+        for name in profile['files']:
+            if not name.startswith(engine + '/'):
+                result[name] = regular(safe_destination(root, profile['directory'] + '/' + name)).read_bytes()
+        return result
     if profile['id'] != 'civ7-s8n':
         return tree_files(directory)
     # A full upstream checkout can coexist with the selected closure. Inspect
@@ -189,14 +230,16 @@ def proof(root):
         require(p.get('hen_sha256') == HEN_SHA and not any(key in p for key in
                 ('components', 'bootstrap_sha256', 'protocol_version', 'source_tree_sha256')), 'Public legacy HEN proof/hash differs or mixes new descriptors')
         return p
-    require(p.get('schema') == 2, 'Unsupported kaiHEN build proof schema')
+    require(p.get('schema') in (2, 3), 'Unsupported kaiHEN build proof schema')
     require(p.get('base_commit') == 'e897f991524590833b82fbe8d63a3c6775fb8101' and p.get('release_base') == '20261114c' and
             p.get('patch') == 'software-builds/kaihen-mo.patch' and p.get('protocol_version') == 7, 'Unqualified kaiHEN base, patch or protocol')
     require(p.get('native_build_passed') is True and type(p.get('console_retest_passed')) is bool, 'Missing explicit native build/console validation scope')
     require(p.get('source_tree_algorithm') == SOURCE_TREE_ALGORITHM and p.get('source_tree_sha256') == kaihen_source_sha(root), 'kaiHEN source identity differs from build proof')
     require(p.get('patch_sha256') == digest(patch), 'kaiHEN patch identity differs from build proof')
     components = p.get('components')
-    require(isinstance(components, dict) and set(components) == {'hen/main', 'bootstrap.bin'}, 'Build proof requires exactly the HEN/bootstrap pair')
+    expected = {'hen/main', 'bootstrap.bin'} | ({'ro/main'} if p['schema'] == 3 else set())
+    require(isinstance(components, dict) and set(components) == expected,
+            'Build proof requires the exact RO/HEN/bootstrap set' if p['schema'] == 3 else 'Build proof requires exactly the HEN/bootstrap pair')
     for name, item in components.items():
         require(isinstance(item, dict) and set(item) == {'bytes', 'sha256'} and type(item['bytes']) is int and 0 < item['bytes'] <= MAX_FILE and
                 isinstance(item['sha256'], str) and re.fullmatch(r'[a-f0-9]{64}', item['sha256']), 'Invalid patched component descriptor: ' + name)
@@ -207,15 +250,15 @@ def proof(root):
 
 
 def patched_components(p):
-    return p['components'] if p.get('schema') == 2 else {'hen/main': {'sha256': HEN_SHA}}
+    return p['components'] if p.get('schema') in (2, 3) else {'hen/main': {'sha256': HEN_SHA}}
 
 
 def qualify_patched(data, name, p):
     item = patched_components(p)[name]
     require(0 < len(data) <= MAX_FILE and digest(data) == item['sha256'] and ('bytes' not in item or len(data) == item['bytes']),
             'Patched component does not match pinned build/tested bytes: ' + name)
-    if name == 'hen/main':
-        require(data[:4] == b'NSO0', 'Invalid patched HEN NSO')
+    if name in ('hen/main', 'ro/main'):
+        require(data[:4] == b'NSO0', 'Invalid patched native NSO: ' + name)
 
 
 def sdk(root):
@@ -239,14 +282,19 @@ def build_inputs(root, work):
     hen = (source / 'runtime/kaihen/hen/build/main').read_bytes()
     qualify_patched(hen, 'hen/main', p)
     pair = {'hen/main': hen}
-    if p.get('schema') == 2:
+    if p.get('schema') in (2, 3):
         subprocess.run(['make', '-C', str(source / 'runtime/kaihen/bootstrap'), '-j4', 'DEVKITPRO=' + str(devkit), 'LIBOUNCE=' + str(devkit / 'libounce')], check=True)
         bootstrap = regular(source / 'runtime/kaihen/bootstrap/build/bootstrap.bin').read_bytes()
         qualify_patched(bootstrap, 'bootstrap.bin', p); pair['bootstrap.bin'] = bootstrap
+        if p.get('schema') == 3:
+            subprocess.run(['make', '-C', str(source / 'runtime/kaihen/ro'), '-j4',
+                            'DEVKITPRO=' + str(devkit), 'LIBOUNCE=' + str(devkit / 'libounce')], check=True)
+            ro = regular(source / 'runtime/kaihen/ro/build/main').read_bytes()
+            qualify_patched(ro, 'ro/main', p); pair['ro/main'] = ro
         require(kaihen_source_sha(source) == p['source_tree_sha256'], 'Copied native build source identity changed')
     subprocess.run(['make', '-C', str(source), '-j4', 'DEVKITPRO=' + str(devkit)], check=True)
     result = {name: regular(source / name).read_bytes() for name in PROGRAM_ENTRIES}
-    validate_programs(result); return pair if p.get('schema') == 2 else hen, result
+    validate_programs(result); return pair if p.get('schema') in (2, 3) else hen, result
 
 
 def safe_destination(root, relative):
@@ -321,7 +369,8 @@ def check_root(root, node='node', host_profile='smilebasic-kurumuz'):
     return {'readyForInstallerCheck': True, 'consoleConnected': False, 'node': version, 'hostProfile': profile['id'], 'engineRevision': profile['revision'],
             'engineTreeSha256': profile['sha256'], 'henSha256': p['hen_sha256'], 'bundledPrograms': sorted(bundled),
             'kaihenProofSchema': p.get('schema', 1), 'kaihenConsoleRetestPassed': p.get('console_retest_passed', False),
-            **({'bootstrapSha256': p['components']['bootstrap.bin']['sha256'], 'kaihenProtocolVersion': p['protocol_version']} if p.get('schema') == 2 else {}),
+            **({'bootstrapSha256': p['components']['bootstrap.bin']['sha256'], 'kaihenProtocolVersion': p['protocol_version']} if p.get('schema') in (2, 3) else {}),
+            **({'roSha256': p['components']['ro/main']['sha256']} if p.get('schema') == 3 else {}),
             'programs': {name: {'bytes': len(data), 'sha256': digest(data)} for name, data in built.items()}}
 
 
@@ -334,7 +383,7 @@ def setup_sources(root, args):
         require(tree_sha(engine) == profile['sha256'], 'Existing engine differs; use a separate clean checkout')
     else:
         with tempfile.TemporaryDirectory(prefix='moader-engine-source-') as temporary:
-            archive = args.engine_archive or download(profile['url'], pathlib.Path(temporary) / 'engine.tar.gz', offline=args.offline)
+            archive = args.engine_archive or download(profile['url'], pathlib.Path(temporary) / 'engine.tar.gz', expected=profile.get('archiveSha256'), offline=args.offline)
             regular(archive)
             require(archive.stat().st_size <= MAX_ARCHIVE, 'Source archive exceeds size bound')
             engine = engine_files(archive, args.host_profile)
@@ -349,7 +398,7 @@ def setup(args):
     profile = source_profile(args.host_profile)
     require(not (args.check and args.build), '--check cannot build')
     if args.sources_only:
-        conflicts = [name.replace('_', '-') for name in ('check', 'build', 'node', 'release_manifest', 'kaihen_archive', 'programs_archive', 'programs_sha256', 'hen_binary', 'bootstrap_binary') if getattr(args, name) not in (None, False)]
+        conflicts = [name.replace('_', '-') for name in ('check', 'build', 'node', 'release_manifest', 'kaihen_archive', 'programs_archive', 'programs_sha256', 'hen_binary', 'bootstrap_binary', 'ro_binary') if getattr(args, name) not in (None, False)]
         require(not conflicts, '--sources-only accepts only --root, --host-profile, --offline and --engine-archive; conflicting options: ' + ', '.join('--' + name for name in conflicts))
         return setup_sources(args.root.resolve(), args)
     root = args.root.resolve(); p = proof(root)
@@ -376,24 +425,28 @@ def setup(args):
         if engine_target.exists():
             engine = profile_files(root, profile)
         else:
-            engine_archive = args.engine_archive or download(profile['url'], work / 'engine.tar.gz', offline=args.offline)
+            engine_archive = args.engine_archive or download(profile['url'], work / 'engine.tar.gz', expected=profile.get('archiveSha256'), offline=args.offline)
             engine = engine_files(engine_archive, args.host_profile)
         built, app = None, None
         if args.build:
             built, app = build_inputs(root, work)
         pair = built if isinstance(built, dict) else ({'hen/main': built} if built is not None else {})
-        require(p.get('schema') == 2 or not args.bootstrap_binary, '--bootstrap-binary requires the schema-2 paired build proof')
+        require(p.get('schema') in (2, 3) or not args.bootstrap_binary, '--bootstrap-binary requires a paired build proof')
+        require(p.get('schema') == 3 or not args.ro_binary, '--ro-binary requires the schema-3 RO build proof')
         for name, pin in patched_components(p).items():
             if name not in pair:
-                explicit = args.hen_binary if name == 'hen/main' else args.bootstrap_binary
+                explicit = {'hen/main': args.hen_binary, 'bootstrap.bin': args.bootstrap_binary,
+                            'ro/main': args.ro_binary}.get(name)
                 local = root / 'vendor/kaihen-mo' / name
-                release = manifest.get('patched_hen' if name == 'hen/main' else 'patched_bootstrap', {})
+                release = manifest.get({'hen/main': 'patched_hen', 'bootstrap.bin': 'patched_bootstrap',
+                                        'ro/main': 'patched_ro'}[name], {})
                 if explicit:
                     pair[name] = regular(explicit).read_bytes()
                 elif local.exists():
                     pair[name] = regular(local).read_bytes()
                 elif release.get('url'):
-                    pair[name] = download(release['url'], work / ('patched-hen.nso' if name == 'hen/main' else 'bootstrap.bin'), pin['sha256'], args.offline).read_bytes()
+                    pair[name] = download(release['url'], work / {'hen/main': 'patched-hen.nso',
+                        'bootstrap.bin': 'bootstrap.bin', 'ro/main': 'patched-ro.nso'}[name], pin['sha256'], args.offline).read_bytes()
                 else:
                     raise ValueError('Missing pinned patched component '+name+': use the paired host kit, explicit binary, or --build')
             qualify_patched(pair[name], name, p)
@@ -417,11 +470,11 @@ def setup(args):
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', type=pathlib.Path, default=ROOT, help='isolated public checkout/host-kit root')
-    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned held-session consumer; Civ7 is experimental and hardware untested')
+    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned source profile; Civ7 is hardware untested; Seedsow is local development only and does not qualify a held session')
     p.add_argument('--check', action='store_true', help='read-only local validation; no downloads/builds/preparation')
     p.add_argument('--sources-only', action='store_true', help='fetch/validate only selected host sources; no acquisition/HEN/app/SDK/Node work')
     p.add_argument('--offline', action='store_true', help='refuse downloads; use supplied/host-kit inputs')
-    p.add_argument('--build', action='store_true', help='explicit isolated pinned HEN/bootstrap/app rebuild with existing Apple Silicon SDK')
+    p.add_argument('--build', action='store_true', help='explicit isolated pinned RO/HEN/bootstrap/app rebuild with existing Apple Silicon SDK')
     p.add_argument('--node', help='Node executable (default: node); pass mac2jb Node 24 path when appropriate')
     p.add_argument('--release-manifest', type=pathlib.Path)
     p.add_argument('--kaihen-archive', type=pathlib.Path)
@@ -429,7 +482,8 @@ def parser():
     p.add_argument('--programs-archive', type=pathlib.Path)
     p.add_argument('--programs-sha256')
     p.add_argument('--hen-binary', type=pathlib.Path)
-    p.add_argument('--bootstrap-binary', type=pathlib.Path, help='schema-2 pinned bootstrap paired with patched HEN')
+    p.add_argument('--bootstrap-binary', type=pathlib.Path, help='pinned bootstrap paired with patched HEN')
+    p.add_argument('--ro-binary', type=pathlib.Path, help='schema-3 pinned RO with FS proof and HEN frontend')
     return p
 
 
