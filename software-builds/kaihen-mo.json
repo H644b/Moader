@@ -4,15 +4,15 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "3c3e44a19f89d9f547a4d40417d90cb5ce6eb1032d211cec989539953b6d0604",
+  "patch_sha256": "ae2156d3d0e7a821b0546b12e44a5f8abe4de6350d9ea6dd926745d637d24169",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "2553c4dca89deff98e93209c1c357b539733ae119790143c5fb3613ae774b23b",
+  "source_tree_sha256": "92e3cd40b022bb61a08f299365f2c500b7bcff9cb8790202a726dd4781f2e33d",
   "protocol_version": 7,
-  "hen_sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a",
+  "hen_sha256": "4bc8184d9e3c37ce49fb704fa4c044c15ddcd22ea03414823191c7f8a16844f5",
   "components": {
     "hen/main": {
-      "bytes": 130965,
-      "sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a"
+      "bytes": 131316,
+      "sha256": "4bc8184d9e3c37ce49fb704fa4c044c15ddcd22ea03414823191c7f8a16844f5"
     },
     "bootstrap.bin": {
       "bytes": 30016,
@@ -24,7 +24,7 @@
     }
   },
   "native_build_passed": true,
-  "console_retest_passed": true,
-  "reason": "The exact matched RO/HEN/bootstrap pair passed one combined Seedsow Lullaby Demo installation with current-boot FS and RO proof, HEN startup and same-owner resident inspection.",
-  "validation_scope": "One Demo boot also opened Moader and kept its paired browser available after app exit. No same-boot replacement-file read trace or new-console-run proof of the corrected final GUI message is claimed."
+  "console_retest_passed": false,
+  "reason": "Host-tested HEN candidate broadens fresh R input sampling and waits past a closing Seedsow process before first-launch policy capture. This exact HEN has not passed a console retest.",
+  "validation_scope": "Pinned RO and bootstrap bytes are unchanged; the new HEN built with the pinned toolchain and passed host regressions. Game policy capture, second-launch hbmenu entry and failure cleanup still require a fresh device test."
 }

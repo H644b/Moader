@@ -2,6 +2,12 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
+## Hold-R candidate after v0.2.5
+
+A supplied v0.2.5 Seedsow backend archive records verified HEN startup, a game arm waiting for input, complete game-loader/hbmenu staging and clean listener retirement. It has no trace after the user launched a game, so it cannot prove R sampling, first-launch policy capture or hbmenu entry. Read-only FTP inspection of the maintainer's working SD found an existing `main.npdm` dated before the successful installation. That installation therefore does not prove the empty-policy path.
+
+The current source and build proof contain a newer HEN candidate that samples fresh R from standard controller styles as well as SystemExt and waits through a still-closing Seedsow process during first-launch capture. Focused HEN host tests and the pinned native cross build pass. The proof marks `console_retest_passed: false`; a fresh device test, including a console without a saved game policy, remains required before treating this as a verified fix or publishing it as a new release. The published v0.2.5 assets remain the earlier HEN.
+
 ## Carousel interface
 
 On November 19, 2026, the maintainer reported that the redesigned app worked on their console. The NRO supplied for that check had SHA-256 `bfb876a0de82a9dc1224b70a09fc8fd86e7ddb0a4d03c645234864161046eb57`. [Tested source](https://github.com/H644b/Moader/commit/cda6ecc31acd90a8be179938f0062a515911c903)
