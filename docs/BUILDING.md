@@ -56,7 +56,7 @@ Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/ar
 
 The experimental Civ7 profile fetches the [pinned s8n archive](https://github.com/s8n/civ7-fs-kaihen/archive/51a804cbce09216e1a42e65929644fd436b4c8bf.tar.gz) instead of the kurumuz engine. Its 120 selected files total 720,866 bytes and include `engine/`, `targets/civ7/` and `bridge/civ_bridge.js`. [config/civ7-provider.json](../config/civ7-provider.json) records each source file and its materialized run counterpart. Its tree digest uses the same format. Source identity and host checks do not establish a Civ7 console installation.
 
-For offline preparation, transfer these exact upstream inputs yourself and pass `--offline --engine-archive PATH --kaihen-archive PATH`. A matching release checkout also needs a source build or the exact pinned HEN, bootstrap and app/resident inputs. The programs ZIP must contain `switch/Moader.nro` and `kaihen/plugins/moader.nso`. The minimal host kit already supplies the patched HEN and Moader binaries; provide both upstream archives for its first offline preparation.
+For offline preparation from a source checkout, transfer the exact upstream inputs and pass `--offline --engine-archive PATH --kaihen-archive PATH`. A matching release checkout also needs a source build or the exact pinned HEN, bootstrap and app/resident inputs. The programs ZIP must contain `switch/Moader.nro` and `kaihen/plugins/moader.nso`. The backend ZIP now includes the pinned official kaiHEN base and the complete patched release; its first offline preparation still needs the pinned upstream host-source archive.
 
 ## Host tests and runtime assets
 

@@ -5,6 +5,7 @@ import argparse
 import datetime
 import hashlib
 import importlib.util
+import io
 import json
 import re
 import subprocess
@@ -139,6 +140,37 @@ def write_zip(target, entries, timestamp):
             require(archive.read(name) == data, 'Release ZIP bytes differ: ' + name)
 
 
+def full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp):
+    backend_spec = importlib.util.spec_from_file_location('moader_bundle_backend', root / 'tools/setup-backend.py')
+    backend = importlib.util.module_from_spec(backend_spec)
+    backend_spec.loader.exec_module(backend)
+    original = root / 'research/artifacts/kaiHEN-20261114c.zip'
+    require(sha(original.read_bytes()) == backend.KAIHEN_SHA, 'Official kaiHEN base checksum differs')
+    base = backend.zip_files(original)
+    require(all(name in base for name in (*backend.KAIHEN_COMPONENTS, *backend.KAIHEN_PROGRAMS)) and
+            any(name.startswith('licenses/') for name in base), 'Official kaiHEN release is incomplete')
+    patched = dict(base)
+    patched.update({'ro/main': ro, 'hen/main': hen, 'bootstrap.bin': bootstrap,
+                    'programs/Moader.nro': app, 'plugins/moader.nso': service})
+    require(all(patched[name] == base[name] for name in base if name not in
+                {'ro/main', 'hen/main', 'bootstrap.bin'}),
+            'An unpatched kaiHEN release member changed')
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for name, data in sorted(patched.items()):
+            info = zipfile.ZipInfo(name, timestamp)
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, data)
+    with zipfile.ZipFile(io.BytesIO(output.getvalue())) as archive:
+        require(archive.testzip() is None and set(archive.namelist()) == set(patched),
+                'Complete patched kaiHEN ZIP failed verification')
+        for name, data in patched.items():
+            require(archive.read(name) == data, 'Patched kaiHEN ZIP member differs: ' + name)
+    return output.getvalue(), len(patched)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'dist/releases')
@@ -173,6 +205,10 @@ def main():
         host[prefix + 'vendor/kaihen-mo/ro/main'] = (ro, 0o100644)
     host[prefix + 'dist/Moader.nro'] = (app, 0o100644)
     host[prefix + 'dist/moader.nso'] = (service, 0o100644)
+    full_kaihen, full_count = full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp)
+    host[prefix + 'research/artifacts/kaiHEN-20261114c.zip'] = (
+        (root / 'research/artifacts/kaiHEN-20261114c.zip').read_bytes(), 0o100644)
+    host[prefix + 'bundles/kaiHEN-Moader-20261114c.zip'] = (full_kaihen, 0o100644)
     start_here = f'''Moader backend kit {tag}
 
 Use this kit to set up the backend for the current Switch boot. Start by
@@ -186,8 +222,10 @@ opening docs/INSTALLATION.md and choosing a method:
 The kit includes the Moader app, resident service and matching backend
 binaries. Install Python 3.10 or newer. The first preparation downloads
 pinned dependencies, so have internet access. SmileBASIC setup uses prebuilt
-files without an SDK. The Seedsow RO, HEN and bootstrap binaries are included
-as one source-qualified set. The Seedsow guide provisions the pinned patched
+files without an SDK. The full patched kaiHEN release is in
+bundles/kaiHEN-Moader-20261114c.zip, including hbmenu, hbloader, OunceShell,
+licenses, and the matched RO/HEN/bootstrap and Moader binaries. The Seedsow
+guide provisions the pinned patched
 GUI from upstream and installs the SDK needed by its live helper.
 
 Run preparation from this outer folder (the one containing tools/).
@@ -218,7 +256,9 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         **({'patchedRoSha256': sha(ro)} if ro is not None else {}),
         'kaihenBuildProofSchema': proof.get('schema', 1),
         'kaihenConsoleRetestPassed': proof.get('console_retest_passed', False),
-        'upstreamHostSourceBundled': False, 'officialHenArchiveBundled': False,
+        'upstreamHostSourceBundled': False, 'officialHenArchiveBundled': True,
+        'patchedFullKaihenSha256': sha(full_kaihen),
+        'patchedFullKaihenEntries': full_count,
         'assets': records, 'validation': 'docs/VALIDATION.md',
     }, indent=2) + '\n')
     (output / 'SHA256SUMS.txt').write_text(''.join(

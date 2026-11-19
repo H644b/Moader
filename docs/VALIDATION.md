@@ -24,6 +24,8 @@ Ben216k reported using extensive RomFS and ExeFS patches and additional subSDKs 
 
 ## Seedsow Lullaby Demo source workflow
 
+The later v0.2.0 kit update adds the complete official kaiHEN file set with the matched Moader RO/HEN/bootstrap, stages OunceShell along with hbmenu and the game loader, and requires HEN's game arm to reach its waiting-for-game state before reporting success. Host tests cover the one-shot FS retirement, final cache proof, TCP/HTTP listener stop and GUI bundle checks. This updated success shutdown and full bundle have **not** yet been run on a console; the earlier Demo installation below used the held owner and does not verify this new shutdown sequence or a new user's hold-R entry.
+
 One combined installation was observed on a Seedsow Lullaby **Demo** on firmware 23.0.1 using the reviewed `Malev0/seedsow-fs-kaihen` source revision `7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17` and Moader's matched local RO/HEN/bootstrap build. Those exact native component bytes are now included in the v0.1.3 backend kit. The earlier v0.1.2 kit and the SmileBASIC and CivSwitch records remain separate.
 
 The same boot's private run receipts establish fresh FS memory read/write/restoration, two diagnostic RO/FS instruction challenges, Loader restoration, Moader resident runtime installation with fresh FS code qualification and metadata readback, matched kaiHEN startup (operation 10/result 0), and a borrowed, same-owner HEN inspection. That inspection reported HEN protocol 7/result 0, one published `moader` plugin, a reachable resident service, `backendConnected: true` and current routing generation. The original RO inspection lease remained owned; newly opened inspector handles closed.

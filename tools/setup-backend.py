@@ -21,6 +21,7 @@ HEN_SHA = 'e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c'
 SOURCE_TREE_ALGORITHM = 'sha256-sorted-path-nul-sha256-newline-v1'
 PROGRAM_ENTRIES = {'dist/Moader.nro': 'switch/Moader.nro', 'dist/moader.nso': 'kaihen/plugins/moader.nso'}
 KAIHEN_COMPONENTS = ('ro/main', 'hen/main', 'game/main', 'bootstrap.bin', 'hbmenu.nro')
+KAIHEN_PROGRAMS = ('programs/ounceshell.nro',)
 MAX_ARCHIVE, MAX_FILE, MAX_TOTAL, MAX_ENTRIES = 64 << 20, 32 << 20, 96 << 20, 4096
 
 
@@ -367,6 +368,8 @@ def check_root(root, node='node', host_profile='smilebasic-kurumuz'):
         else:
             require(actual == data, 'Local kaiHEN component differs: ' + name)
     bundled = bundled_programs(root)
+    require(bundled.get('ounceshell.nro') == shipped[KAIHEN_PROGRAMS[0]],
+            'Local kaiHEN programs differ from the complete official release')
     built = {name: regular(root / name).read_bytes() for name in PROGRAM_ENTRIES}; validate_programs(built)
     version = node_check(root, node)
     return {'readyForInstallerCheck': True, 'consoleConnected': False, 'node': version, 'hostProfile': profile['id'], 'engineRevision': profile['revision'],
@@ -423,7 +426,8 @@ def setup(args):
         work = pathlib.Path(temporary)
         archive = args.kaihen_archive or (existing_archive if existing_archive.exists() else download(KAIHEN_URL, work / 'kaihen.zip', KAIHEN_SHA, args.offline))
         checked_archive(archive, KAIHEN_SHA); shipped = zip_files(archive)
-        require(all(name in shipped for name in KAIHEN_COMPONENTS), 'Incomplete official kaiHEN archive')
+        require(all(name in shipped for name in (*KAIHEN_COMPONENTS, *KAIHEN_PROGRAMS)),
+                'Incomplete official kaiHEN archive')
         bundled_programs(root, allow_missing=True)
         if engine_target.exists():
             engine = profile_files(root, profile)
@@ -464,8 +468,8 @@ def setup(args):
                 checked_archive(program_archive, expected); app = programs(zip_files(program_archive))
         files = {'research/artifacts/kaiHEN-20261114c.zip': archive.read_bytes(), **app}
         files.update({profile['directory'] + '/' + name: data for name, data in engine.items()})
-        # Optional programs such as OunceShell are deliberately not extracted.
         files.update({'vendor/kaihen-mo/' + name: pair.get(name, shipped[name]) for name in KAIHEN_COMPONENTS})
+        files.update({'vendor/kaihen-mo/' + name: shipped[name] for name in KAIHEN_PROGRAMS})
         written = publish_new(root, files, directories=('vendor/kaihen-mo/programs',))
     result = check_root(root, args.node or 'node', args.host_profile); result['newFiles'] = written; return result
 

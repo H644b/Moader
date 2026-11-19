@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {spawnSync} = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const gui = path.resolve(process.argv[2] || '');
@@ -62,8 +63,11 @@ async function main() {
       fs.writeFileSync(source, bytes);
       programs.push({target, source, bytes: bytes.length, sha256: sha(bytes)});
     }
+    const shell = fs.readFileSync(path.join(base, 'programs/ounceshell.nro'));
     const manifest = {hostProfile: {revision: '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17'},
-      kaihen: inputs, kaihenFiles, programs, manifestFile: path.join(work, 'fixture-manifest.json')};
+      kaihen: inputs, kaihenFiles, programs,
+      bundledPrograms: [{target: '/switch/ounceshell.nro', bytes: shell.length, sha256: sha(shell)}],
+      manifestFile: path.join(work, 'fixture-manifest.json')};
     fs.writeFileSync(path.join(moader, 'tools/install-moader.cjs'),
       'module.exports.prepare=async()=>(' + JSON.stringify(manifest) + ');\n');
     fs.writeFileSync(path.join(moader, 'tools/install-inputs.cjs'),
@@ -91,7 +95,31 @@ async function main() {
     helper.verifyBundle(manifest);
     for (const [name, item] of Object.entries(components))
       assert.equal(sha(fs.readFileSync(path.join(gui, 'kaihen', name))), item.sha256);
-    console.log('PASS: fresh GUI auto-download stages a matched bundle without console contact');
+    const officialCopy = path.join(moader, 'research/artifacts/kaiHEN-20261114c.zip');
+    const bundled = path.join(moader, 'bundles/kaiHEN-Moader-20261114c.zip');
+    fs.mkdirSync(path.dirname(officialCopy), {recursive: true});
+    fs.mkdirSync(path.dirname(bundled), {recursive: true});
+    fs.writeFileSync(officialCopy, official);
+    const script = `import sys, zipfile, pathlib
+base, output, inputs, app, service = map(pathlib.Path, sys.argv[1:])
+with zipfile.ZipFile(base) as source, zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as target:
+ for row in source.infolist():
+  if row.is_dir(): continue
+  data = (inputs / row.filename).read_bytes() if row.filename in ('ro/main','hen/main','bootstrap.bin') else source.read(row)
+  target.writestr(row.filename, data)
+ target.writestr('programs/Moader.nro', app.read_bytes())
+ target.writestr('plugins/moader.nso', service.read_bytes())
+`;
+    const made = spawnSync('python3', ['-c', script, officialCopy, bundled, inputs,
+      programs[0].source, programs[1].source], {encoding: 'utf8'});
+    assert.equal(made.status, 0, made.stderr || made.error?.message);
+    const included = await helper.updateFromMatchedBuild();
+    assert.equal(included.includedFullBundle, true);
+    assert.equal(downloads, 1, 'Included full bundle must not trigger another download');
+    helper.verifyBundle(manifest);
+    assert.equal(sha(fs.readFileSync(path.join(gui, 'kaihen/programs/ounceshell.nro'))),
+      manifest.bundledPrograms[0].sha256);
+    console.log('PASS: fresh download and included full kaiHEN bundle stage the matched set without console contact');
   } finally {
     global.fetch = oldFetch;
     if (oldRoot === undefined) delete process.env.MOADER_ROOT;

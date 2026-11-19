@@ -22,7 +22,7 @@ function request(frame){
  const header=(at+15)&~15;assert.equal(frame.toString('ascii',header,header+4),'SFCI');return{id:frame.readUInt32LE(header+8),input:frame.subarray(header+16)};
 }
 function fixture(protocol,options={}){
- const events=[],closed=[],names=options.names??['echo','moader'];let outbound,lastKey,reply;
+ const events=[],closed=[],names=options.names??['echo','moader'];let outbound,lastKey,reply,gameReads=0;
  const fault=key=>{if(options.failAt===key)throw options.failure??Error('Native request timed out; it was not replayed');};
  const rpc={
   async call(key,handle){events.push(key);fault(key);return 0;},
@@ -35,7 +35,10 @@ function fixture(protocol,options={}){
   if(handle===10&&id===protocol.initialize)lastKey='initialize-ro';
   else if(handle===10&&id===protocol.homebrew){lastKey='open-hen';copies=[20];}
   else if(handle===20&&id===protocol.status){lastKey='status';data=Buffer.alloc(16);data.writeBigUInt64LE(55n);data.writeUInt32LE(protocol.henVersion,8);}
-  else if(handle===20&&id===protocol.game){lastKey='game';data=Buffer.alloc(24);data.writeUInt32LE(3);data.writeBigUInt64LE(77n,16);}
+  else if(handle===20&&id===protocol.game){lastKey='game';data=Buffer.alloc(24);
+   const phases=options.gamePhases??[protocol.gameReady];
+   data.writeUInt32LE(phases[Math.min(gameReads++,phases.length-1)]);
+   data.writeBigUInt64LE(77n,16);}
   else if(handle===20&&id===protocol.trace){lastKey='trace';data=Buffer.alloc(24);data.writeUInt32LE(42);if(options.traceError){data=Buffer.alloc(0);result=0x202;}}
   else if(handle===20&&id===protocol.count){lastKey='count';data=Buffer.alloc(4);data.writeUInt32LE(options.count??names.length);}
   else if(handle===20&&id===protocol.name){lastKey='name';const index=input.readUInt32LE();assert(index<names.length);data=Buffer.alloc(protocol.nameBytes);data.write(names[index]);if(options.unterminatedName)data.fill(65);}
@@ -90,6 +93,13 @@ function stubMain(overrides){
   assert.equal(r.moader.serviceReachable,true);assert.equal(r.moader.resident,true);assert.equal(r.moader.summary.ipv4,'192.0.2.22');
   assert.equal(r.moader.summary.port,7712);assert.equal(r.moader.summary.generation,'9');assert.equal(r.moader.summary.routingGenerationCurrent,true);
   assert.deepEqual(f.closed,[30,20,10]);assert(f.events.includes('send:summary'));
+ });
+ test('game arm must leave startup and reach waiting-for-game before service success',async()=>{
+  const f=fixture(p,{gamePhases:[1,2,p.gameReady]}),r=await f.operation();
+  assert.equal(r.game.phase,p.gameReady);assert.equal(f.events.filter(e=>e==='send:game').length,3);
+  const fault=fixture(p,{gamePhases:[p.gameFault]});
+  await assert.rejects(fault.operation,/game arm faulted/);
+  assert(!fault.events.includes('send:trace'));
  });
  test('held Seedsow inspection reuses its initialized RO context and closes only new handles',async()=>{
   const f=fixture(p,{borrowed:true}),r=await f.operation();

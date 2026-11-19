@@ -4,7 +4,8 @@
 // One Moader-owned Seedsow Lullaby attempt. --check performs source/build/run
 // graph qualification without touching the console. --start starts one saved
 // launcher RPC loop, one acquisition, the restored FS challenge, and then the
-// Moader installer in the same owner process. It never retires automatically.
+// Moader installer in the same owner process. A proven success retires the
+// retained cache and listener once; uncertain results retain the owner.
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -33,8 +34,9 @@ function qualifyHenInspection(inspection, henReceipt) {
     inspection.plugins.names?.includes('moader') && inspection.moader?.listed === true &&
     inspection.moader.resident === true && inspection.moader.serviceReachable === true &&
     inspection.moader.summary?.backendConnected === true &&
-    inspection.moader.summary.routingGenerationCurrent === true,
-  'Current Seedsow HEN/Moader service did not pass the same-owner status check');
+    inspection.moader.summary.routingGenerationCurrent === true &&
+    inspection.game?.phase === 3 && inspection.game.result === 0,
+  'Current Seedsow HEN/Moader service and game arm did not pass the same-owner status check');
   return true;
 }
 function applyEnvironment(file) {
@@ -91,6 +93,9 @@ async function main(argv = process.argv.slice(2)) {
   hosts.qualifySources(hosts.resolveProfile('seedsow-malev0'));
   const install = require('./install-moader.cjs');
   const prepared = await install.prepare('seedsow-malev0');
+  const shell = prepared.bundledPrograms?.find(item => item.target === '/switch/ounceshell.nro');
+  check(shell?.sha256 === '675b492a1922b3dafa7a69fe3afe37cda117ecdc406ae5fc964d093fc761c9ba',
+    'Seedsow requires the complete official kaiHEN program set');
   check(typeof prepared.kaihen === 'string' &&
     fs.realpathSync(prepared.kaihen) === prepared.kaihen &&
     fs.lstatSync(prepared.kaihen).isDirectory(),
@@ -214,14 +219,23 @@ async function main(argv = process.argv.slice(2)) {
     fs.writeFileSync(path.join(run, 'moader-hen-inspection.json'),
       JSON.stringify(inspection, null, 2) + '\n', {flag: 'wx', mode: 0o600});
     qualifyHenInspection(inspection, henReceipt);
+    console.log('Moader service and game arm passed; retiring owned FS cache and listener: ' + run);
+    let retirement;
+    try {
+      retirement = await require('./seedsow-success-retire.cjs').retire({
+        acquisition, endpoint, producer, guard, run, listener: live});
+      fs.writeFileSync(path.join(run, 'moader-success-retirement.json'),
+        JSON.stringify(retirement, null, 2) + '\n', {flag: 'wx', mode: 0o600});
+    } catch (error) { throw guard.fail(error); }
     const record = {scope: 'Moader installation completed; physical app/resident/FS acceptance pending',
       run, at: new Date().toISOString(), ownerPid: process.pid,
       nativeRequestUncertain: false, sourceSha256: loader.sourceSha256,
-      henInspection: path.join(run, 'moader-hen-inspection.json')};
+      henInspection: path.join(run, 'moader-hen-inspection.json'),
+      retirement: path.join(run, 'moader-success-retirement.json')};
     fs.writeFileSync(path.join(run, 'moader-device-verification-pending.json'),
       JSON.stringify(record, null, 2) + '\n', {flag: 'wx', mode: 0o600});
-    console.log('Moader installation reached the held device-verification gate: ' + run);
-    return producer.preserve();
+    console.log('Moader setup complete; FS cache restored and listener closed: ' + run);
+    return {execution, retirement, deviceVerificationPending: true};
   };
   try { await pipeline.main(); }
   catch (error) {

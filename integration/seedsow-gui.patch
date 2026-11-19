@@ -1,5 +1,5 @@
 diff --git a/gui/ns2-gui.cjs b/gui/ns2-gui.cjs
-index ac4aa44..c7e9567 100644
+index ac4aa44..59c1698 100644
 --- a/gui/ns2-gui.cjs
 +++ b/gui/ns2-gui.cjs
 @@ -15,6 +15,7 @@ const fs = require('node:fs');
@@ -96,7 +96,7 @@ index ac4aa44..c7e9567 100644
  
  async function runPipeline() {
    setState({phase: 'running', message: 'Pipeline running ...', pipeline: null, report: null});
-@@ -681,6 +702,131 @@ async function runPipeline() {
+@@ -681,6 +702,144 @@ async function runPipeline() {
  
  let busy = false;
  let autoRunning = false;
@@ -168,11 +168,13 @@ index ac4aa44..c7e9567 100644
 +                /^switch-[A-Za-z0-9]+$/.test(path.basename(run)) &&
 +                fs.realpathSync(run) === run) RUN = run;
 +          }
-+          if (row.startsWith('Moader installation reached the held device-verification gate: ')) {
++          if (row.startsWith('Moader service and game arm passed; retiring owned FS cache and listener: ')) {
++            setState({phase: 'moader-running', message: 'Moader and game arm passed. Restoring FS cache and closing the listener; keep Seedsow open.',
++              stage: '[4/4] Retiring FS and closing listener',
++              progress: {stage: 4, percent: 95, label: 'Closing the owned connection', detail: ''}});
++          }
++          if (row.startsWith('Moader setup complete; FS cache restored and listener closed: ')) {
 +            completed = true;
-+            setState({phase: 'moader-held', message: 'Moader service check passed. Keep this host open. On the Switch, press HOME and close Seedsow, then open Moader from hbmenu.',
-+              stage: '[4/4] Moader service check passed',
-+              progress: {stage: 4, percent: 100, label: 'Service ready. Open Moader on the Switch.', detail: ''}});
 +          }
 +          if (row.startsWith('Seedsow definite pre-FS miss:')) {
 +            definiteMiss = true;
@@ -206,15 +208,26 @@ index ac4aa44..c7e9567 100644
 +      }
 +    });
 +    p.once('exit', (code, signal) => {
-+      addLine(`[moader] process exited (${signal || code}); no automatic native cleanup or retry.`);
++      let retired = false;
++      try {
++        const file = path.join(RUN, 'moader-success-retirement.json');
++        const receipt = JSON.parse(fs.readFileSync(file, 'utf8'));
++        retired = fs.realpathSync(file) === file && receipt.run === RUN &&
++          receipt.probe?.cacheRestored === true && receipt.probe.endpointClosed === true &&
++          receipt.listener?.tcpClosed === true && receipt.listener.serveEnded === true &&
++          receipt.hostOwnerExiting === true;
++      } catch {}
++      const success = code === 0 && !signal && completed && retired;
++      addLine(`[moader] process exited (${signal || code}); success retirement ${success ? 'verified' : 'not verified'}.`);
 +      if (moaderChild === p) {
 +        moaderChild = null;
 +        moaderChildRetained = false;
-+        setState({phase: 'finished', message: completed
-+          ? 'Moader owner exited. Check device results and the installation journal.'
++        setState({phase: success ? 'moader-complete' : 'finished', message: success
++          ? 'Moader setup complete; FS cache and listener closed. Press HOME and close Seedsow, then open Moader from hbmenu.'
 +          : definiteMiss
 +            ? 'FS acquisition missed. The listener stopped safely; fully reboot the Switch before another attempt.'
 +            : 'Moader attempt stopped. Inspect its run and reboot before another attempt.',
++          progress: success ? {stage: 4, percent: 100, label: 'Moader ready for this boot', detail: ''} : null,
 +          finishedAt: Date.now()});
 +      }
 +    });
@@ -228,7 +241,7 @@ index ac4aa44..c7e9567 100644
  // Set by the Stop button. A stop is not a failed attempt: it must not run the
  // attempt-failed cleanup, retry, or report a stage. It also aborts a controller
  // restart while it is waiting for the console.
-@@ -761,9 +907,12 @@ async function autoRun(options = {}) {
+@@ -761,9 +920,12 @@ async function autoRun(options = {}) {
  }
  
  async function startRun(options = {}) {
@@ -242,7 +255,7 @@ index ac4aa44..c7e9567 100644
    // One acquisition per boot: a second probe on the same process runs against a
    // dirtied FS heap and is the usual way a boot turns into a hard reboot.
    if (!bootFresh) {
-@@ -826,6 +975,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -826,6 +988,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
          file: path.join(TOOLS, 'console-host.txt')}));
      }
      if (req.method === 'POST' && url.pathname === '/api/console-host') {
@@ -251,7 +264,7 @@ index ac4aa44..c7e9567 100644
        let body = {};
        try { body = JSON.parse((await readBody(req)) || '{}'); } catch {}
        const host = String(body.host || '').trim();
-@@ -847,6 +998,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -847,6 +1011,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/kaihen/upload') {
@@ -260,7 +273,7 @@ index ac4aa44..c7e9567 100644
        let body = {};
        try {
          body = JSON.parse((await readBody(req, 32 * 1024 * 1024)) || '{}');
-@@ -867,6 +1020,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -867,6 +1033,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/kaihen/validate') {
@@ -269,7 +282,7 @@ index ac4aa44..c7e9567 100644
        try {
          const {checkDir, required} = require(path.join(TOOLS, 'update-kaihen.cjs'));
          checkDir(KAIHEN);
-@@ -882,77 +1037,25 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -882,77 +1050,25 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        if (runActive())
          return send(409, JSON.stringify({ok: false,
            error: 'A run is active; stop it before updating kaiHEN.'}));
@@ -357,7 +370,7 @@ index ac4aa44..c7e9567 100644
      }
      if (req.method === 'GET' && url.pathname === '/api/state') {
        return send(200, JSON.stringify({...publicState(), logSeq: state.seq}));
-@@ -974,13 +1077,46 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -974,13 +1090,46 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
      if (req.method === 'POST' && url.pathname === '/api/start') {
        let body = {};
        try { body = JSON.parse((await readBody(req)) || '{}'); } catch {}
@@ -405,7 +418,7 @@ index ac4aa44..c7e9567 100644
      if (req.method === 'GET' && url.pathname === '/api/controller-status') {
        // Pass the bridge's own answer through: any controller may add fields.
        try {
-@@ -1025,6 +1161,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1025,6 +1174,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/restart-game') {
@@ -414,7 +427,7 @@ index ac4aa44..c7e9567 100644
        let body = {};
        try { body = JSON.parse((await readBody(req)) || '{}'); } catch {}
        const aPresses = Number(body.aPresses) === 1 ? 1 : 2;
-@@ -1033,6 +1171,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1033,6 +1184,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        return send(200, JSON.stringify({ok: true, aPresses, yDelayMs}));
      }
      if (req.method === 'POST' && url.pathname === '/api/failed') {
@@ -423,7 +436,7 @@ index ac4aa44..c7e9567 100644
        await stopEverything('attempt marked failed; boot marked dead');
        killTree();
        pipelineHeld = false;
-@@ -1042,6 +1182,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1042,6 +1195,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        return send(200, JSON.stringify({ok: true}));
      }
      if (req.method === 'POST' && url.pathname === '/api/stop') {
@@ -432,7 +445,7 @@ index ac4aa44..c7e9567 100644
        stopping = true;
        if (pipelineHeld && releasePipeline('stop', false)) {
          // Retire the held endpoint cleanly instead of killing the pipeline; the
-@@ -1065,6 +1207,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1065,6 +1220,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/quit') {
@@ -441,7 +454,7 @@ index ac4aa44..c7e9567 100644
        if (state.phase === 'setup' || state.phase === 'running' || state.phase === 'restarting')
          return send(409, JSON.stringify({error: 'A run is active; stop it first.'}));
        if (pipelineHeld)
-@@ -1084,6 +1228,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1084,6 +1241,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
  server.requestTimeout = 0;
  server.listen(PORT, '127.0.0.1', () => {
    addLine(`[gui] listening on http://127.0.0.1:${PORT} (console ${CONSOLE})`);
@@ -451,7 +464,7 @@ index ac4aa44..c7e9567 100644
  });
  server.on('error', err => {
 diff --git a/gui/ns2-gui.html b/gui/ns2-gui.html
-index da70953..79b593e 100644
+index da70953..5e6215d 100644
 --- a/gui/ns2-gui.html
 +++ b/gui/ns2-gui.html
 @@ -177,7 +177,7 @@
@@ -538,10 +551,10 @@ index da70953..79b593e 100644
    post('/api/restart-game', {aPresses: aPresses(), yDelayMs: yDelayMs()});
 diff --git a/tools/moader-local.cjs b/tools/moader-local.cjs
 new file mode 100644
-index 0000000..e0592ff
+index 0000000..5499ece
 --- /dev/null
 +++ b/tools/moader-local.cjs
-@@ -0,0 +1,149 @@
+@@ -0,0 +1,191 @@
 +// Local Moader route for the Seedsow GUI. The public kaiHEN archive supplies
 +// the unchanged release files; the patched Moader RO, HEN and bootstrap are
 +// admitted only as the exact matched build set from the backend kit.
@@ -558,6 +571,7 @@ index 0000000..e0592ff
 +const NODE24 = process.env.MOADER_NODE24 || process.execPath;
 +const BASE_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip';
 +const BASE_SHA256 = '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967';
++const FULL_BUNDLE = 'bundles/kaiHEN-Moader-20261114c.zip';
 +const REVISION = '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17';
 +const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 +const check = (ok, message) => { if (!ok) throw Error(message); };
@@ -599,7 +613,20 @@ index 0000000..e0592ff
 +    check(item, 'Prepared Moader program is missing: ' + target);
 +    validatedFile(path.join(folder, relative), item);
 +  }
++  const shell = manifest.bundledPrograms?.find(row => row.target === '/switch/ounceshell.nro');
++  check(shell, 'Complete regular kaiHEN OunceShell is missing from the prepared snapshot');
++  validatedFile(path.join(folder, 'programs/ounceshell.nro'), shell);
 +  return marker;
++}
++
++function filesBelow(root, dir = root) {
++  return fs.readdirSync(dir, {withFileTypes: true}).flatMap(entry => {
++    const file = path.join(dir, entry.name);
++    check(!entry.isSymbolicLink() && (entry.isDirectory() || entry.isFile()),
++      'Unexpected kaiHEN release member: ' + file);
++    return entry.isDirectory() ? filesBelow(root, file) :
++      [path.relative(root, file).split(path.sep).join('/')];
++  }).sort();
 +}
 +
 +async function prepare({requireBundle = false} = {}) {
@@ -635,12 +662,36 @@ index 0000000..e0592ff
 +  const staging = fs.mkdtempSync(path.join(runs, 'moader-kaihen-update-'));
 +  let backup = null;
 +  try {
-+    const zip = path.join(staging, 'kaiHEN-20261114c.zip');
-+    const received = await download(BASE_URL, zip);
-+    check(received.sha256 === BASE_SHA256,
-+      'Pinned official kaiHEN release checksum differs');
 +    const unpacked = path.join(staging, 'unpacked');
-+    extract(zip, unpacked);
++    const included = path.join(MOADER, FULL_BUNDLE);
++    const hasIncluded = fs.existsSync(included);
++    if (hasIncluded) {
++      check(fs.realpathSync(included) === included && fs.lstatSync(included).isFile(),
++        'Included full Moader kaiHEN bundle is not a regular file');
++      const official = path.join(MOADER, 'research/artifacts/kaiHEN-20261114c.zip');
++      check(fs.realpathSync(official) === official &&
++        sha(fs.readFileSync(official)) === BASE_SHA256,
++      'Pinned official kaiHEN base for the included bundle differs');
++      const original = path.join(staging, 'official');
++      extract(official, original);
++      extract(included, unpacked);
++      const prior = findReleaseRoot(original), candidate = findReleaseRoot(unpacked);
++      const expected = filesBelow(prior), actual = filesBelow(candidate);
++      check(JSON.stringify(actual) === JSON.stringify([...expected,
++        'plugins/moader.nso', 'programs/Moader.nro'].sort()),
++      'Included Moader kaiHEN is not the complete official file set plus Moader');
++      for (const relative of expected.filter(name =>
++        !['ro/main', 'hen/main', 'bootstrap.bin'].includes(name)))
++        check(fs.readFileSync(path.join(prior, relative)).equals(
++          fs.readFileSync(path.join(candidate, relative))),
++        'Included kaiHEN changed an unpatched official release file: ' + relative);
++    } else {
++      const zip = path.join(staging, 'kaiHEN-20261114c.zip');
++      const received = await download(BASE_URL, zip);
++      check(received.sha256 === BASE_SHA256,
++        'Pinned official kaiHEN release checksum differs');
++      extract(zip, unpacked);
++    }
 +    const base = findReleaseRoot(unpacked);
 +    const next = path.join(staging, 'next');
 +    fs.cpSync(base, next, {recursive: true, force: false});
@@ -672,6 +723,9 @@ index 0000000..e0592ff
 +    fs.writeFileSync(path.join(next, 'moader-local.json'), JSON.stringify(marker, null, 2) + '\n');
 +    for (const relative of ['ro/main', 'hen/main', 'bootstrap.bin'])
 +      validatedFile(path.join(next, relative), build.components[relative]);
++    const shell = manifest.bundledPrograms?.find(row => row.target === '/switch/ounceshell.nro');
++    check(shell, 'Complete regular kaiHEN OunceShell is missing from the prepared snapshot');
++    validatedFile(path.join(next, 'programs/ounceshell.nro'), shell);
 +    if (fs.existsSync(target)) {
 +      backup = path.join(runs, 'kaihen-backup-' + Date.now() + '-' +
 +        crypto.randomBytes(3).toString('hex'));
@@ -680,10 +734,11 @@ index 0000000..e0592ff
 +    try { fs.renameSync(next, target); }
 +    catch (error) { if (backup) fs.renameSync(backup, target); throw error; }
 +    return {tag: '20261114c + local Moader build', target,
-+      downloaded: BASE_URL, roSha256: marker.roSha256,
++      downloaded: hasIncluded ? null : BASE_URL, includedFullBundle: hasIncluded,
++      roSha256: marker.roSha256,
 +      henSha256: marker.henSha256,
 +      bootstrapSha256: marker.bootstrapSha256, backup,
-+      count: 5, matched: true};
++      count: filesBelow(target).length, matched: true};
 +  } finally {
 +    fs.rmSync(staging, {recursive: true, force: true});
 +  }

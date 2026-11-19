@@ -12,11 +12,11 @@ const ROOT = path.resolve(__dirname, '..');
 const PATCH = path.join(ROOT, 'integration/seedsow-gui.patch');
 const REVISION = '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17';
 const OFFICIAL = 'https://github.com/Malev0/seedsow-fs-kaihen.git';
-const PATCH_SHA256 = '9d338a34a73fb8dac1e81dd96ddee65a2334c5e53377657fb6d3c224b1bfe443';
+const PATCH_SHA256 = 'dd2d1a22ac51d23eecc87c74790bae5eccebfc3c4e2a8583bd40a38a8b666ac3';
 const FILES = Object.freeze({
   'gui/ns2-gui.cjs': {
     before: '8818822df303f940e44414faafcd199cf064a6e7a24fb80ac56fbdbd40d7c35c',
-    after: 'dbc4b8494a42b3fe187326f4e77ab59dd83d8a368ee131fa4bda93f931e02f7e',
+    after: '2a0bf34858e6514e70b388e01aa0b62a6e5482e75c656de7e54f364e0c3663db',
   },
   'gui/ns2-gui.html': {
     before: '50ea6dceeee52c8309d96d3b3f4fcea5acfed33e1bff3cae1ddc62dcb765880d',
@@ -24,7 +24,7 @@ const FILES = Object.freeze({
   },
   'tools/moader-local.cjs': {
     before: null,
-    after: 'b3912071b81b0aa47b14d5e70d927b8b74546b6b33f21c46ad630478e0512c16',
+    after: 'b1e6ac44e20dd232a374d46b4ba5d6b62ed4fa32f684a6a9b0f1e809c8a2da0c',
   },
 });
 const check = (ok, message) => { if (!ok) throw Error(message); };
