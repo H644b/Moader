@@ -10,7 +10,7 @@ Host checks covered controller and touch navigation, mod actions, settings, brow
 
 ## v0.2.0 release scope
 
-The v0.2.0 app and resident are rebuilt from the tagged source with new version labels. The earlier carousel NRO identified above was exercised on the maintainer's console; the exact v0.2.0 binary pair has host build, source and packaging checks, without a new console installation record. The backend kit retains the v0.1.3 source-qualified Seedsow RO/HEN/bootstrap bytes and the same per-boot ownership gates. The recorded Seedsow Demo installation below used those native backend bytes with an older app/resident pair. Do not transfer that device result to the newly rebuilt pair or to the full-game, Linux/WSL or CivSwitch routes. [v0.2.0 release notes](releases/v0.2.0.md)
+The refreshed v0.2.0 app and resident are rebuilt from the later source commit recorded in the release manifest; the protected tag retains the original release source. The earlier carousel NRO identified above was exercised on the maintainer's console. The exact refreshed pair has host build, source and packaging checks, without a new console installation record. Host regression tests exercise the compact installed icon request, same-Edition full-size fallback, JPEG and PNG decoding, carousel retry and paired-browser artwork. The backend kit retains the v0.1.3 source-qualified Seedsow RO/HEN/bootstrap bytes and the same per-boot ownership gates. The recorded Seedsow Demo installation below used those native backend bytes with an older app/resident pair. Do not transfer that device result to the newly rebuilt pair or to the full-game, Linux/WSL or CivSwitch routes. [v0.2.0 release notes](releases/v0.2.0.md)
 
 ## Refreshed v0.1.3 assets
 

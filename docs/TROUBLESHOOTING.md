@@ -11,6 +11,7 @@ Open the **ZL** debug view in the app or the **Debug** panel in the browser. Kee
 
 ## Library and mods
 
+- **A working game shows the cartridge logo.** The carousel retries a missing icon after one minute while the game is in view. If the placeholder persists, press **ZL → Save report**. The `Game icon` line in `sdmc:/moader/app-diagnostics.txt` identifies which lookup or image decode failed. If the issue occurs only in a resident-hosted browser, check that the resident plugin matches the app build.
 - **The list is stale or unavailable.** Check SD access and select **Refresh**. Moader keeps the last readable list during imports and scan failures. Changes pause after a failed scan until a complete scan succeeds. Keep your library folders and preferences in place.
 - **A game shows up by Title ID.** Moader uses the ID when a game name is unavailable. Check the ID before uploading a mod or changing its settings.
 - **Game unavailable.** Select the title and check **Settings → Game copy**. Insert the matching physical or game-key card, or choose **My digital copy** for a card-independent copy. Read the mod's detail for a failed availability check or an unconfirmed routing change. [Game-copy checks](CARTRIDGES.md)

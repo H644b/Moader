@@ -22,6 +22,15 @@ inline std::runtime_error failure(const char* operation, Result rc) {
     char text[128]; std::snprintf(text, sizeof(text), "%s returned 0x%08X", operation, rc);
     return std::runtime_error(text);
 }
+class ControlSession {
+    std::lock_guard<std::mutex> lock{ns_query_mutex()};
+public:
+    ControlSession() {
+        const Result rc = nsInitialize();
+        if (R_FAILED(rc)) throw failure("Game metadata service", rc);
+    }
+    ~ControlSession() { nsExit(); }
+};
 inline u64 parse_id(const std::string& title) {
     if (title.size() != 16) throw std::invalid_argument("Invalid game Title ID");
     u64 id = 0;
@@ -82,29 +91,32 @@ inline MetadataIdentity metadata_identity(u64 routing_id) {
     if (!selected.application_id) throw std::runtime_error("No supported record-backed game metadata identity");
     return selected;
 }
-inline std::string read_name(u64 application_id, u8 acd_index) {
-    auto control = std::make_unique<NsApplicationControlData>();
+enum class IconSize : u8 { Full = 0, Compact = 1 };
+
+inline size_t read_control(MetadataIdentity id, IconSize icon, NsApplicationControlData& control) {
     u64 actual = 0;
     u32 auxiliary = 0; // Opaque: actual console returned 1 on successful requests.
-    const Result rc = nsGetApplicationControlData2(NsApplicationControlSource_Storage, application_id,
-        control.get(), sizeof(*control), 1, acd_index, &actual, &auxiliary);
+    const Result rc = nsGetApplicationControlData2(NsApplicationControlSource_Storage, id.application_id,
+        &control, sizeof(control), static_cast<u8>(icon), id.acd_index, &actual, &auxiliary);
     if (R_FAILED(rc)) throw failure("Installed control metadata", rc);
-    if (actual < sizeof(NacpStruct) || actual > sizeof(*control))
+    if (actual < sizeof(control.nacp) || actual > sizeof(control))
         throw std::runtime_error("Installed control metadata returned an invalid output size");
-    if (acd_index == 1 && (control->nacp.acd_index != 1 || control->nacp.apparent_platform != 1))
+    if (id.acd_index == 1 && (control.nacp.acd_index != 1 || control.nacp.apparent_platform != 1))
         throw std::runtime_error("Installed Edition control metadata did not match Edition fields");
-    const auto parsed = moader_metadata::parse_name(control->nacp, static_cast<size_t>(actual), preferred_language());
+    return static_cast<size_t>(actual);
+}
+inline std::string read_name(u64 application_id, u8 acd_index) {
+    auto control = std::make_unique<NsApplicationControlData>();
+    const auto actual = read_control({application_id, acd_index}, IconSize::Compact, *control);
+    const auto parsed = moader_metadata::parse_name(control->nacp, actual, preferred_language());
     if (!parsed.valid) throw std::runtime_error("Installed control metadata: " + parsed.error);
     return parsed.name;
 }
 }
 // Read installed control metadata. No network lookup, title launch or writes.
 inline std::string installed_game_name(const std::string& title) {
-    std::lock_guard<std::mutex> lock(game_names_detail::ns_query_mutex());
     const u64 id = game_names_detail::parse_id(title);
-    const Result initialized = nsInitialize();
-    if (R_FAILED(initialized)) throw game_names_detail::failure("Game metadata service", initialized);
-    struct NsGuard { ~NsGuard() { nsExit(); } } guard;
+    game_names_detail::ControlSession session;
     const auto metadata = game_names_detail::metadata_identity(id);
     return game_names_detail::read_name(metadata.application_id, metadata.acd_index);
 }

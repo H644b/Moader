@@ -160,7 +160,7 @@ void refresh_reload_diagnostics(){
        (next.flags&~511u)){reload_diagnostics_result=MAKERESULT(Module_Libnx,LibnxError_BadInput);return;}
     reload_diagnostics=next;reload_diagnostics_valid=true;
 }
-void save_debug(){if(ui.connected)refresh_debug();refresh_reload_diagnostics();sync_reload_ui();
+void save_debug(const moader_native::CoverLoader& covers){if(ui.connected)refresh_debug();refresh_reload_diagnostics();sync_reload_ui();
     std::ofstream file("sdmc:/moader/app-diagnostics.txt",std::ios::binary);
     file<<"Moader 0.2.0\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
         <<"\nFS acknowledged generation: "<<ui.summary.applied_generation<<"\nBackend channel connected (summary): "<<bool(ui.summary.flags&moader::ipc::BackendConnected)
@@ -198,6 +198,13 @@ void save_debug(){if(ui.connected)refresh_debug();refresh_reload_diagnostics();s
     }
     file<<'\n';
     for(const auto& line:ui.events)file<<line<<'\n';
+    for (const auto& game : ui.games) {
+        const auto problem = covers.error_for(game.id);
+        if (problem.empty()) continue;
+        char id[17];
+        std::snprintf(id, sizeof(id), "%016llX", static_cast<unsigned long long>(game.id));
+        file << "Game icon " << id << ": " << problem << '\n';
+    }
     file.close();
     message(file?"Saved sdmc:/moader/app-diagnostics.txt":"Could not save the diagnostic report.",!file);
 }
@@ -440,7 +447,7 @@ int main(){
             }
         }
         if(actions&RefreshEvents)refresh_debug();
-        if(actions&SaveReport)save_debug();
+        if(actions&SaveReport)save_debug(covers);
         if(actions&SavePreferences)save_preferences();
         if(actions&ReloadService)begin_reload();
         if(actions&GetGameSource)refresh_game_source();

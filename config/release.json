@@ -7,13 +7,13 @@
   "binaries": {
     "Moader.nro": {
       "source": "dist/Moader.nro",
-      "bytes": 4589149,
-      "sha256": "334a750648cee5a5f108e4bf32de105d6d97831870a96032ec4dcf7a5ab4137a"
+      "bytes": 4593245,
+      "sha256": "c305bbbb8327ffd6bf8799afb51013aa8ae504d023c51777d644eb3e3d976b1c"
     },
     "moader.nso": {
       "source": "dist/moader.nso",
-      "bytes": 774997,
-      "sha256": "afb2c3e0298947c4a5cf83248da8a576dcf0960a5798f08df0bb0d7c8853f4a8"
+      "bytes": 814309,
+      "sha256": "1c045f8b3c0ee9a5c9edb1be176bfb52831fe4d6ce88d1279ec06f1d3dc6b068"
     }
   },
   "patched_hen": {
