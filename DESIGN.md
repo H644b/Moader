@@ -107,6 +107,8 @@ components:
 
 The mint stacked-cartridge mark and lowercase paper wordmark identify Moader on both surfaces. Use the square icon for hbmenu, the browser favicon and artwork fallbacks. [Identity artwork and export recipe](branding/README.md)
 
+Open the clickable PDF to browse the library, mod details and settings. Its bookmarks also open the community Store design. Both videos show the transitions at the original 1440 × 810 resolution. [Clickable mockup](docs/design/moader-clickable.pdf) · [Library walkthrough](docs/design/moader-motion.mp4) · [Store walkthrough](docs/design/store-walkthrough.mp4)
+
 ## Colors
 
 Mint identifies focus, the current page indicator and primary actions. Paper carries names, headings and values. Soft green-gray carries descriptions and adjacent game names. Muted green-gray carries column labels, file counts and secondary controls.

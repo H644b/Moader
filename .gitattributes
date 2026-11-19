@@ -9,6 +9,8 @@ software-builds/*.patch whitespace=-blank-at-eol,-blank-at-eof
 integration/*.patch whitespace=-blank-at-eol,-blank-at-eof
 *.png binary
 *.jpg binary
+*.pdf binary
+*.mp4 binary
 *.ttf binary
 *.wasm binary
 *.zip binary
