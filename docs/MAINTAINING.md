@@ -4,7 +4,7 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v0.2.0** has prebuilt downloads for the redesigned app and its matching resident. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json) to identify their exact source. The v0.1.3 tag predates its final refreshed assets; that older release manifest identifies their later source commit.
+**v0.2.0** has prebuilt downloads for the redesigned app and its matching resident. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original release source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |

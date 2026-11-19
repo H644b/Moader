@@ -5,6 +5,7 @@
 - Center the selected game in a cover carousel on the console and web. Open its mods and return to the same game; move listener and pairing controls into Settings.
 - Add the native community Store reader for games, releases, galleries and independent publisher feeds. Store navigation stays disabled in this release. Publish the interface walkthroughs and publisher template links.
 - Rebuild the app and matching resident with 0.2.0 labels. The backend kit keeps the source-qualified Seedsow RO/HEN/bootstrap set and the existing SmileBASIC and experimental CivSwitch host profiles. [Release notes](docs/releases/v0.2.0.md).
+- Refresh the v0.2.0 app and resident after PR #23: request the compact installed game icon first, fall back to the full-size icon for the same game and Edition, and serve either JPEG or PNG artwork in the paired browser. The refreshed binaries have host validation and await a Switch 2 check.
 
 ## v0.1.3 — Seedsow Lullaby backend kit
 
