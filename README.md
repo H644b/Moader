@@ -4,15 +4,15 @@ Moader manages Switch 2 mods from a controller or a web browser. Import mods, tu
 
 The **Moader app** opens from hbmenu, the homebrew launcher. It can manage the library while open. The **backend** loads mods into games and keeps browser access running after you close the app. Set up the backend once after each full reboot.
 
-## Prebuilt downloads for v0.1.2
+## Prebuilt downloads for v0.1.3
 
 | I want to… | Download | Start here |
 | --- | --- | --- |
-| Open or update the console app | [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip) | [Copy the app](docs/INSTALLATION.md#copy-or-update-the-console-app) |
-| Set up the backend for this boot | [Moader-backend-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip) | [Choose a setup method](docs/INSTALLATION.md#start-the-backend-for-this-boot) |
-| Update a compatible running service | [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip) | [Reload the resident service](docs/PLUGIN_RELOAD.md#use-it) |
+| Open or update the console app | [Moader-v0.1.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-v0.1.3.zip) | [Copy the app](docs/INSTALLATION.md#copy-or-update-the-console-app) |
+| Set up the backend for this boot | [Moader-backend-v0.1.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) | [Choose a setup method](docs/INSTALLATION.md#start-the-backend-for-this-boot) |
+| Update a compatible running service | [Moader-v0.1.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-v0.1.3.zip) | [Reload the resident service](docs/PLUGIN_RELOAD.md#use-it) |
 
-The release kit includes prebuilt components for SmileBASIC setup. For Seedsow Lullaby Demo, use the [v0.1.3 source release](https://github.com/H644b/Moader/releases/tag/v0.1.3) and the [Seedsow guide](docs/SEEDSOW.md). The [experimental CivSwitch profile](docs/CIV7.md) has host test coverage. See the [release files and checksums](https://github.com/H644b/Moader/releases/tag/v0.1.2).
+The backend kit includes the matched Seedsow Demo RO/HEN/bootstrap set and the helper that provisions the pinned patched GUI. SmileBASIC and experimental CivSwitch use the same kit with their own source profiles. [Seedsow guide](docs/SEEDSOW.md) · [Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v0.1.3) · [Validation scope](docs/VALIDATION.md)
 
 ## Use Moader
 

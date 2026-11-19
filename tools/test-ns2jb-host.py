@@ -182,7 +182,7 @@ def baseline_members(data):
 
 def release_binaries(kit, work, baseline=False):
     proof=json.loads((kit/'software-builds/kaihen-mo.json').read_text())
-    if proof.get('schema')==2 and not baseline:
+    if proof.get('schema') in (2,3) and not baseline:
         spec=json.loads((kit/'config/release.json').read_text())
         descriptors={
             'dist/Moader.nro':spec['binaries']['Moader.nro'],
@@ -190,18 +190,20 @@ def release_binaries(kit, work, baseline=False):
             'vendor/kaihen-mo/hen/main':spec['patched_hen'],
             'vendor/kaihen-mo/bootstrap.bin':spec['patched_bootstrap'],
         }
+        if proof['schema']==3:
+            descriptors['vendor/kaihen-mo/ro/main']=spec['patched_ro']
         expected={}
         for relative,item in descriptors.items():
             require(item['source']==relative,'Unexpected candidate binary source')
             source=ROOT/relative;require(source.is_file() and not source.is_symlink(),'Missing pinned local candidate bytes')
             payload=source.read_bytes();require(len(payload)==item['bytes'] and sha(payload)==item['sha256'],'Candidate binary checksum/size mismatch')
             if relative.startswith('vendor/'):
-                name='hen/main' if relative.endswith('/hen/main') else 'bootstrap.bin'
+                name='hen/main' if relative.endswith('/hen/main') else 'ro/main' if relative.endswith('/ro/main') else 'bootstrap.bin'
                 require(proof['components'][name]=={'bytes':len(payload),'sha256':sha(payload)},'Candidate pair/config proof differs')
             destination=kit/relative;destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(payload);expected[relative]=sha(payload)
-        print('PASS: current recorded candidate app/service and paired HEN/bootstrap pins match; bytes treated only as data, no console-test claim.')
+        print('PASS: current recorded candidate app/service and matched native component pins agree; bytes treated only as data, no console-test claim.')
         return expected
-    require(baseline,'Current candidate mode requires schema-2 paired inputs; public legacy compatibility requires explicit --baseline')
+    require(baseline,'Current candidate mode requires schema-2 or schema-3 paired inputs; public legacy compatibility requires explicit --baseline')
     request=urllib.request.Request(BACKEND_URL,headers={'User-Agent':'Moader-host-integration'})
     with urllib.request.urlopen(request,timeout=90) as response:
         data=response.read((8<<20)+1)

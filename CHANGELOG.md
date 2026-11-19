@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.3 — Seedsow Demo backend kit
+
+- Add the Seedsow Lullaby Demo source-qualified entrypoint and one bounded installation record, with a matched RO/HEN/bootstrap set and patched GUI provisioning helper.
+- Extend the host setup and source-build paths to Linux x86_64 and WSL2 x86_64. Linux CI checks passed; WSL2 and Linux live-device installations remain unverified.
+- Refresh the two v0.1.3 ZIPs with the Seedsow backend files and 0.1.3-labelled app/resident. The rebuilt app/resident have host validation only; the exact RO/HEN/bootstrap bytes have the recorded Demo installation. [Release notes](docs/releases/v0.1.3.md).
+
 ## v0.1.2 — source-matched HEN refresh
 
 - Remove Moader's local pending-launch workaround from the custom HEN source while retaining cooperative reload, cartridge checks and the supported host setup routes.

@@ -3,6 +3,7 @@
 from pathlib import Path
 import hashlib
 import json
+import subprocess
 import zipfile
 
 root = Path(__file__).resolve().parent.parent
@@ -21,6 +22,7 @@ app, service = files['switch/Moader.nro'].read_bytes(), files['kaihen/plugins/mo
 assert app[16:20] == b'NRO0' and service[:4] == b'NSO0'
 tag = release['tag']
 repository = 'https://github.com/' + release['repository']
+source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 instructions = f'''Moader {tag}
 
 1. Close Moader on the Switch if it is open.
@@ -38,10 +40,10 @@ Reload Moader service to load it if your running backend supports reload.
 For first-time backend setup, a reboot or a HEN update, use the matching
 backend kit and the installation guide.
 
-Install and update: {repository}/blob/{tag}/docs/INSTALLATION.md
-Manage mods: {repository}/blob/{tag}/docs/USAGE.md
+Install and update: {repository}/blob/{source_commit}/docs/INSTALLATION.md
+Manage mods: {repository}/blob/{source_commit}/docs/USAGE.md
 Downloads and checksums: {repository}/releases/tag/{tag}
-Corresponding source: {repository}/tree/{tag}
+Corresponding source: {repository}/tree/{source_commit}
 '''
 manifest = {name: {'bytes': path.stat().st_size,
                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}

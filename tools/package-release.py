@@ -47,18 +47,25 @@ def native_pair(root, spec):
     backend.qualify_patched(hen, 'hen/main', proof)
     require(spec['patched_hen']['source'] == 'vendor/kaihen-mo/hen/main', 'Unexpected patched HEN release source')
     bootstrap = None
-    if proof.get('schema') == 2:
+    if proof.get('schema') in (2, 3):
         item = spec.get('patched_bootstrap')
         require(isinstance(item, dict) and item.get('source') == 'vendor/kaihen-mo/bootstrap.bin', 'Paired patched bootstrap descriptor is required')
         bootstrap = binary(root, item, b'')
         backend.qualify_patched(bootstrap, 'bootstrap.bin', proof)
+        if proof['schema'] == 3:
+            item = spec.get('patched_ro')
+            require(isinstance(item, dict) and item.get('source') == 'vendor/kaihen-mo/ro/main', 'Paired patched RO descriptor is required')
+            backend.qualify_patched(binary(root, item, b'NSO0'), 'ro/main', proof)
+        else:
+            require('patched_ro' not in spec, 'Schema-2 release cannot declare an unqualified patched RO')
     else:
-        require('patched_bootstrap' not in spec, 'Legacy release cannot declare an unqualified patched bootstrap')
+        require('patched_bootstrap' not in spec and 'patched_ro' not in spec,
+                'Legacy release cannot declare unqualified patched components')
     return hen, bootstrap, proof
 
 
 def qualify_exported_native_source(source, proof):
-    if proof.get('schema') != 2:
+    if proof.get('schema') not in (2, 3):
         return
     files = {}
     for name, (data, _) in source.items():
@@ -143,6 +150,7 @@ def main():
     app = binary(root, spec['binaries']['Moader.nro'], b'NRO0', 16)
     service = binary(root, spec['binaries']['moader.nso'], b'NSO0')
     hen, bootstrap, proof = native_pair(root, spec)
+    ro = binary(root, spec['patched_ro'], b'NSO0') if proof.get('schema') == 3 else None
     commit, source = public_source(root)
     qualify_exported_native_source(source, proof)
     timestamp = datetime.datetime.fromtimestamp(int(git(root, 'show', '-s', '--format=%ct', 'HEAD')), datetime.timezone.utc).timetuple()[:6]
@@ -161,6 +169,8 @@ def main():
     host[prefix + 'vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
     if bootstrap is not None:
         host[prefix + 'vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
+    if ro is not None:
+        host[prefix + 'vendor/kaihen-mo/ro/main'] = (ro, 0o100644)
     host[prefix + 'dist/Moader.nro'] = (app, 0o100644)
     host[prefix + 'dist/moader.nso'] = (service, 0o100644)
     start_here = f'''Moader backend kit {tag}
@@ -170,20 +180,26 @@ opening docs/INSTALLATION.md and choosing a method:
 
 - SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
 - SmileBASIC with direct ns2jb: macOS, Linux or WSL2 and native Node 24.
+- Seedsow Lullaby Demo: macOS, Linux or WSL2. See docs/SEEDSOW.md.
 - CivSwitch: experimental. See docs/CIV7.md for the required profile.
 
 The kit includes the Moader app, resident service and matching backend
 binaries. Install Python 3.10 or newer. The first preparation downloads
-pinned dependencies, so have internet access. Setup uses prebuilt files.
+pinned dependencies, so have internet access. SmileBASIC setup uses prebuilt
+files without an SDK. The Seedsow RO, HEN and bootstrap binaries are included
+as one source-qualified set. The Seedsow guide provisions the pinned patched
+GUI from upstream and installs the SDK needed by its live helper.
 
 Run preparation from this outer folder (the one containing tools/).
-Preparation checks files on your computer and prints the command that
-installs on the Switch. Follow the completion steps for your method in
-docs/INSTALLATION.md or docs/CIV7.md.
+For SmileBASIC and CivSwitch, preparation checks local files and prints
+one installation command. For Seedsow, the pinned GUI performs the one
+owned installation after its local preparation. Follow the completion
+steps for your method in docs/INSTALLATION.md, docs/SEEDSOW.md or
+docs/CIV7.md.
 
 Mod layout and controls: docs/USAGE.md
 Test results: docs/VALIDATION.md
-Corresponding source: https://github.com/{spec['repository']}/tree/{tag}
+Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''
     host[prefix + 'START_HERE.txt'] = (start_here.encode(), 0o100644)
     write_zip(output / names[1], host, timestamp)
@@ -199,6 +215,7 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{tag}
         'appAndResidentHardwareTested': spec['appAndResidentHardwareTested'],
         'patchedHenSha256': sha(hen),
         **({'patchedBootstrapSha256': sha(bootstrap), 'kaihenProtocolVersion': proof['protocol_version']} if bootstrap is not None else {}),
+        **({'patchedRoSha256': sha(ro)} if ro is not None else {}),
         'kaihenBuildProofSchema': proof.get('schema', 1),
         'kaihenConsoleRetestPassed': proof.get('console_retest_passed', False),
         'upstreamHostSourceBundled': False, 'officialHenArchiveBundled': False,
