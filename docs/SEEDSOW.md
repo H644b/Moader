@@ -2,7 +2,7 @@
 
 Download the [v0.2.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-backend-v0.2.0.zip) for Seedsow Lullaby Demo or the full game. It contains the prebuilt Moader app, resident, the pinned official kaiHEN base, and `bundles/kaiHEN-Moader-20261114c.zip`: the complete regular release with only the matched RO/HEN/bootstrap replaced and Moader added. This includes the game loader, hbmenu, OunceShell and licenses. Its helper provisions Moader's patched [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen) from the exact upstream revision. The upstream Seedsow GUI and source are fetched during preparation.
 
-The full game's program ID is admitted by the same current-process qualification that accepts the Demo, while unrelated program IDs still stop. The code profile is checked anew on each boot. One **Demo** installation on firmware 23.0.1 was verified from macOS; a complete Moader installation from the **full game** has not yet been observed. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
+The full game's program ID is admitted by the same current-process qualification that accepts the Demo, while unrelated program IDs still stop. The code profile is checked anew on each boot. The **Demo** route was verified from macOS, including the updated full bundle, successful FS retirement and two-launch hold-R entry; a complete Moader installation from the **full game** has not yet been observed. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
 
 ## Before you begin
 
