@@ -64,7 +64,7 @@ build/native/moader-service.elf: build/native/service.o build/native/libmoader.a
 	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=sha1 $< build/native/libmoader.a -Lruntime/kaihen/libkaihen/build -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
 
 build/native/Moader.nacp: Makefile | build/native
-	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader' 'Moader' '0.1.3' $@
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader' 'Moader' '0.2.0' $@
 
 dist/Moader.nro: build/native/Moader.elf build/native/Moader.nacp branding/hbmenu.jpg | dist
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/Moader.nacp --icon=branding/hbmenu.jpg
@@ -76,7 +76,7 @@ build/native/diagnostics.elf: build/native/diagnostics.o build/native/switch.spe
 	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -lounce_core -o $@
 
 build/native/diagnostics.nacp: Makefile | build/native
-	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader Diagnostics' 'Moader' '0.1.3' $@
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader Diagnostics' 'Moader' '0.2.0' $@
 
 build/native/core-linkcheck.o: tests/native_link.cpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
@@ -136,7 +136,7 @@ build/native/metadata.elf: build/native/metadata.o build/native/switch.specs
 	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
 
 build/native/metadata.nacp: Makefile | build/native
-	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader Metadata' 'Moader' '0.1.3' $@
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader Metadata' 'Moader' '0.2.0' $@
 
 dist/moader-metadata.nro: build/native/metadata.elf build/native/metadata.nacp | dist
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/metadata.nacp
@@ -151,7 +151,7 @@ build/native/read-probe.elf: build/native/read-probe.o build/native/switch.specs
 	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< -L$(DEVKITPRO)/libounce/lib -lounce_core -o $@
 
 build/native/read-probe.nacp: | build/native
-	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader MK8 Read Probe' 'Moader' '0.1.3' $@
+	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader MK8 Read Probe' 'Moader' '0.2.0' $@
 
 dist/moader-read-probe.nro: build/native/read-probe.elf build/native/read-probe.nacp branding/hbmenu.jpg | dist
 	$(DEVKITPRO)/tools/bin/elf2nro $< $@ --nacp=build/native/read-probe.nacp --icon=branding/hbmenu.jpg

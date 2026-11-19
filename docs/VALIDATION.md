@@ -8,6 +8,10 @@ On November 19, 2026, the maintainer reported that the redesigned app worked on 
 
 Host checks covered controller and touch navigation, mod actions, settings, browser pairing, and the disabled Store. The native catalog reader also loaded the example publisher feed and decoded its preview over HTTPS. [Interface design](../DESIGN.md) · [Publisher template](https://github.com/H644b/moader-mod-repo-template)
 
+## v0.2.0 release scope
+
+The v0.2.0 app and resident are rebuilt from the tagged source with new version labels. The earlier carousel NRO identified above was exercised on the maintainer's console; the exact v0.2.0 binary pair has host build, source and packaging checks, without a new console installation record. The backend kit retains the v0.1.3 source-qualified Seedsow RO/HEN/bootstrap bytes and the same per-boot ownership gates. The recorded Seedsow Demo installation below used those native backend bytes with an older app/resident pair. Do not transfer that device result to the newly rebuilt pair or to the full-game, Linux/WSL or CivSwitch routes. [v0.2.0 release notes](releases/v0.2.0.md)
+
 ## Refreshed v0.1.3 assets
 
 The v0.1.3 backend ZIP includes the exact RO/HEN/bootstrap component hashes from the Seedsow Demo installation below. Its 0.1.3-labelled app (`c271a67c2e48aab2ebfb079acdcc2cc7785ee1a0180534f9fa2612ca038af97b`) and resident (`3830ca2129bae1e10c19084afb274e98772b34a6fff499b0eeca1690f4c76217`) are rebuilt bytes. They passed host compilation and packaging checks, but have not been installed on the console as this exact pair. The prior Demo installation used app `e251020bcd550afc72982ac80bf54a1060ff6aca8b3ffdb401a36c01c44ae9eb` and resident `4e17afa1c1f04f172fd91c9411e239e95eaf9c6067492921b769cda794ed13a0`. The extracted v0.1.3 Seedsow kit passed offline local setup, read-only qualification and pinned GUI provision/check. The current SmileBASIC and CivSwitch host preparations passed with pinned downloads and console transports blocked. None of these new kit checks is a live installation. [v0.1.3 release notes](releases/v0.1.3.md)

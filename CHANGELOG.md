@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.0 — game carousel and community Store foundation
+
+- Center the selected game in a cover carousel on the console and web. Open its mods and return to the same game; move listener and pairing controls into Settings.
+- Add the native community Store reader for games, releases, galleries and independent publisher feeds. Store navigation stays disabled in this release. Publish the interface walkthroughs and publisher template links.
+- Rebuild the app and matching resident with 0.2.0 labels. The backend kit keeps the source-qualified Seedsow RO/HEN/bootstrap set and the existing SmileBASIC and experimental CivSwitch host profiles. [Release notes](docs/releases/v0.2.0.md).
+
 ## v0.1.3 — Seedsow Lullaby backend kit
 
 - Add the Seedsow Lullaby Demo source-qualified entrypoint and one bounded installation record, with a matched RO/HEN/bootstrap set and patched GUI provisioning helper.
