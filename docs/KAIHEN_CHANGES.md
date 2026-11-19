@@ -20,7 +20,7 @@ The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. It
 
 The v0.2.5 installer success receipt shows HEN waiting for a game. It does not show whether a later R press was sampled, whether the first game supplied a signed policy, or whether the second launch entered hbmenu. A tester's v0.2.5 archive reached that waiting state and contained no post-install game trace. On the maintainer's working console, the saved game policy predates the installation, so its successful entry did not exercise first-launch policy capture.
 
-The current HEN samples fresh R state from SystemExt and the enabled standard controller styles, including FullKey, Handheld, JoyDual and JoyRight. During first-launch capture it waits past a still-closing nonnative Seedsow application instead of faulting before the native game appears. Host tests cover a FullKey R sample and this PM transition; the native HEN builds with the pinned toolchain. Neither mechanism is established as the tester's exact failure cause, and this candidate has not yet passed a clean-policy console test.
+The current HEN samples fresh R state from SystemExt and the enabled standard controller styles, including FullKey, Handheld, JoyDual and JoyRight. During first-launch capture it waits past a still-closing nonnative Seedsow application instead of faulting before the native game appears. Host tests cover a fresh FullKey R sample, reject a stale one and cover this PM transition; the native HEN builds with the pinned toolchain. One Demo installation and existing-policy hold-R entry passed with the exact candidate. Neither mechanism is established as the tester's exact failure cause, and this candidate has not yet passed a clean-policy console test.
 
 ## v0.1.2 source selection
 

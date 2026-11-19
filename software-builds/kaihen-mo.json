@@ -25,6 +25,6 @@
   },
   "native_build_passed": true,
   "console_retest_passed": false,
-  "reason": "Host-tested HEN candidate broadens fresh R input sampling and waits past a closing Seedsow process before first-launch policy capture. This exact HEN has not passed a console retest.",
-  "validation_scope": "Pinned RO and bootstrap bytes are unchanged; the new HEN built with the pinned toolchain and passed host regressions. Game policy capture, second-launch hbmenu entry and failure cleanup still require a fresh device test."
+  "reason": "The exact HEN passed one combined Seedsow Demo installation and existing-policy hold-R entry, but the clean-policy first-launch path reported failing on other consoles has not been device-tested.",
+  "validation_scope": "The same-boot receipt verified matched RO/HEN/bootstrap startup, Moader resident/FS connection, restored cache and closed listener. The owner reached hbmenu after two R launches of Pokemon Z-A with a previously saved game policy. Host regressions cover fresh FullKey input and a still-closing Seedsow process; neither was isolated on hardware."
 }
