@@ -4,13 +4,13 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v0.2.0** has prebuilt downloads for the redesigned app and its matching resident. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original release source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
+**v0.2.5** has prebuilt downloads for the app and resident with the reduced BSD session budget. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.5/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.2.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.2.0.zip` | Public host source, the five matched Moader/kaiHEN binaries, the pinned official kaiHEN archive and `bundles/kaiHEN-Moader-20261114c.zip`, which preserves the full regular release with matched RO/HEN/bootstrap and Moader additions; outer `Moader-backend-v0.2.0` folder includes `START_HERE.txt` |
+| `Moader-v0.2.5.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.2.5.zip` | Public host source, the five matched Moader/kaiHEN binaries, the pinned official kaiHEN archive and `bundles/kaiHEN-Moader-20261114c.zip`, which preserves the full regular release with matched RO/HEN/bootstrap and Moader additions; outer `Moader-backend-v0.2.5` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -24,7 +24,7 @@ The host kit contains `research/artifacts/kaiHEN-20261114c.zip` and the full pat
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-v0.2.0.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-v0.2.5.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {

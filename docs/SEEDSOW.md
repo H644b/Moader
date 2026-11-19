@@ -1,8 +1,8 @@
 # Install Moader through Seedsow Lullaby
 
-Download the [v0.2.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-backend-v0.2.0.zip) for Seedsow Lullaby Demo or the full game. It contains the prebuilt Moader app, resident, the pinned official kaiHEN base, and `bundles/kaiHEN-Moader-20261114c.zip`: the complete regular release with only the matched RO/HEN/bootstrap replaced and Moader added. This includes the game loader, hbmenu, OunceShell and licenses. Its helper provisions Moader's patched [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen) from the exact upstream revision. The upstream Seedsow GUI and source are fetched during preparation.
+Download the [v0.2.5 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip) for Seedsow Lullaby Demo or the full game. It contains the prebuilt Moader app, resident, the pinned official kaiHEN base, and `bundles/kaiHEN-Moader-20261114c.zip`: the complete regular release with only the matched RO/HEN/bootstrap replaced and Moader added. This includes the game loader, hbmenu, OunceShell and licenses. Its helper provisions Moader's patched [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen) from the exact upstream revision. The upstream Seedsow GUI and source are fetched during preparation.
 
-The full game's program ID is admitted by the same current-process qualification that accepts the Demo, while unrelated program IDs still stop. The code profile is checked anew on each boot. The **Demo** route was verified from macOS, including the updated full bundle, successful FS retirement and two-launch hold-R entry; a complete Moader installation from the **full game** has not yet been observed. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
+The full game's program ID is admitted by the same current-process qualification that accepts the Demo, while unrelated program IDs still stop. The code profile is checked anew on each boot. The **Demo** route was verified from macOS with the full bundle, successful FS retirement and two-launch hold-R entry. The v0.2.5 resident was then verified through a cooperative reload and a Minecraft world run on a Demo-installed boot. A fresh complete v0.2.5 kit installation and an installation from the **full game** have not yet been observed. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#v025-resident-bsd-session-budget)
 
 ## Before you begin
 
@@ -27,7 +27,7 @@ python3 --version
 
 ### Linux x86_64 or Windows with WSL2
 
-On Ubuntu or Debian, keep the extracted kit in the Linux filesystem (for example under `~/Moader-backend-v0.2.0`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
+On Ubuntu or Debian, keep the extracted kit in the Linux filesystem (for example under `~/Moader-backend-v0.2.5`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
 
 ```sh
 sudo apt-get update
@@ -74,7 +74,7 @@ tools/start-seedsow-gui.sh "$MOADER_SEEDSOW_GUI"
 
 Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Seedsow launcher starts. Select **Auto-Download Moader kaiHEN**. The current kit uses its included complete patched release and checks every unchanged file against the pinned official base, plus the matched RO/HEN/bootstrap and Moader bytes. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
 
-The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. v0.2.0 retains the reviewed GUI patch; provision a new folder if an existing checkout fails that check.
+The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. v0.2.5 retains the reviewed GUI patch; provision a new folder if an existing checkout fails that check.
 
 ## Install on one fresh boot
 

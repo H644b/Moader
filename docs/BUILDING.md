@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.0 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.5 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
@@ -22,7 +22,7 @@ The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, includin
 
 The [Seedsow prebuilt workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
 
-For a v0.2.0 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json). The commands below select the Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
+For a v0.2.5 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.5/release-manifest.json). The commands below select the Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
 
 ```sh
 python3 tools/setup-devkit.py

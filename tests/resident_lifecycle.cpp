@@ -25,7 +25,7 @@ struct Fake {
     bool reload = false, abort_reload = false, stop_failure = false;
     Result fs_result = 0, socket_result = 0, signal_result = 0, start_result = 0, nifm_result = 0;
     unsigned fs_init = 0, fs_exit = 0, mounts = 0, unmounts = 0;
-    unsigned socket_init = 0, socket_exit = 0, nifm_init = 0, nifm_exit = 0;
+    unsigned socket_init = 0, resident_socket_init = 0, socket_exit = 0, nifm_init = 0, nifm_exit = 0;
     unsigned starts = 0, stops = 0, runtime_exit = 0, kicks = 0, sleeps = 0;
 } fake;
 Result call(u32 id, const void* input = nullptr, size_t size = 0, void* output = nullptr) {
@@ -128,7 +128,29 @@ extern "C" Result fsInitialize(void) { assert(fake.ready); ++fake.fs_init; retur
 extern "C" void fsExit(void) { ++fake.fs_exit; }
 extern "C" Result fsdevMountSdmc(void) { ++fake.mounts; return 0; }
 extern "C" Result fsdevUnmountAll(void) { ++fake.unmounts; return 0; }
-extern "C" Result socketInitialize(const SocketInitConfig*) { ++fake.socket_init; return fake.socket_result; }
+extern "C" const SocketInitConfig* socketGetDefaultInitConfig(void) {
+    static const SocketInitConfig config = {
+        0x8000, 0x10000, 0x8000, 0x10000, 0x2400, 0xA500, 2, 3, BsdServiceType_User
+    };
+    return &config;
+}
+extern "C" Result socketInitialize(const SocketInitConfig* config) {
+    ++fake.socket_init;
+    if (config) {
+        ++fake.resident_socket_init;
+        const auto& defaults = *socketGetDefaultInitConfig();
+        assert(config->num_bsd_sessions == 1);
+        assert(config->bsd_service_type == defaults.bsd_service_type);
+        assert(config->tcp_tx_buf_size == defaults.tcp_tx_buf_size);
+        assert(config->tcp_rx_buf_size == defaults.tcp_rx_buf_size);
+        assert(config->tcp_tx_buf_max_size == defaults.tcp_tx_buf_max_size);
+        assert(config->tcp_rx_buf_max_size == defaults.tcp_rx_buf_max_size);
+        assert(config->udp_tx_buf_size == defaults.udp_tx_buf_size);
+        assert(config->udp_rx_buf_size == defaults.udp_rx_buf_size);
+        assert(config->sb_efficiency == defaults.sb_efficiency);
+    }
+    return fake.socket_result;
+}
 extern "C" void socketExit(void) { ++fake.socket_exit; }
 extern "C" Result nifmInitialize(NifmServiceType) { ++fake.nifm_init; return fake.nifm_result; }
 extern "C" void nifmExit(void) { ++fake.nifm_exit; }
@@ -260,6 +282,7 @@ int main(int argc, char** argv) {
         assert(fake.fs_exit == (scenario < 4 && scenario != 2 ? 1u : 0u));
         assert(fake.unmounts == fake.mounts);
         assert(fake.socket_exit == (scenario < 2 ? 1u : 0u));
+        assert(fake.resident_socket_init == (scenario < 2 || scenario == 3 ? 1u : 0u));
         assert(fake.nifm_exit == fake.nifm_init);
         assert(fake.sleeps == (scenario < 2 ? 2u : 0u));
         moader_native::InstanceLock released;
@@ -273,6 +296,7 @@ int main(int argc, char** argv) {
         }();
         assert(R_SUCCEEDED(moader_resident_main()));
         assert(fake.stops == 1 && fake.runtime_exit == 1 && fake.sleeps == (scenario ? 4u : 2u));
+        assert(fake.resident_socket_init == 1);
         moader_native::InstanceLock released;
         std::ifstream pairing("sdmc:/moader/pairing-code"), saved("sdmc:/moader/preferences");
         assert(std::string((std::istreambuf_iterator<char>(pairing)), {}) == "001234");
@@ -291,6 +315,7 @@ int main(int argc, char** argv) {
             try { moader_native::Foreground duplicate; assert(false); }
             catch (const std::runtime_error&) {}
             assert(fake.socket_init == 2 && fake.socket_exit == 1);
+            assert(fake.resident_socket_init == 0);
             assert(fake.nifm_init == 1 && fake.nifm_exit == 0);
         }
         assert(fake.socket_exit == 2);
