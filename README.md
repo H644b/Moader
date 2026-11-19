@@ -38,7 +38,7 @@ The precompiled kit needs Python 3.10+ and the route's Node 24; Git is only need
 
 Use the chosen upstream tool's current console/application requirements. A stock-console installer is not included; CivSwitch has a separate [experimental s8n host profile](docs/CIV7.md), with no Moader Civ7 hardware validation. HerXayah and mac2jb CivSwitch runs are not admitted by that profile. The direct Linux/WSL instructions follow pinned source and helper contracts; they do not add a new Linux/WSL console-verification claim to the existing macOS/mac2jb hardware results.
 
-**Seedsow Lullaby Demo on Apple Silicon macOS:** the current source branch also has a [Seedsow installation guide](docs/SEEDSOW.md). It builds a separate matched RO/HEN/bootstrap and uses a source-qualified patch of the Seedsow FS GUI. One Demo installation, app launch and resident browser lifecycle passed on hardware. This source workflow is not in the v0.1.2 backend ZIP.
+**Seedsow Lullaby Demo on Apple Silicon macOS, Linux x86_64 or WSL2 x86_64:** the repository has a [Seedsow installation guide](docs/SEEDSOW.md). It builds a separate matched RO/HEN/bootstrap and uses a source-qualified patch of the Seedsow FS GUI. One Demo installation, app launch and resident browser lifecycle passed on hardware from macOS; Linux and WSL2 host support has separate validation. This source workflow is not in the v0.1.2 backend ZIP.
 
 **kaiHEN** is the homebrew environment; **hbmenu** is the launcher for homebrew apps; **FS** means the filesystem service, whose verified access is needed to install Moader's backend. Everyday mod management uses the running backend rather than repeating that setup.
 
@@ -74,7 +74,7 @@ This is a bounded test of one loose RomFS replacement. Game caches, new/resized 
 
 - [Wiki](https://github.com/H644b/Moader/wiki) — browse all user guides
 - [Installation](docs/INSTALLATION.md) — app copy, both backend setup routes and updates
-- [Seedsow installation](docs/SEEDSOW.md) — Apple Silicon source build, patched GUI and Demo entrypoint
+- [Seedsow installation](docs/SEEDSOW.md) — macOS/Linux/WSL2 source build, patched GUI and Demo entrypoint
 - [kaiHEN modifications](docs/KAIHEN_CHANGES.md) — complete source patch, reload protocol, upstream base and HEN/bootstrap hashes
 - [CivSwitch / Civilization VII](docs/CIV7.md) — experimental entrypoint, exact source pin and validation limits
 - [Usage](docs/USAGE.md) — controller controls, pairing, ZIP layout and settings

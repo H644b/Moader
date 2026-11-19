@@ -262,7 +262,10 @@ def qualify_patched(data, name, p):
 
 
 def sdk(root):
-    require(platform.system() == 'Darwin' and platform.machine().lower() in ('arm64', 'aarch64'), '--build currently requires Apple Silicon macOS; no Linux/Intel SDK is provisioned')
+    system, machine = platform.system(), platform.machine().lower()
+    require((system == 'Darwin' and machine in ('arm64', 'aarch64')) or
+            (system == 'Linux' and machine in ('x86_64', 'amd64')),
+            '--build requires the pinned Apple Silicon macOS or Linux x86_64 SDK')
     result = root / 'vendor/devkitpro'
     for name in ('devkitA64/bin/aarch64-none-elf-g++', 'tools/bin/elf2nso', 'libounce/switch2_cpu.mk', 'libounce/lib/libounce_core.a'):
         regular(result / name)
@@ -474,7 +477,7 @@ def parser():
     p.add_argument('--check', action='store_true', help='read-only local validation; no downloads/builds/preparation')
     p.add_argument('--sources-only', action='store_true', help='fetch/validate only selected host sources; no acquisition/HEN/app/SDK/Node work')
     p.add_argument('--offline', action='store_true', help='refuse downloads; use supplied/host-kit inputs')
-    p.add_argument('--build', action='store_true', help='explicit isolated pinned RO/HEN/bootstrap/app rebuild with existing Apple Silicon SDK')
+    p.add_argument('--build', action='store_true', help='explicit isolated pinned RO/HEN/bootstrap/app rebuild with the matching macOS or Linux SDK')
     p.add_argument('--node', help='Node executable (default: node); pass mac2jb Node 24 path when appropriate')
     p.add_argument('--release-manifest', type=pathlib.Path)
     p.add_argument('--kaihen-archive', type=pathlib.Path)

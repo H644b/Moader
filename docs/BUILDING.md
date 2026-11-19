@@ -1,8 +1,8 @@
 # Building and preparing the backend
 
-The published **v0.1.2 release** retains protocol-7 service reload, corrected cartridge checks and the checked host installer, with the qualified official `20261114c` base at `e897f991524590833b82fbe8d63a3c6775fb8101`. This source branch adds a separately matched Seedsow RO/HEN/bootstrap build. Its clean source build and bounded console installation are recorded in [Validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow); the v0.1.2 release's original binaries and validation scope remain in its [release notes](releases/v0.1.2.md).
+The published **v0.1.2 release** retains protocol-7 service reload, corrected cartridge checks and the checked host installer, with the qualified official `20261114c` base at `e897f991524590833b82fbe8d63a3c6775fb8101`. The repository also has a separately matched Seedsow RO/HEN/bootstrap build. Its clean source build and bounded console installation are recorded in [Validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow); the v0.1.2 release's original binaries and validation scope remain in its [release notes](releases/v0.1.2.md).
 
-The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds remain [Apple Silicon macOS only](#build-from-a-clean-source-checkout).
+The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds support [Apple Silicon macOS and Linux x86_64](#build-from-a-clean-source-checkout).
 
 Unzip the kit, read `START_HERE.txt`, and enter the outer folder containing `tools/`. Install Python 3.10+. Either acquisition route needs its exact Node **24** for preparation and installation; host-only setup checks accept Node 22+.
 
@@ -45,7 +45,7 @@ Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnos
 
 ## Build from a clean source checkout
 
-The bundled SDK setup currently targets **Apple Silicon macOS only**. It provisions devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114. Linux and Intel macOS cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use Node 24 for the later live installation.
+The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114 into the checkout. Linux needs `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
 
 The [Seedsow source workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
 
@@ -58,7 +58,7 @@ python3 tools/setup-backend.py --check --node node
 node tools/install-moader.cjs --check
 ```
 
-The SDK bootstrap downloads the packages pinned in `tools/toolchain-packages.json` and the checksum-pinned ounce SDK. Backend setup downloads the pinned official kaiHEN archive and ns2jb source. It copies a source allowlist to a temporary directory, rebuilds HEN, bootstrap, plugin library and the application there, verifies HEN/bootstrap against the source-qualified component digests, then fills missing local inputs. Existing files must already match; there is no force-overwrite option. Use a separate clean checkout for a rebuild when release binaries already occupy `dist/` or `vendor/kaihen-mo`.
+The SDK bootstrap downloads the shared and macOS packages pinned in `tools/toolchain-packages.json`, the Linux x86_64 overrides in `tools/toolchain-packages-linux-x86_64.json` when applicable, and the checksum-pinned ounce SDK. Backend setup downloads the pinned official kaiHEN archive and ns2jb source. It copies a source allowlist to a temporary directory, rebuilds HEN, bootstrap, plugin library and the application there, verifies HEN/bootstrap against the source-qualified component digests, then fills missing local inputs. Existing files must already match; there is no force-overwrite option. Use a separate clean checkout for a rebuild when release binaries already occupy `dist/` or `vendor/kaihen-mo`.
 
 `setup-backend.py --check` is read-only. In contrast, `install-moader.cjs --check` writes a local immutable snapshot under `build/install/prepared-*` and updates its convenience pointer. Both avoid console connections. Use the unique manifest printed by the installer for any later `--prepared` command; `build/install/manifest.json` is a mutable convenience pointer.
 
@@ -78,7 +78,7 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
-The Seedsow source branch's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json). Its source, GUI and build instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix this pair with the v0.1.2 release kit.
+The Seedsow workflow's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json). Its source, GUI and build instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix this pair with the v0.1.2 release kit.
 
 Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.
 

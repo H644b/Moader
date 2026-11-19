@@ -54,7 +54,7 @@ The release packager exports committed public source from `HEAD`, adds only the 
 
 ## Native changes
 
-The supported SDK bootstrap is Apple Silicon macOS with the pins documented in [BUILDING.md](BUILDING.md). Use a fresh checkout and `python3 tools/setup-backend.py --build` for isolated HEN/bootstrap/app compilation. The HEN/bootstrap pair must reproduce the source-qualified proof before provisioning. The app's debug information can encode its build directory, so distinguish successful builds from byte reproducibility.
+The supported SDK bootstrap covers Apple Silicon macOS and Linux x86_64 with the pins documented in [BUILDING.md](BUILDING.md). Use a fresh checkout and `python3 tools/setup-backend.py --build` for isolated HEN/bootstrap/app compilation. The HEN/bootstrap pair must reproduce the source-qualified proof before provisioning. The app's debug information can encode its build directory, so distinguish successful builds from byte reproducibility.
 
 Changes to `runtime/modloader/native` or a source listed in its prebuilt manifest require Zig 0.15.2 and a maintainer rebuild:
 
