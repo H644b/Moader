@@ -58,6 +58,18 @@ def verified_download(file, url, expected, user_agent):
         raise ValueError('Pinned SDK package checksum differs: ' + file.name)
     return file
 
+def extract_package(file, sdk):
+    names = subprocess.check_output(['tar', '-tf', str(file)], text=True).splitlines()
+    members = [name for name in names if name.startswith('opt/devkitpro/')]
+    if not members:
+        return
+    if 'opt/devkitpro/' not in members or any('..' in name.split('/') for name in members):
+        raise ValueError('Unsafe SDK package member paths: ' + file.name)
+    # Selecting the directory once extracts its subtree on both BSD and GNU
+    # tar. Passing every listed child makes GNU tar report them as missing.
+    subprocess.run(['tar', '-xf', str(file), '-C', str(sdk),
+                    '--strip-components=2', 'opt/devkitpro/'], check=True)
+
 def main():
     host_name, user_agent = host()
     packages = register(host_name)
@@ -72,10 +84,7 @@ def main():
         files = list(executor.map(download, NAMES))
     SDK.mkdir(parents=True, exist_ok=True)
     for file in files:
-        names = subprocess.check_output(['tar', '-tf', str(file)], text=True).splitlines()
-        members = [n for n in names if n.startswith('opt/devkitpro/') and '..' not in n.split('/')]
-        if members:
-            subprocess.run(['tar', '-xf', str(file), '-C', str(SDK), '--strip-components=2', *members], check=True)
+        extract_package(file, SDK)
     archive = ROOT / 'research/artifacts/ounce-devkit-20261114.tar.xz'
     verified_download(archive, OUNCE_URL, OUNCE_SHA256, user_agent)
     subprocess.run(['tar', '-xJf', str(archive), '-C', str(SDK)], check=True)

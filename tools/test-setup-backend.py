@@ -24,6 +24,22 @@ def zip_bytes(files):
 
 
 class DevkitHostTests(unittest.TestCase):
+    def test_package_extracts_sdk_subtree_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            archive = root / 'sdk.tar'
+            with tarfile.open(archive, 'w') as out:
+                folder = tarfile.TarInfo('opt/devkitpro/'); folder.type = tarfile.DIRTYPE
+                out.addfile(folder)
+                member = tarfile.TarInfo('opt/devkitpro/devkitA64/bin/compiler'); member.size = 8
+                out.addfile(member, io.BytesIO(b'compiler'))
+                metadata = tarfile.TarInfo('.PKGINFO'); metadata.size = 4
+                out.addfile(metadata, io.BytesIO(b'meta'))
+            sdk = root / 'sdk'; sdk.mkdir()
+            devkit.extract_package(archive, sdk)
+            self.assertEqual((sdk / 'devkitA64/bin/compiler').read_bytes(), b'compiler')
+            self.assertFalse((sdk / '.PKGINFO').exists())
+
     def test_linux_package_selection_preserves_shared_and_mac_pins(self):
         with patch.object(devkit.platform, 'system', return_value='Linux'), patch.object(devkit.platform, 'machine', return_value='x86_64'):
             self.assertEqual(devkit.host()[0], 'linux-x86_64')
