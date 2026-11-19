@@ -10,6 +10,8 @@ The current source and build proof contain a newer HEN candidate that samples fr
 
 An affected tester subsequently reported that hbmenu still did not appear with the same candidate. Their archive verifies installation and SD readback of the exact HEN above, the complete game loader and hbmenu, game-arm phase 3 (`WaitingForGame`) at installation, and clean FS/listener retirement. It contains no post-game HEN status or trace, so it does not identify whether the first launch sampled R, captured a policy, or reached the takeover gate. This failed user observation supersedes any implication that the maintainer's existing-policy check resolved the broader report.
 
+The `v0.2.6-rc.2` local candidate adds a bounded PM observation for the first native game when no saved policy exists. It can capture the game's signed policy after a missed first R sample while leaving that launch stock; the second-launch takeover still requires R. The six HEN host suites and pinned native cross build pass, and the full patch replays to the tracked native source. No console has installed these exact HEN bytes, and the affected tester's failure cause remains unproven. The proof keeps `console_retest_passed: false`.
+
 ## Carousel interface
 
 On November 19, 2026, the maintainer reported that the redesigned app worked on their console. The NRO supplied for that check had SHA-256 `bfb876a0de82a9dc1224b70a09fc8fd86e7ddb0a4d03c645234864161046eb57`. [Tested source](https://github.com/H644b/Moader/commit/cda6ecc31acd90a8be179938f0062a515911c903)

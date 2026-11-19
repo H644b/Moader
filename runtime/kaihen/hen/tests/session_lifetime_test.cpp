@@ -62,6 +62,8 @@ bool full_key_stale = false;
 u64 full_key_samples = 0;
 u64 application_pid = 0;
 u64 application_program = 0;
+bool policy_read_ready = false;
+unsigned policy_writes = 0;
 template <typename T> void put(u64 address, const T& value) {
     assert(address >= MemoryBase && address + sizeof(T) <= MemoryBase + memory.size());
     std::memcpy(memory.data() + address - MemoryBase, &value, sizeof(value));
@@ -351,9 +353,21 @@ size_t hidGetNpadStatesJoyDual(HidNpadIdType, HidNpadJoyDualState*, size_t) { re
 size_t hidGetNpadStatesJoyRight(HidNpadIdType, HidNpadJoyRightState*, size_t) { return 0; }
 }
 Result readSavedPolicy(Handle, const char*, SignedPolicy*) { return MAKERESULT(2, 1); }
-Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy&, u8*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
+Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy* out) {
+    if (!kernel::policy_read_ready) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    out->size = 1;
+    out->bytes[0] = 0x42;
+    return 0;
+}
+Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy& policy, u8*) {
+    assert(policy.size == 1 && policy.bytes[0] == 0x42);
+    ++kernel::policy_writes;
+    return 0;
+}
+Result saveSignedPolicy(Handle, const char*, const SignedPolicy& policy) {
+    assert(policy.size == 1 && policy.bytes[0] == 0x42);
+    return 0;
+}
 
 struct GameArmLifetimeTest {
     static void run(Handle root) {
@@ -429,6 +443,31 @@ struct GameArmLifetimeTest {
         assert(game.state_ == GameArm::State::CapturePolicy);
         assert(game.active_title_ == application_program);
         assert(game.status_.process_id == application_pid);
+        // A first native launch without an observed R still captures policy.
+        // It must ignore the Switch 1 entrypoint and leave that game stock.
+        game.state_ = GameArm::State::WaitForInput;
+        game.capture_pending_ = false;
+        game.capture_probe_next_tick_ = 0;
+        game.active_title_ = 0;
+        game.status_.process_id = 0;
+        full_key_r = false;
+        application_program = 0x0100c9100b06a000ull;
+        game.step();
+        assert(game.state_ == GameArm::State::WaitForInput);
+        assert(game.status_.process_id == 0);
+        application_program = 0x0400000000010000ull;
+        game.capture_probe_next_tick_ = 0;
+        game.step();
+        assert(game.state_ == GameArm::State::CapturePolicy);
+        assert(game.trace().point == GameTracePoint_AutomaticPolicyCapture);
+        assert(game.status_.process_id == application_pid);
+        policy_read_ready = true;
+        const unsigned previous_writes = policy_writes;
+        game.step();
+        assert(game.policy_ready_ && policy_writes == previous_writes + 1);
+        assert(game.status_.phase == HenGamePhase_WaitingForExit);
+        assert(game.trace().point == GameTracePoint_PolicyCaptured);
+        policy_read_ready = false;
         application_pid = 0;
         application_program = 0;
     }

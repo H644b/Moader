@@ -27,6 +27,7 @@ enum GameTracePoint : u32 {
     GameTracePoint_PolicyCaptureAttempt = 49,
     GameTracePoint_PolicyCaptured = 50,
     GameTracePoint_PolicyCaptureFailed = 51,
+    GameTracePoint_AutomaticPolicyCapture = 52,
     GameTracePoint_Fault = 0xff,
 };
 

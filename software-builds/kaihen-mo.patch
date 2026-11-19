@@ -823,10 +823,20 @@ index d18dd69..6253ee7 100644
  all: $(OUT)/main
  
 diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
-index 4d2ba21..29d3cc4 100644
+index 4d2ba21..c0be8fd 100644
 --- a/hen/source/game_arm.cpp
 +++ b/hen/source/game_arm.cpp
-@@ -46,9 +46,10 @@ u32 faultCause(u32 point, u32 value) {
+@@ -32,6 +32,9 @@ constexpr char GamePackageFile[] = "/kaihen/bin/game/exefs.nsp";
+ /// a second, while the game runs.
+ constexpr u32 CaptureAttempts = 20;
+ constexpr u64 CaptureIntervalNs = 1000000000;
++/// A missed first-launch R sample must not prevent policy capture. Probe PM
++/// sparingly while no saved policy exists; the observed game remains stock.
++constexpr u64 CaptureProbeIntervalNs = 250000000;
+ /// How long sampleR waits for each controller to post a new sample.
+ constexpr u64 InputSampleIntervalNs = 50000000;
+ 
+@@ -46,9 +49,10 @@ u32 faultCause(u32 point, u32 value) {
  }
  
  bool containsEntry(const ounce::DomainEntry entries[ounce::MaxDomainEntries], u32 count,
@@ -839,7 +849,7 @@ index 4d2ba21..29d3cc4 100644
              return true;
          }
      }
-@@ -191,6 +192,7 @@ void GameArm::fault(Result result) {
+@@ -191,6 +195,7 @@ void GameArm::fault(Result result) {
  }
  
  void GameArm::step() {
@@ -847,7 +857,7 @@ index 4d2ba21..29d3cc4 100644
      Result rc = 0;
      switch (state_) {
      case State::Inactive:
-@@ -243,6 +245,16 @@ void GameArm::step() {
+@@ -243,6 +248,16 @@ void GameArm::step() {
      }
  }
  
@@ -864,7 +874,74 @@ index 4d2ba21..29d3cc4 100644
  Result GameArm::openPackage() {
      if (!memory_) {
          trace_.write(GameTracePoint_WorkerEntered);
-@@ -383,43 +395,45 @@ GameArm::InputChoice GameArm::sampleR() {
+@@ -269,6 +284,7 @@ Result GameArm::openPackage() {
+     active_title_ = 0;
+     active_storage_ = 0;
+     capture_pending_ = false;
++    capture_probe_next_tick_ = 0;
+     gate_failure_step_ = 0;
+     step_started_ = false;
+     before_step_count_ = 0;
+@@ -295,26 +311,46 @@ Result GameArm::openPackage() {
+ }
+ 
+ Result GameArm::waitForInput() {
+-    if (sampleR() != InputChoice::Pressed) {
+-        return 0;
+-    }
+-
++    const InputChoice input = sampleR();
+     if (!policy_ready_) {
+-        // The first R launch stays stock. PM identifies the running title,
+-        // then its live CodeFS supplies the signed policy for later launches.
+-        capture_pending_ = true;
+-        capture_attempts_ = 0;
+-        capture_next_tick_ = 0;
+-        trace_.write(GameTracePoint_FirstLaunchCapture);
+-        state_ = State::WaitProcess;
+-        status_.phase = HenGamePhase_WaitingForProcess;
++        // The first native launch stays stock. A fresh R press starts the
++        // existing PM wait immediately; if its sample is missed, observe the
++        // native process itself and still capture its signed policy.
++        if (input == InputChoice::Pressed) {
++            beginPolicyCapture();
++            trace_.write(GameTracePoint_FirstLaunchCapture);
++            return 0;
++        }
++        const u64 now = GameClock::now();
++        if (capture_probe_next_tick_ && now < capture_probe_next_tick_) return 0;
++        capture_probe_next_tick_ = now + GameClock::toTicks(CaptureProbeIntervalNs);
++        u64 pid = 0;
++        Result rc = pmdmntGetApplicationProcessId(&pid);
++        if (R_FAILED(rc) || !pid) return 0;
++        u64 title = 0;
++        rc = pmdmntGetProgramId(&title, pid);
++        if (R_FAILED(rc) || !isApplicationProgram(title)) return 0;
++        beginPolicyCapture();
++        active_title_ = title;
++        status_.process_id = pid;
++        state_ = State::CapturePolicy;
++        trace_.write(GameTracePoint_AutomaticPolicyCapture);
+         return 0;
+     }
++    if (input != InputChoice::Pressed) return 0;
+     state_ = State::ParkGate;
+     status_.phase = HenGamePhase_Parking;
+     return 0;
+ }
+ 
++void GameArm::beginPolicyCapture() {
++    capture_pending_ = true;
++    capture_attempts_ = 0;
++    capture_next_tick_ = 0;
++    state_ = State::WaitProcess;
++    status_.phase = HenGamePhase_WaitingForProcess;
++}
++
+ Result GameArm::parkGate() {
+     status_.phase = HenGamePhase_Parking;
+     Result rc = gate_->park();
+@@ -383,43 +419,45 @@ GameArm::InputChoice GameArm::sampleR() {
          HidNpadIdType_No4, HidNpadIdType_No5, HidNpadIdType_No6,
          HidNpadIdType_No7, HidNpadIdType_No8, HidNpadIdType_Handheld,
      };
@@ -940,7 +1017,7 @@ index 4d2ba21..29d3cc4 100644
      trace_.write(GameTracePoint_InputSample, 0,
                   choice == InputChoice::Released ? 0 : 0xffffffffu);
      return choice;
-@@ -468,7 +482,7 @@ Result GameArm::receiveGameMount() {
+@@ -468,7 +506,7 @@ Result GameArm::receiveGameMount() {
      trace_.write(GameTracePoint_SecondSnapshotDone, rc, after_count);
      if (R_FAILED(rc)) return restoreGate(rc);
  
@@ -949,7 +1026,7 @@ index 4d2ba21..29d3cc4 100644
          first_closed_ = true;
      }
      bool matching = false;
-@@ -514,10 +528,19 @@ Result GameArm::receiveGameMount() {
+@@ -514,10 +552,19 @@ Result GameArm::receiveGameMount() {
          // restored, the pending title can continue on its stock CodeFS.
          return restoreGate(rc, State::WaitProcess);
      }
@@ -970,7 +1047,7 @@ index 4d2ba21..29d3cc4 100644
  Result GameArm::waitForProcess() {
      u64 pid = 0;
      Result rc = active_title_ ? pmdmntGetProcessId(&pid, active_title_)
-@@ -538,6 +561,10 @@ Result GameArm::waitForProcess() {
+@@ -538,6 +585,10 @@ Result GameArm::waitForProcess() {
              return rc;
          }
          if (!allow_bridge_process_ && !isApplicationProgram(title)) {
@@ -981,7 +1058,7 @@ index 4d2ba21..29d3cc4 100644
              return UnexpectedState;
          }
          active_title_ = title;
-@@ -563,9 +590,9 @@ Result GameArm::capturePolicy() {
+@@ -563,9 +614,9 @@ Result GameArm::capturePolicy() {
      if (R_FAILED(rc)) return rc;
      if (program_id != active_title_) return UnexpectedState;
  
@@ -993,7 +1070,7 @@ index 4d2ba21..29d3cc4 100644
      capture_attempts_++;
      trace_.write(GameTracePoint_PolicyCaptureAttempt, 0, capture_attempts_);
  
-@@ -619,7 +646,7 @@ Result GameArm::pollProcessExit() {
+@@ -619,7 +670,7 @@ Result GameArm::pollProcessExit() {
          u32 count = 0;
          GameMount final_mount(*memory_, mount_config_);
          R_TRY(final_mount.snapshot(entries, count));
@@ -1003,7 +1080,7 @@ index 4d2ba21..29d3cc4 100644
      if (package_) package_->close();
      package_.reset();
 diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
-index 441bdbf..8658394 100644
+index 441bdbf..a102c55 100644
 --- a/hen/source/game_arm.hpp
 +++ b/hen/source/game_arm.hpp
 @@ -7,13 +7,22 @@
@@ -1040,15 +1117,18 @@ index 441bdbf..8658394 100644
  
    private:
      enum class InputChoice {
-@@ -52,6 +64,7 @@ class GameArm {
+@@ -50,8 +62,10 @@ class GameArm {
+ 
+     Result openPackage();
      Result waitForInput();
++    void beginPolicyCapture();
      Result parkGate();
      Result receiveGameMount();
 +    Result exchangeGameCode();
      Result waitForProcess();
      Result capturePolicy();
      Result pollProcessExit();
-@@ -98,6 +111,7 @@ class GameArm {
+@@ -98,9 +112,11 @@ class GameArm {
      bool handles1_ = false;
      bool started_ = false;
      bool policy_ready_ = false;
@@ -1056,6 +1136,22 @@ index 441bdbf..8658394 100644
      bool capture_pending_ = false;
      u32 capture_attempts_ = 0;
      u64 capture_next_tick_ = 0;
++    u64 capture_probe_next_tick_ = 0;
+     Result recovery_primary_result_ = 0;
+     State recovery_target_ = State::Fault;
+     Result last_restore_result_ = 0;
+diff --git a/hen/source/game_trace.hpp b/hen/source/game_trace.hpp
+index ced7db6..b697b6b 100644
+--- a/hen/source/game_trace.hpp
++++ b/hen/source/game_trace.hpp
+@@ -27,6 +27,7 @@ enum GameTracePoint : u32 {
+     GameTracePoint_PolicyCaptureAttempt = 49,
+     GameTracePoint_PolicyCaptured = 50,
+     GameTracePoint_PolicyCaptureFailed = 51,
++    GameTracePoint_AutomaticPolicyCapture = 52,
+     GameTracePoint_Fault = 0xff,
+ };
+ 
 diff --git a/hen/source/lifecycle_client.hpp b/hen/source/lifecycle_client.hpp
 new file mode 100644
 index 0000000..c45c059
@@ -3365,10 +3461,10 @@ index 0000000..3747804
 +}
 diff --git a/hen/tests/session_lifetime_test.cpp b/hen/tests/session_lifetime_test.cpp
 new file mode 100644
-index 0000000..2674d79
+index 0000000..a0700e5
 --- /dev/null
 +++ b/hen/tests/session_lifetime_test.cpp
-@@ -0,0 +1,570 @@
+@@ -0,0 +1,609 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// Actual plugin runtime and SM proxy loops, real SDK clone/close/IPC packing,
 +// counted fake kernel. FS's quota/peer teardown are a MODEL, not device proof.
@@ -3433,6 +3529,8 @@ index 0000000..2674d79
 +u64 full_key_samples = 0;
 +u64 application_pid = 0;
 +u64 application_program = 0;
++bool policy_read_ready = false;
++unsigned policy_writes = 0;
 +template <typename T> void put(u64 address, const T& value) {
 +    assert(address >= MemoryBase && address + sizeof(T) <= MemoryBase + memory.size());
 +    std::memcpy(memory.data() + address - MemoryBase, &value, sizeof(value));
@@ -3722,9 +3820,21 @@ index 0000000..2674d79
 +size_t hidGetNpadStatesJoyRight(HidNpadIdType, HidNpadJoyRightState*, size_t) { return 0; }
 +}
 +Result readSavedPolicy(Handle, const char*, SignedPolicy*) { return MAKERESULT(2, 1); }
-+Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-+Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy&, u8*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-+Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy* out) {
++    if (!kernel::policy_read_ready) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
++    out->size = 1;
++    out->bytes[0] = 0x42;
++    return 0;
++}
++Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy& policy, u8*) {
++    assert(policy.size == 1 && policy.bytes[0] == 0x42);
++    ++kernel::policy_writes;
++    return 0;
++}
++Result saveSignedPolicy(Handle, const char*, const SignedPolicy& policy) {
++    assert(policy.size == 1 && policy.bytes[0] == 0x42);
++    return 0;
++}
 +
 +struct GameArmLifetimeTest {
 +    static void run(Handle root) {
@@ -3800,6 +3910,31 @@ index 0000000..2674d79
 +        assert(game.state_ == GameArm::State::CapturePolicy);
 +        assert(game.active_title_ == application_program);
 +        assert(game.status_.process_id == application_pid);
++        // A first native launch without an observed R still captures policy.
++        // It must ignore the Switch 1 entrypoint and leave that game stock.
++        game.state_ = GameArm::State::WaitForInput;
++        game.capture_pending_ = false;
++        game.capture_probe_next_tick_ = 0;
++        game.active_title_ = 0;
++        game.status_.process_id = 0;
++        full_key_r = false;
++        application_program = 0x0100c9100b06a000ull;
++        game.step();
++        assert(game.state_ == GameArm::State::WaitForInput);
++        assert(game.status_.process_id == 0);
++        application_program = 0x0400000000010000ull;
++        game.capture_probe_next_tick_ = 0;
++        game.step();
++        assert(game.state_ == GameArm::State::CapturePolicy);
++        assert(game.trace().point == GameTracePoint_AutomaticPolicyCapture);
++        assert(game.status_.process_id == application_pid);
++        policy_read_ready = true;
++        const unsigned previous_writes = policy_writes;
++        game.step();
++        assert(game.policy_ready_ && policy_writes == previous_writes + 1);
++        assert(game.status_.phase == HenGamePhase_WaitingForExit);
++        assert(game.trace().point == GameTracePoint_PolicyCaptured);
++        policy_read_ready = false;
 +        application_pid = 0;
 +        application_program = 0;
 +    }

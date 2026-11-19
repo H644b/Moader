@@ -14,7 +14,7 @@ Moader ships a modified kaiHEN for features such as cooperative service reload a
 
 ## Current source profile
 
-The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. The current HEN includes a host-tested hold-R candidate; its proof sets `console_retest_passed` to false. The earlier Demo installation records in [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) apply to the previous HEN bytes, not this candidate. Use the tagged proof above for the v0.1.2 kit.
+The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. The current HEN is a host-tested first-launch capture candidate; its proof sets `console_retest_passed` to false. The earlier Demo installation records in [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) apply to previous HEN bytes, not this candidate. Use the tagged proof above for the v0.1.2 kit.
 
 ## Hold-R game entry candidate
 
@@ -23,6 +23,8 @@ The v0.2.5 installer success receipt shows HEN waiting for a game. It does not s
 The current HEN samples fresh R state from SystemExt and the enabled standard controller styles, including FullKey, Handheld, JoyDual and JoyRight. During first-launch capture it waits past a still-closing nonnative Seedsow application instead of faulting before the native game appears. Host tests cover a fresh FullKey R sample, reject a stale one and cover this PM transition; the native HEN builds with the pinned toolchain. One Demo installation and existing-policy hold-R entry passed with the exact candidate. Neither mechanism is established as the tester's exact failure cause, and this candidate has not yet passed a clean-policy console test.
 
 An affected tester's later archive confirms installation and readback of that exact candidate, but they reported the same no-hbmenu result. The archive ends before either game launch and cannot identify the game-arm step that failed. The candidate remains diagnostic work rather than a validated fix.
+
+The next local candidate also observes the first native game's PM process when no saved policy exists. It captures that game's signed policy while the first launch stays stock, even if HEN missed its R sample. R remains necessary for the later hbmenu takeover. The PM probe is limited to once per quarter second and ignores Switch 1 titles; host tests cover the automatic first-launch transition and policy staging. The failed tester log does not establish that a missed first R sample was their cause, and this new candidate has no device result.
 
 ## v0.1.2 source selection
 

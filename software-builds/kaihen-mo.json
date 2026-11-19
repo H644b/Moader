@@ -4,15 +4,15 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "ae2156d3d0e7a821b0546b12e44a5f8abe4de6350d9ea6dd926745d637d24169",
+  "patch_sha256": "1b22bf5948265406bd7bef864ae5753a367410091968b06fff9e720d138e90da",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "92e3cd40b022bb61a08f299365f2c500b7bcff9cb8790202a726dd4781f2e33d",
+  "source_tree_sha256": "af72a8de6c84c266b1251ce643d05b1cc01fb030cf219472903473fff07c460a",
   "protocol_version": 7,
-  "hen_sha256": "4bc8184d9e3c37ce49fb704fa4c044c15ddcd22ea03414823191c7f8a16844f5",
+  "hen_sha256": "092fd1987a018944975dfa02a14e348d02c576595a4c697a6d217d407b41b607",
   "components": {
     "hen/main": {
-      "bytes": 131316,
-      "sha256": "4bc8184d9e3c37ce49fb704fa4c044c15ddcd22ea03414823191c7f8a16844f5"
+      "bytes": 131480,
+      "sha256": "092fd1987a018944975dfa02a14e348d02c576595a4c697a6d217d407b41b607"
     },
     "bootstrap.bin": {
       "bytes": 30016,
@@ -25,6 +25,6 @@
   },
   "native_build_passed": true,
   "console_retest_passed": false,
-  "reason": "The exact HEN passed one combined Seedsow Demo installation and existing-policy hold-R entry, but the clean-policy first-launch path reported failing on other consoles has not been device-tested.",
-  "validation_scope": "The same-boot receipt verified matched RO/HEN/bootstrap startup, Moader resident/FS connection, restored cache and closed listener. The owner reached hbmenu after two R launches of Pokemon Z-A with a previously saved game policy. Host regressions cover fresh FullKey input and a still-closing Seedsow process; neither was isolated on hardware."
+  "reason": "The previous candidate installed on an affected console but did not open hbmenu. This HEN adds automatic first-native-game policy capture and has not been device-tested.",
+  "validation_scope": "The previous candidate's same-boot receipt verified matched RO/HEN/bootstrap startup, Moader resident/FS connection, restored cache and closed listener. The owner reached hbmenu after two R launches of Pokemon Z-A with a previously saved game policy; an affected tester still reported no hbmenu. Host regressions for this HEN cover automatic stock first-launch capture without an R sample, fresh FullKey input and a still-closing Seedsow process. None of those changes is isolated on hardware."
 }
