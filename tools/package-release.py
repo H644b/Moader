@@ -150,7 +150,8 @@ def full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp):
     require(all(name in base for name in (*backend.KAIHEN_COMPONENTS, *backend.KAIHEN_PROGRAMS)) and
             any(name.startswith('licenses/') for name in base), 'Official kaiHEN release is incomplete')
     patched = dict(base)
-    patched.update({'ro/main': ro, 'hen/main': hen, 'bootstrap.bin': bootstrap,
+    patched.update({'ro/main': ro if ro is not None else base['ro/main'],
+                    'hen/main': hen, 'bootstrap.bin': bootstrap,
                     'programs/Moader.nro': app, 'plugins/moader.nso': service})
     require(all(patched[name] == base[name] for name in base if name not in
                 {'ro/main', 'hen/main', 'bootstrap.bin'}),

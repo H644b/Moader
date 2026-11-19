@@ -258,7 +258,8 @@ def paired_setup_checks(node, work):
     js="const p=require(process.argv[1]); p.qualifyKaihenBuild(process.argv[2]).then(x=>console.log(JSON.stringify(x))).catch(e=>{console.error(e.message);process.exitCode=1;});"
     qualified=json.loads(subprocess.check_output([node,'-e',js,str(ROOT/'tools/install-inputs.cjs'),str(root)],text=True))
     require(qualified['schema']==2 and qualified['protocolVersion']==7 and qualified['identity']==sha(proof_file.read_bytes()),'Python/Node proof identity differs')
-    official={name:('official-'+name).encode() for name in backend.KAIHEN_COMPONENTS}
+    official={name:('official-'+name).encode() for name in
+              (*backend.KAIHEN_COMPONENTS,*backend.KAIHEN_PROGRAMS,'licenses/COPYING')}
     archive=work/'official fixture.zip';archive.write_bytes(zipped(official))
     engine={'host/index.cjs':b'fixture selected host source'}
     engine_archive=work/'host fixture.zip';engine_archive.write_bytes(zipped({'engine/'+name:data for name,data in engine.items()}))
@@ -299,7 +300,9 @@ def paired_setup_checks(node, work):
     with patch.object(backend,'sdk',return_value=work/'fake sdk'),patch.object(backend.subprocess,'run',side_effect=make):
         pair,_=backend.build_inputs(root,build_work)
     require(pair=={'hen/main':hen,'bootstrap.bin':bootstrap} and len(calls)==3 and tree(root)==before,'Paired build did not remain isolated/complete')
-    put('tools/setup-backend.py',(ROOT/'tools/setup-backend.py').read_bytes())
+    put('tools/setup-backend.py',(ROOT/'tools/setup-backend.py').read_bytes().replace(
+        backend.KAIHEN_SHA.encode(),sha(archive.read_bytes()).encode()))
+    put('research/artifacts/kaiHEN-20261114c.zip',archive.read_bytes())
     release={'patched_hen':{'source':'vendor/kaihen-mo/hen/main','bytes':len(hen),'sha256':sha(hen)},
              'patched_bootstrap':{'source':'vendor/kaihen-mo/bootstrap.bin','bytes':len(bootstrap),'sha256':sha(bootstrap)}}
     require(package.native_pair(root,release)[:2]==(hen,bootstrap),'Release pair qualification differs')
