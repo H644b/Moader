@@ -301,7 +301,7 @@ index ac4aa44..07b96b5 100644
 -        return send(500, JSON.stringify({ok: false, error: error.message}));
 -      }
 +      return send(409, JSON.stringify({ok: false,
-+        error: 'This local Moader integration branch uses a pinned Seedsow revision; upstream self-update is disabled.'}));
++        error: 'Moader uses a pinned Seedsow revision; upstream self-update is disabled.'}));
      }
      if (req.method === 'POST' && url.pathname === '/api/update/apply') {
 -      if (runActive())
@@ -353,7 +353,7 @@ index ac4aa44..07b96b5 100644
 -      setTimeout(() => { try { server.close(); } catch {} process.exit(0); }, 700);
 -      return;
 +      return send(409, JSON.stringify({ok: false,
-+        error: 'Upstream self-update would overwrite the local Moader integration.'}));
++        error: 'Upstream self-update would overwrite the pinned Moader integration.'}));
      }
      if (req.method === 'GET' && url.pathname === '/api/state') {
        return send(200, JSON.stringify({...publicState(), logSeq: state.seq}));
@@ -470,7 +470,7 @@ index da70953..79b593e 100644
 -      <button id="kaihenAuto" class="small" title="Download the latest kaiHEN release from GitHub, extract it into <repo>/kaihen, and delete the ZIP">Update kaiHEN (Auto-Download)</button>
 -      <button id="updateCheck" class="small" title="Check the Seedsow FS kaiHEN repository for a newer version">Check for updates</button>
 +      <button id="kaihenAuto" class="small" title="Download the pinned official base and apply Moader's locally built, matched HEN and bootstrap">Auto-Download Moader kaiHEN</button>
-+      <button id="updateCheck" class="small" style="display:none" title="Disabled for the local Moader integration branch">Check for updates</button>
++      <button id="updateCheck" class="small" style="display:none" title="Disabled for the pinned Moader Seedsow integration">Check for updates</button>
        <button id="updateDownload" class="small primary" style="display:none" title="Stop the GUI, download the new repository, update the folder, and restart"></button>
        <span id="updateNote" class="hint danger"></span>
      </div>

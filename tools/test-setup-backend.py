@@ -12,6 +12,7 @@ def load(name, file):
 
 backend = load('setup_backend', 'setup-backend.py')
 wrapper = load('install_from_rpc', 'install-from-rpc.py')
+devkit = load('setup_devkit', 'setup-devkit.py')
 
 
 def zip_bytes(files):
@@ -20,6 +21,58 @@ def zip_bytes(files):
         for name, data in files.items():
             archive.writestr(name, data)
     return result.getvalue()
+
+
+class DevkitHostTests(unittest.TestCase):
+    def test_package_extracts_sdk_subtree_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            archive = root / 'sdk.tar'
+            with tarfile.open(archive, 'w') as out:
+                folder = tarfile.TarInfo('opt/devkitpro/'); folder.type = tarfile.DIRTYPE
+                out.addfile(folder)
+                member = tarfile.TarInfo('opt/devkitpro/devkitA64/bin/compiler'); member.size = 8
+                out.addfile(member, io.BytesIO(b'compiler'))
+                metadata = tarfile.TarInfo('.PKGINFO'); metadata.size = 4
+                out.addfile(metadata, io.BytesIO(b'meta'))
+            sdk = root / 'sdk'; sdk.mkdir()
+            devkit.extract_package(archive, sdk)
+            self.assertEqual((sdk / 'devkitA64/bin/compiler').read_bytes(), b'compiler')
+            self.assertFalse((sdk / '.PKGINFO').exists())
+
+    def test_linux_package_selection_preserves_shared_and_mac_pins(self):
+        with patch.object(devkit.platform, 'system', return_value='Linux'), patch.object(devkit.platform, 'machine', return_value='x86_64'):
+            self.assertEqual(devkit.host()[0], 'linux-x86_64')
+        linux = devkit.register('linux-x86_64')
+        mac = devkit.register('macos-arm64')
+        for name in ('devkita64-gcc', 'devkita64-binutils', 'switch-tools', 'general-tools'):
+            self.assertIn('/linux/x86_64/', linux[name]['url'])
+            self.assertNotEqual(linux[name]['SHA256SUM'][0], mac[name]['SHA256SUM'][0])
+        for name in ('devkitA64', 'devkita64-newlib', 'devkita64-rules', 'dkp-toolchain-vars', 'switch-zlib'):
+            self.assertEqual(linux[name], mac[name])
+
+    def test_unsupported_host_and_changed_cached_package_stop(self):
+        with patch.object(devkit.platform, 'system', return_value='Linux'), patch.object(devkit.platform, 'machine', return_value='aarch64'), self.assertRaisesRegex(ValueError, 'Linux x86_64'):
+            devkit.host()
+        with tempfile.TemporaryDirectory() as directory:
+            file = pathlib.Path(directory) / 'package.pkg.tar.zst'
+            file.write_bytes(b'changed')
+            with patch.object(devkit.urllib.request, 'urlopen', side_effect=AssertionError('Cached file must not download')), self.assertRaisesRegex(ValueError, 'checksum differs'):
+                devkit.verified_download(file, 'https://example.invalid/package', hashlib.sha256(b'expected').hexdigest(), 'test')
+
+
+class SeedsowLauncherTests(unittest.TestCase):
+    def test_wsl_windows_node_is_rejected_before_gui_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            node = root / 'node.exe'
+            node.write_text('#!/bin/sh\nif [ "$1" = "--version" ]; then echo v24.0.0; elif [ "$1" = "-p" ]; then echo win32; else exit 66; fi\n')
+            node.chmod(0o755)
+            gui = root / 'gui'; gui.mkdir()
+            result = subprocess.run(['bash', str(pathlib.Path(__file__).with_name('start-seedsow-gui.sh')), str(gui.resolve())],
+                                    env={**os.environ, 'MOADER_NODE24': str(node)}, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('use Linux node rather than node.exe', result.stderr)
 
 
 class SetupTests(unittest.TestCase):
@@ -277,9 +330,18 @@ class SetupTests(unittest.TestCase):
 
     def test_unsupported_build_rejected_before_fetch_or_write(self):
         before = self.snapshot()
-        with patch.object(backend.platform, 'system', return_value='Linux'), patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'Apple Silicon'):
+        with patch.object(backend.platform, 'system', return_value='Linux'), patch.object(backend.platform, 'machine', return_value='aarch64'), patch.object(backend, 'download', side_effect=AssertionError()), self.assertRaisesRegex(ValueError, 'Linux x86_64'):
             backend.setup(self.args('--build'))
         self.assertEqual(self.snapshot(), before)
+
+    def test_linux_x86_64_sdk_is_admitted_only_with_required_files(self):
+        with patch.object(backend.platform, 'system', return_value='Linux'), patch.object(backend.platform, 'machine', return_value='x86_64'):
+            with self.assertRaisesRegex(ValueError, 'Expected regular local file'):
+                backend.sdk(self.root)
+            for name in ('devkitA64/bin/aarch64-none-elf-g++', 'tools/bin/elf2nso',
+                         'libounce/switch2_cpu.mk', 'libounce/lib/libounce_core.a'):
+                self.put('vendor/devkitpro/' + name, b'pinned SDK fixture')
+            self.assertEqual(backend.sdk(self.root), (self.root / 'vendor/devkitpro').resolve())
 
     def test_build_runs_only_in_private_copy(self):
         for name in ('include', 'source', 'native', 'branding', 'web', 'tests', 'runtime/kaihen'):

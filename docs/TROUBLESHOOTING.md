@@ -137,4 +137,4 @@ The protocol-7 patch adds **Settings → Advanced → Reload Moader service**. T
 
 ## Installation stops during Loader restoration
 
-Keep the terminal's saved installation journal. A memory timeout does not prove the native request stopped. Do not repeat the installation, run cleanup commands, or reuse that RPC session. If the console is frozen, hold POWER for 12 seconds to turn it off, then power on normally. A new installation requires a newly acquired FS session after recovery. This development branch's Loader-restoration correction still needs console validation; see [Validation](VALIDATION.md) for the recorded failure and current scope.
+Keep the terminal's saved installation journal. A memory timeout does not prove the native request stopped. Do not repeat the installation, run cleanup commands, or reuse that RPC session. If the console is frozen, hold POWER for 12 seconds to turn it off, then power on normally. A new installation requires a newly acquired FS session after recovery. See [Validation](VALIDATION.md) for the Loader-restoration evidence and its limits.

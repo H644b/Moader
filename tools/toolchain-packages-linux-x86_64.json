@@ -1,0 +1,22 @@
+{
+  "devkita64-binutils": {
+    "FILENAME": ["devkita64-binutils-2.46.0-1-x86_64.pkg.tar.zst"],
+    "SHA256SUM": ["0d61ad4946eb1080c6e645c41f0cfaac0a2eba5fec88426fef8f03363e933b5a"],
+    "url": "https://downloads.devkitpro.org/packages/linux/x86_64/devkita64-binutils-2.46.0-1-x86_64.pkg.tar.zst"
+  },
+  "devkita64-gcc": {
+    "FILENAME": ["devkita64-gcc-16.1.0-1-x86_64.pkg.tar.zst"],
+    "SHA256SUM": ["8192b899f0a5fcfe10d11fa63a631b45310c0c8f0b98d88c7c283c16e9d6b0fa"],
+    "url": "https://downloads.devkitpro.org/packages/linux/x86_64/devkita64-gcc-16.1.0-1-x86_64.pkg.tar.zst"
+  },
+  "switch-tools": {
+    "FILENAME": ["switch-tools-1.13.1-1-x86_64.pkg.tar.zst"],
+    "SHA256SUM": ["de0a9473764d3c5205a7cc9b640e9e913c371b5684d526133384eb7e545c7dab"],
+    "url": "https://downloads.devkitpro.org/packages/linux/x86_64/switch-tools-1.13.1-1-x86_64.pkg.tar.zst"
+  },
+  "general-tools": {
+    "FILENAME": ["general-tools-1.4.4-1-x86_64.pkg.tar.zst"],
+    "SHA256SUM": ["b6b59bd3d22d4f83a7f0668f749df7cf97b1f05083031e629d43ca4f4377c7b5"],
+    "url": "https://downloads.devkitpro.org/packages/linux/x86_64/general-tools-1.4.4-1-x86_64.pkg.tar.zst"
+  }
+}

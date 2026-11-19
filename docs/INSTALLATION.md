@@ -2,7 +2,7 @@
 
 This guide describes the matched v0.1.2 downloads. Read the [release notes](releases/v0.1.2.md) for download choices and the [validation scope](VALIDATION.md) for the boundaries of the recorded checks.
 
-For the separate Apple Silicon source workflow through **Seedsow Lullaby Demo**, use the [Seedsow installation guide](SEEDSOW.md). It is not part of the v0.1.2 backend ZIP.
+For the separate Apple Silicon macOS, Linux x86_64 or WSL2 x86_64 source workflow through **Seedsow Lullaby Demo**, use the [Seedsow installation guide](SEEDSOW.md). It is not part of the v0.1.2 backend ZIP.
 
 | Situation | What to do |
 | --- | --- |
@@ -10,7 +10,7 @@ For the separate Apple Silicon source workflow through **Seedsow Lullaby Demo**,
 | You need the resident service and game-file routing | Choose either backend route below |
 | The console rebooted | Obtain a new verified held FS session and set up this boot's backend |
 
-The precompiled host kit works through Python/Node; end users do not need an SDK or to compile HEN. Source SDK rebuilds are a separate [Apple Silicon macOS workflow](BUILDING.md#build-from-a-clean-source-checkout). See the [short glossary](../README.md#supported-setup) for kaiHEN, hbmenu and FS.
+The precompiled host kit works through Python/Node; end users do not need an SDK or to compile HEN. Source SDK rebuilds are a separate [macOS/Linux workflow](BUILDING.md#build-from-a-clean-source-checkout). See the [short glossary](../README.md#supported-setup) for kaiHEN, hbmenu and FS.
 
 ## Copy or update the console app
 

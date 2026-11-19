@@ -168,3 +168,26 @@ jobs:
           for test in runtime/modloader/tests/diagnostics/*.cjs; do
             node "$test"
           done
+
+  seedsow-linux-build:
+    name: Seedsow Linux source build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y make clang zstd
+      - name: Provision pinned Linux SDK and build matched Seedsow components
+        run: |
+          python3 tools/setup-devkit.py
+          python3 tools/setup-backend.py --build --host-profile seedsow-malev0 --node node
+          python3 tools/setup-backend.py --check --host-profile seedsow-malev0 --node node
