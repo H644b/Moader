@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.0 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.5 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
@@ -14,15 +14,17 @@ python3 tools/setup-backend.py --check --node /absolute/path/to/node24
 
 On a kit that still needs its upstream inputs, run `python3 tools/setup-backend.py --node /absolute/path/to/node24` first. The fetched official archive is kept locally at `research/artifacts/kaiHEN-20261114c.zip` for installer qualification; only the pinned engine is retained from the ns2jb source archive. No existing research checkout or copied private state is needed. Setup refuses to replace changed existing inputs. Use a fresh kit directory to change versions.
 
-Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnostics if supplied there, are preserved and appear as `bundledPrograms` in check output. The installer includes them. A fresh minimal kit has no such programs; setup never adds OunceShell.
+Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnostics if supplied there, are preserved and appear as `bundledPrograms` in check output. The installer includes them. The v0.2.5 backend kit includes the complete regular kaiHEN bundle, so its Seedsow setup also extracts and checks OunceShell.
 
 ## Build from a clean source checkout
 
 The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114 into the checkout. Linux needs `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
 
+If devkitPro's official endpoint returns HTTP 403 for the architecture-independent `dkp-toolchain-vars` 1.0.5 package, `setup-devkit.py` tries one [alternate host](https://wii.leseratte10.de/devkitPro/other-stuff/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst). This exception applies only to that exact URL and SHA-256 `e6e26af3147061090572b61c576114ee9a45d5ed8c77c7d93cc5f5559198c288`; the downloaded bytes must match before extraction.
+
 The [Seedsow prebuilt workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
 
-For a v0.2.0 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json). The commands below select the Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
+For a v0.2.5 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.5/release-manifest.json). The commands below select the Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
 
 ```sh
 python3 tools/setup-devkit.py

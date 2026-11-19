@@ -4,13 +4,13 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v0.2.0** has prebuilt downloads for the redesigned app and its matching resident. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original release source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
+**v0.2.5** has prebuilt downloads for the app and resident with the reduced BSD session budget. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.5/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.2.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.2.0.zip` | Public host source, the five matched Moader/kaiHEN binaries, the pinned official kaiHEN archive and `bundles/kaiHEN-Moader-20261114c.zip`, which preserves the full regular release with matched RO/HEN/bootstrap and Moader additions; outer `Moader-backend-v0.2.0` folder includes `START_HERE.txt` |
+| `Moader-v0.2.5.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.2.5.zip` | Public host source, the five matched Moader/kaiHEN binaries, the pinned official kaiHEN archive and `bundles/kaiHEN-Moader-20261114c.zip`, which preserves the full regular release with matched RO/HEN/bootstrap and Moader additions; outer `Moader-backend-v0.2.5` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -24,7 +24,7 @@ The host kit contains `research/artifacts/kaiHEN-20261114c.zip` and the full pat
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-v0.2.0.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-v0.2.5.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
@@ -72,7 +72,7 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 
 1. Run `python3 tools/test-setup-backend.py` and the relevant host tests. Native tests that use SDK headers need the pinned SDK; `make check` itself is not SDK-free.
 2. Inspect the public export and both ZIP inventories for forbidden private paths and missing license/source files. Scan text for personal paths, accounts, credentials and captured session identifiers. Keep release checksums for the final bytes.
-3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries beyond the patched RO/HEN/bootstrap set, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the native set matches the reviewed proof, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
+3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory beyond the kit's pinned official kaiHEN archive and patched RO/HEN/bootstrap set, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned ns2jb source, the reported tree/hash matches [BUILDING.md](BUILDING.md), and the native set matches the reviewed proof. For the Seedsow profile, confirm the complete included bundle supplies the game loader, hbmenu and OunceShell.
 4. Run `python3 tools/setup-backend.py --check --node /absolute/path/to/node24` twice. It must not download, compile or change files. Run the local installer `--check` with that same Node executable and confirm it prints a unique `build/install/prepared-*/manifest.json`, validates both programs and performs no console connection.
 5. Exercise the direct ns2jb wrapper with `--run-dir PATH --node node` and separately the existing mac2jb status-command route. Both must preserve the selected Node 24, execute local Moader scripts only, create a unique local snapshot and print a matching `--prepared` install command. The wrapper never performs installation itself. `python3 tools/test-ns2jb-host.py --online --node node` checks real precompiled-kit preparation with public inputs and transport calls blocked; it does not acquire FS or install on a console.
 6. Exercise `--host-profile civ7-s8n` separately: `python3 tools/test-civ7-host.py --online --node node` checks the upstream source/materialization and native ABI; `node tools/test-civ7-host.cjs` checks synthetic held sessions against the actual provider; `python3 tools/test-ns2jb-host.py --online --node node --host-profile civ7-s8n` checks real precompiled-kit preparation with endpoint/process calls blocked. These establish host behavior only.

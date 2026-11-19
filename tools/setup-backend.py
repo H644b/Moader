@@ -180,7 +180,7 @@ def download(url, target, expected=None, offline=False):
     parsed = urllib.parse.urlparse(url)
     require(parsed.scheme == 'https' and parsed.hostname in ('github.com', 'gitlab.com'), 'Only explicit HTTPS upstream/release URLs are accepted')
     require(not offline, 'Offline setup needs the missing archive supplied explicitly: ' + url)
-    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Moader-setup/0.2.0'}), timeout=60) as reply:
+    with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent': 'Moader-setup/0.2.5'}), timeout=60) as reply:
         data = reply.read(MAX_ARCHIVE + 1)
     require(0 < len(data) <= MAX_ARCHIVE, 'Download exceeds archive bound')
     if expected:

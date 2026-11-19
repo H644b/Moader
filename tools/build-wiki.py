@@ -8,6 +8,7 @@ import re
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
+    'Release-v0.2.5': 'docs/releases/v0.2.5.md',
     'Release-v0.2.0': 'docs/releases/v0.2.0.md',
     'Release-v0.1.3': 'docs/releases/v0.1.3.md',
     'Release-v0.1.2': 'docs/releases/v0.1.2.md',
@@ -93,7 +94,8 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 | Guide | Covers |
 | --- | --- |
-| [v0.2.0 release notes](Release-v0.2.0) | Current downloads, redesigned interface and validation scope |
+| [v0.2.5 release notes](Release-v0.2.5) | Current downloads, BSD session fix and validation scope |
+| [v0.2.0 release notes](Release-v0.2.0) | Historical carousel and Store release |
 | [v0.1.3 release notes](Release-v0.1.3) | Historical Seedsow backend kit and validation scope |
 | [v0.1.2 release notes](Release-v0.1.2) | Historical source-matched HEN refresh |
 | [v0.1.1 release notes](Release-v0.1.1) | Historical cumulative release |
@@ -132,7 +134,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-No. The v0.2.0 backend kit supports direct ns2jb and Seedsow Lullaby Demo or full game from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. Seedsow needs its pinned GUI and host SDK preparation. [Installation](Installation) covers the method choices and host requirements.
+No. The v0.2.5 backend kit supports direct ns2jb and Seedsow Lullaby Demo or full game from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. Seedsow needs its pinned GUI and host SDK preparation. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 
@@ -189,7 +191,8 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
     pages['_Sidebar'] = '''**Moader**
 
 - [Home](Home)
-- [v0.2.0 release notes](Release-v0.2.0)
+- [v0.2.5 release notes](Release-v0.2.5)
+- [v0.2.0 release notes (historical)](Release-v0.2.0)
 - [v0.1.3 release notes](Release-v0.1.3)
 - [v0.1.2 release notes (historical)](Release-v0.1.2)
 - [v0.1.1 release notes (historical)](Release-v0.1.1)

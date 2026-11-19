@@ -88,7 +88,16 @@ int main() {
         if (R_SUCCEEDED(rc)) rc = svcSignalEvent(ready);
         if (R_SUCCEEDED(rc)) { rc = fsInitialize(); fs_ready = R_SUCCEEDED(rc); }
         if (R_SUCCEEDED(rc)) { rc = fsdevMountSdmc(); mounted = R_SUCCEEDED(rc); }
-        if (R_SUCCEEDED(rc)) { rc = socketInitializeDefault(); sockets_ready = R_SUCCEEDED(rc); }
+        if (R_SUCCEEDED(rc)) {
+            // This resident handles one HTTP client at a time. The pinned
+            // libounce default keeps three BSD operation sessions plus its
+            // monitor session open, even when Moader's web listener is off.
+            // One operation session preserves the listener and instance lock
+            // while leaving fewer bsd:u sessions held during game launch.
+            SocketInitConfig socket_config = *socketGetDefaultInitConfig();
+            socket_config.num_bsd_sessions = 1;
+            rc = socketInitialize(&socket_config); sockets_ready = R_SUCCEEDED(rc);
+        }
         if (R_SUCCEEDED(rc)) {
             std::array<uint64_t,2> epoch{}; randomGet(epoch.data(),sizeof(epoch));
             if (!(epoch[0] | epoch[1])) epoch[0] = 1;
