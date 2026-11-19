@@ -74,7 +74,7 @@ tools/start-seedsow-gui.sh "$MOADER_SEEDSOW_GUI"
 
 Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Demo launcher starts. Select **Auto-Download Moader kaiHEN**. It stages the ZIP's exact RO/HEN/bootstrap and Moader binaries with the checksum-pinned official base. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
 
-The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse an already checked folder with `--check` and `start-seedsow-gui.sh`. If you kept an earlier locally patched GUI folder, provision this new folder so its source and patch hashes match the repository.
+The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. For the refreshed v0.1.3 backend ZIP, choose a new `MOADER_SEEDSOW_GUI` folder path: an older patched GUI still has the failing auto-download action and will not pass the new patch hash check.
 
 ## Install on one fresh boot
 

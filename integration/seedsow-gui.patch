@@ -541,10 +541,10 @@ new file mode 100644
 index 0000000..e0592ff
 --- /dev/null
 +++ b/tools/moader-local.cjs
-@@ -0,0 +1,145 @@
-+// Local Moader development route for the Seedsow GUI. The public kaiHEN
-+// archive supplies the unchanged release files; the unpublished Moader RO,
-+// HEN and bootstrap are admitted only as the exact matched local build set.
+@@ -0,0 +1,149 @@
++// Local Moader route for the Seedsow GUI. The public kaiHEN archive supplies
++// the unchanged release files; the patched Moader RO, HEN and bootstrap are
++// admitted only as the exact matched build set from the backend kit.
 +'use strict';
 +const fs = require('node:fs');
 +const path = require('node:path');
@@ -628,7 +628,11 @@ index 0000000..e0592ff
 +  check(build.schema === 3 && build.protocolVersion === 7,
 +    'Moader matched kaiHEN build proof differs');
 +  const target = path.join(ROOT, 'kaihen');
-+  const staging = fs.mkdtempSync(path.join(ROOT, 'runs', 'moader-kaihen-update-'));
++  const runs = path.join(ROOT, 'runs');
++  fs.mkdirSync(runs, {recursive: true});
++  check(fs.realpathSync(runs) === runs && fs.lstatSync(runs).isDirectory(),
++    'Seedsow GUI runs path must be a canonical directory');
++  const staging = fs.mkdtempSync(path.join(runs, 'moader-kaihen-update-'));
 +  let backup = null;
 +  try {
 +    const zip = path.join(staging, 'kaiHEN-20261114c.zip');
@@ -669,7 +673,7 @@ index 0000000..e0592ff
 +    for (const relative of ['ro/main', 'hen/main', 'bootstrap.bin'])
 +      validatedFile(path.join(next, relative), build.components[relative]);
 +    if (fs.existsSync(target)) {
-+      backup = path.join(ROOT, 'runs', 'kaihen-backup-' + Date.now() + '-' +
++      backup = path.join(runs, 'kaihen-backup-' + Date.now() + '-' +
 +        crypto.randomBytes(3).toString('hex'));
 +      fs.renameSync(target, backup);
 +    }
