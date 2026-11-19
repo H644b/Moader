@@ -1,8 +1,8 @@
 {
   "name": "Moader",
-  "version": "0.2.5",
-  "tag": "v0.2.5",
-  "prerelease": false,
+  "version": "0.2.6-rc.1",
+  "tag": "v0.2.6-rc.1",
+  "prerelease": true,
   "repository": "H644b/Moader",
   "binaries": {
     "Moader.nro": {
@@ -18,8 +18,8 @@
   },
   "patched_hen": {
     "source": "vendor/kaihen-mo/hen/main",
-    "bytes": 130965,
-    "sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a"
+    "bytes": 131316,
+    "sha256": "4bc8184d9e3c37ce49fb704fa4c044c15ddcd22ea03414823191c7f8a16844f5"
   },
   "validation": "docs/VALIDATION.md",
   "appAndResidentHardwareTested": true,
