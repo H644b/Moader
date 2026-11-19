@@ -83,7 +83,7 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 ## Start here
 
-1. **[Install Moader](Installation)** — choose SmileBASIC, Seedsow Demo or the experimental CivSwitch route. The Seedsow guide covers its additional host SDK and GUI setup.
+1. **[Install Moader](Installation)** — choose SmileBASIC, Seedsow Lullaby or the experimental CivSwitch route. The Seedsow guide covers its additional host SDK and GUI setup.
 2. **[Learn the controls](Using-Moader#controller-controls)** — navigate the app, open Settings and turn the web interface on.
 3. **[Connect a browser](Using-Moader#connect-a-browser)** — open the displayed Switch address and pair.
 4. **[Import your first mod](Using-Moader#upload-your-first-mod)** — select the correct game Title ID, upload a ZIP, then enable it and read its apply state.
@@ -97,7 +97,7 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | [v0.1.1 release notes](Release-v0.1.1) | Historical cumulative release |
 | [Changelog](Changelog) | Release history and the unpublished dev.5 candidate |
 | [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
-| [Seedsow Demo](Seedsow-Demo) | Pinned GUI preparation and one-boot Moader installation |
+| [Seedsow Lullaby](Seedsow-Demo) | Pinned GUI preparation and one-boot Moader installation |
 | [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
 | [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, software errors and setup recovery |
@@ -130,7 +130,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-No. The v0.1.3 backend kit supports direct ns2jb and Seedsow Demo from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. Seedsow needs its pinned GUI and host SDK preparation. [Installation](Installation) covers the method choices and host requirements.
+No. The v0.1.3 backend kit supports direct ns2jb and Seedsow Lullaby Demo or full game from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. Seedsow needs its pinned GUI and host SDK preparation. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 
@@ -192,7 +192,7 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
 - [v0.1.1 release notes (historical)](Release-v0.1.1)
 - [Changelog](Changelog)
 - [Install / Linux / WSL / macOS](Installation)
-- [Seedsow Demo](Seedsow-Demo)
+- [Seedsow Lullaby](Seedsow-Demo)
 - [CivSwitch entrypoint](CivSwitch-Entrypoint)
 - [App and browser usage](Using-Moader)
 - [SD card layout](Using-Moader#sd-card-layout)

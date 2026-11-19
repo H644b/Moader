@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Capture bounded Seedsow Demo helper signatures without acquiring FS or changing code."""
+"""Capture bounded Seedsow helper signatures without acquiring FS or changing code."""
 from __future__ import annotations
 import argparse
 import hashlib
@@ -53,9 +53,9 @@ def lua_source(rows, nonce):
 assert(N.platform=="Ounce","Switch 2 required")
 assert(N.game_id==nil or N.game_id=="seedsow","Launcher game identity differs")
 assert(type(N.run_chain)=="function" and type(N.str_addr)=="function","Read emitter unavailable")
-assert(N.offsets_main.malloc==0x262160 and N.offsets_main.free==0x2621b0,"Demo allocator profile differs")
-assert(N.offsets_sdk.longjmp==0x5511b4 and N.offsets_sdk.vcall8_restore==0x3d9e54,"Demo SDK profile differs")
-assert(N.gadgets.g_call2==0xc27d8 and N.gadgets.g_store_x0_x19==0x173db4,"Demo emitter profile differs")
+assert(N.offsets_main.malloc==0x262160 and N.offsets_main.free==0x2621b0,"Seedsow allocator profile differs")
+assert(N.offsets_sdk.longjmp==0x5511b4 and N.offsets_sdk.vcall8_restore==0x3d9e54,"Seedsow SDK profile differs")
+assert(N.gadgets.g_call2==0xc27d8 and N.gadgets.g_store_x0_x19==0x173db4,"Seedsow emitter profile differs")
 local SDK,MAIN=N.sdk_base,N.main_base
 assert(type(SDK)=="number" and type(MAIN)=="number" and SDK>0 and MAIN>0 and SDK%4096==0 and MAIN%4096==0,"Invalid module bases")
 local function readCode(address,n)
@@ -164,7 +164,7 @@ def capture(console, port, output, profile, opener=None):
     output = Path(output)
     require(not output.exists(), 'Use a new private output directory')
     output.mkdir(mode=0o700, parents=True)
-    record = {'schema': 1, 'purpose': 'Seedsow Demo read-only helper preflight', 'provider': profile['id'],
+    record = {'schema': 1, 'purpose': 'Seedsow read-only helper preflight', 'provider': profile['id'],
               'revision': profile['revision'], 'console': str(address), 'port': port,
               'challenge': nonce, 'fsAcquisitionAttempted': False, 'codeOrKernelPatchAttempted': False,
               'nativeHandoffReady': False, 'complete': False}

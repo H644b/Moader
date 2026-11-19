@@ -64,7 +64,7 @@ async function main(args=process.argv.slice(2)){
  try{
   await fs.writeFile(shared,JSON.stringify({session,owner:'Moader',journal:file,status:'preparing'})+'\n',{flag:'wx',mode:0o600});
   await inputs.validatePrepared(prepared);
-  const entryApp={civ7:'Civilization VII',seedsow:'Seedsow Lullaby Demo',smilebasic:'SmileBASIC'}[profile.target];
+  const entryApp={civ7:'Civilization VII',seedsow:'Seedsow Lullaby Demo or full game',smilebasic:'SmileBASIC'}[profile.target];
   console.log('Keep '+entryApp+' and its session host open while Moader sets up the backend.');
   record.status='installing-filesystem';await save();
   record.runtime=await require('./install-runtime.cjs').install(run,path.join(project,'state',session),prepared,host);
@@ -79,7 +79,7 @@ async function main(args=process.argv.slice(2)){
   });
   record.status='awaiting-device-tests';record.complete=true;record.finished=new Date().toISOString();await save();
   if(profile.target==='seedsow'){
-   console.log('Backend installed. Keep Seedsow Lullaby Demo open while the installer checks the running service.');
+   console.log('Backend installed. Keep Seedsow Lullaby open while the installer checks the running service.');
   }else if(profile.target==='civ7'){
    console.log('Moader setup complete. The CivSwitch handoff to hbmenu still needs a console test.');
   }else{

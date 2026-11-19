@@ -6,7 +6,13 @@
 const crypto = require('node:crypto');
 const sha = value => crypto.createHash('sha256').update(value).digest('hex');
 const check = (ok, message) => { if (!ok) throw Error(message); };
-const DEMO_ID = '010042d022aea000';
+// Both editions use the reviewed Seedsow main/SDK code profile, but their
+// application identities differ. Keep the current-process handle limited to
+// these two known IDs; every other title remains a hard stop.
+const SEEDSOW_IDS = Object.freeze({
+  demo: '010042d022aea000',
+  full: '0100ee5021c9e000',
+});
 const STAGE_ENTRYPOINTS = new Set([
   'switch2/app/map.cjs', 'switch2/ro/install-retained.cjs',
   'switch2/ro/test-sm.cjs', 'switch2/ro/copy-loader-root.cjs',
@@ -69,10 +75,11 @@ function transform(relative, original) {
   } else if (relative === 'switch2/process/qualify.cjs') {
     source = once(source,
       "['0100c9100b06a000', '0100b4b00f9f6000'].includes(proof.app.programId)",
-      `proof.app.programId === '${DEMO_ID}'`, 'Demo process identity');
+      `${JSON.stringify(Object.values(SEEDSOW_IDS))}.includes(proof.app.programId)`,
+      'Seedsow process identity');
     source = once(source, 'The transferred current-process handle is not SmileBASIC',
-      'The transferred current-process handle is not Seedsow Lullaby Demo',
-      'Demo process error');
+      'The transferred current-process handle is not Seedsow Lullaby Demo or full game',
+      'Seedsow process error');
   } else if (relative === 'switch2/ro/launch.cjs') {
     // The diagnostic launch loads this module before Moader temporarily wraps
     // Gate for the HEN launch. Resolve the export when main runs, including
@@ -295,4 +302,4 @@ function transform(relative, original) {
   }
   return {source, sha256: sha(Buffer.from(source)), changed: source !== original};
 }
-module.exports = {transform, STAGE_ENTRYPOINTS, DEMO_ID};
+module.exports = {transform, STAGE_ENTRYPOINTS, SEEDSOW_IDS};

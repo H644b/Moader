@@ -19,10 +19,10 @@ The backend has two parts. The resident service keeps managing the library after
 | --- | --- | --- |
 | [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) |
 | [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) |
-| [Seedsow Lullaby Demo](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) |
+| [Seedsow Lullaby Demo or full game](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) |
 | [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) |
 
-The Seedsow method uses the included matched RO/HEN/bootstrap set. Its guide covers additional SDK and GUI preparation. The updated v0.1.3 app/resident have host validation; the earlier Seedsow device installation used the exact same RO/HEN/bootstrap bytes with the previous app/resident build. [Validation scope](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
+The Seedsow method uses the included matched RO/HEN/bootstrap set. Its guide covers additional SDK and GUI preparation. The updated v0.1.3 app/resident have host validation; the earlier Seedsow **Demo** device installation used the exact same RO/HEN/bootstrap bytes with the previous app/resident build. The full-game process identity has host qualification only. [Validation scope](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
 
 ### Before either SmileBASIC method
 
