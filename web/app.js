@@ -415,13 +415,25 @@ async function loadCovers() {
           cache: "no-store",
           signal: AbortSignal.timeout(8000),
         });
-        if (!response.ok || !response.headers.get("content-type")?.startsWith("image/jpeg"))
+        const imageType = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
+        if (!response.ok || !["image/jpeg", "image/png"].includes(imageType))
           throw Error();
         const blob = await response.blob();
         if (session !== artSession) break;
         const url = URL.createObjectURL(blob);
+        const image = tile.querySelector(".cover-image");
+        image.src = url;
+        try {
+          await image.decode();
+        } catch (error) {
+          URL.revokeObjectURL(url);
+          throw error;
+        }
+        if (session !== artSession || !tile.isConnected) {
+          URL.revokeObjectURL(url);
+          continue;
+        }
         coverCache.set(id, { url });
-        tile.querySelector(".cover-image").src = url;
         tile.classList.add("has-art");
         if (id === selectedTitle) syncCoverContext();
       } catch {

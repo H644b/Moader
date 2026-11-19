@@ -16,14 +16,14 @@ with tempfile.TemporaryDirectory(prefix='moader-resident-') as temporary:
     (headers / 'switch2').symlink_to(sdk / 'switch2', target_is_directory=True)
     binary = work / 'resident-test'
     subprocess.run(['clang++', '-std=c++20', '-g', '-O1', '-Wall', '-Wextra', '-Werror',
-                    '-Wno-invalid-constexpr', '-Wno-missing-field-initializers',
+                    '-Wno-invalid-constexpr', '-Wno-missing-field-initializers', '-Wno-unused-function',
                     '-fsanitize=address,undefined', '-I' + str(root / 'include'),
                     '-I' + str(root / 'tests/host_sdk'),
                     '-I' + str(root / 'tests/host_sdk/resident'),
                     '-I' + str(headers),
                     '-I' + str(root / 'runtime/kaihen/libkaihen/include'),
                     '-I' + str(root / 'build/generated'),
-                    str(root / 'tests/resident_lifecycle.cpp'),
+                    str(root / 'tests/resident_lifecycle.cpp'), str(root / 'native/artwork.cpp'),
                     *[str(root / ('source/' + name + '.cpp'))
                       for name in ['model', 'library', 'zip', 'web', 'runtime_backend']],
                     '-lz', '-pthread', '-o', str(binary)], check=True)

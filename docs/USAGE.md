@@ -4,7 +4,7 @@ After installing Moader, open its game library on the Switch. Each cover represe
 
 ## Browse the game library
 
-Press **L** or **R** to center a game, or swipe across the covers. The caption gives the game’s name, its mod count and how many mods you have requested. If cover art is unavailable, the cartridge mark identifies the game tile.
+Press **L** or **R** to center a game, or swipe across the covers. The caption gives the game’s name, its mod count and how many mods you have requested. Moader reads the installed game’s icon automatically. It tries the compact icon first, then the full-size icon for the same game and edition if needed. The cartridge mark appears while artwork is unavailable.
 
 Press **A** to open the centered game. Its cover stays beside **Installed mods**. Use **↑** or **↓** to select a mod, then press **A** to open its details. **B** returns to the same row and then to the game. In a browser, use the arrows or swipe to browse, select a cover to open it and select a mod name for details.
 

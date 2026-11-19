@@ -11,7 +11,8 @@ subprocess.run(['clang++', '-std=c++17', '-g', '-O1', '-Wall', '-Wextra', '-Werr
                 '-lz', '-o', str(binary)], check=True)
 with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
     work = pathlib.Path(temp).resolve()
-    child = subprocess.Popen([str(binary), str(work / 'library'), TOKEN], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    icon = work / 'fixture-icon'
+    child = subprocess.Popen([str(binary), str(work / 'library'), TOKEN, str(icon)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     try:
         port = int(child.stdout.readline())
         base = 'http://127.0.0.1:' + str(port)
@@ -105,9 +106,19 @@ with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
         status, body = request(route + '?offset=0', 'PUT', payload)
         assert status == 200 and json.loads(body)['received'] == len(payload)
         assert request(route, 'POST', b'')[0] == 201
-        with urllib.request.urlopen(urllib.request.Request(base + art, headers={'Authorization': 'Bearer ' + TOKEN}), timeout=5) as response:
-            assert response.status == 200 and response.headers['Content-Type'] == 'image/jpeg'
-            assert response.read() == bytes.fromhex('ff d8 ff d9')
+        for name, mime in [('hbmenu.jpg', 'image/jpeg'), ('mark-alpha.png', 'image/png')]:
+            expected = (ROOT / 'branding' / name).read_bytes()
+            icon.write_bytes(expected)
+            with urllib.request.urlopen(urllib.request.Request(base + art, headers={'Authorization': 'Bearer ' + TOKEN}), timeout=5) as response:
+                assert response.status == 200 and response.headers['Content-Type'] == mime
+                assert response.read() == expected
+        icon.write_bytes(b'unknown format')
+        assert request(art)[0] == 404
+        icon.write_bytes(b'\xff\xd8\xff' + bytes(0x20000))
+        assert request(art)[0] == 404
+        icon.unlink()
+        status, body = request(art)
+        assert status == 404 and json.loads(body)['error'] == 'Fixture icon unavailable'
         toggle = urllib.parse.urlencode({'titleId': '0400f43008c44001', 'id': 'web-upload', 'enabled': '1'})
         status, body = request('/api/mod/enable?' + toggle, 'POST', b'')
         assert status == 202 and json.loads(body)['mods'][0]['applied'] == 'pending'

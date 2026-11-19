@@ -1,13 +1,17 @@
 // Temporary integration-test driver. It always binds loopback.
 #include "moader/web.hpp"
+#include <fstream>
 #include <iostream>
+#include <iterator>
 int main(int argc, char** argv) {
-    if (argc != 3) return 1;
+    if (argc != 4) return 1;
     moader::UnavailableBackend backend;
     moader::Library library(argv[1], backend);
-    auto cover = [](const std::string& title) {
-        if (title == "0400f43008c44001") return std::string("\xff\xd8\xff\xd9", 4);
-        return std::string{};
+    auto cover = [path = std::string(argv[3])](const std::string& title) {
+        if (title != "0400f43008c44001") return std::string{};
+        std::ifstream fixture(path, std::ios::binary);
+        if (!fixture) throw std::runtime_error("Fixture icon unavailable");
+        return std::string(std::istreambuf_iterator<char>(fixture), {});
     };
     moader::WebServer server(library, argv[1], argv[2], {{"/", "text/plain", "Moader HTTP integration test"}}, cover);
     if (server.running() || server.port() || server.start("not-an-ip", 0) || server.last_error().empty()) return 2;

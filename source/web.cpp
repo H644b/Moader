@@ -1,4 +1,5 @@
 #include "moader/web.hpp"
+#include "moader/game_icon.hpp"
 #include "web_worker.hpp"
 #ifdef __SWITCH__
 #include <switch.h>
@@ -233,14 +234,20 @@ public:
             return {200, "application/json", library.snapshot_json()};
         }
         if (req.method == "GET" && req.path == "/api/game-art") {
-            require(req.query.size()==1 && req.query.count("titleId") && valid_title_id(req.query.at("titleId")), "Choose one valid game Title ID.");
-            auto title=lower(req.query.at("titleId"));
-            const auto snapshot=library.snapshot();
-            if(artwork && std::any_of(snapshot.mods.begin(),snapshot.mods.end(),[&](const Mod& m){return lower(m.title_id)==title;})){
-                try{
-                    auto jpeg=artwork(title);
-                    if(!jpeg.empty() && jpeg.size()<=0x20000)return {200,"image/jpeg",std::move(jpeg)};
-                }catch(const std::exception&){}
+            require(req.query.size() == 1 && req.query.count("titleId") && valid_title_id(req.query.at("titleId")),
+                    "Choose one valid game Title ID.");
+            const auto title = lower(req.query.at("titleId"));
+            const auto snapshot = library.snapshot();
+            if (artwork && std::any_of(snapshot.mods.begin(), snapshot.mods.end(), [&](const Mod& m) {
+                    return lower(m.title_id) == title;
+                })) {
+                try {
+                    auto icon = artwork(title);
+                    const char* type = game_icon_media_type(icon);
+                    if (type && icon.size() <= MaxGameIconBytes) return {200, type, std::move(icon)};
+                } catch (const std::exception& e) {
+                    return {404, "application/json", "{\"error\":" + json_string(e.what()) + "}"};
+                }
             }
             return {404,"application/json",R"({"error":"Game artwork unavailable."})"};
         }
