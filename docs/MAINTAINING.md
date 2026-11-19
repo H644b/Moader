@@ -4,13 +4,13 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v0.1.3** has refreshed prebuilt downloads. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.1.3/release-manifest.json) to identify their exact source. The original v0.1.3 tag predates the refreshed assets; its automatic GitHub source archives are historical tag snapshots.
+**v0.2.0** has prebuilt downloads for the redesigned app and its matching resident. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.0/release-manifest.json) to identify their exact source. The v0.1.3 tag predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.3.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.3.zip` | Public host source plus five exact binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/ro/main`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.1.3` folder includes `START_HERE.txt` |
+| `Moader-v0.2.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.2.0.zip` | Public host source plus five exact binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/ro/main`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.2.0` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -24,7 +24,7 @@ The minimal host kit has no `research/` content and does not bundle the full off
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-v0.1.3.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-v0.2.0.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {

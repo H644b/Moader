@@ -252,5 +252,24 @@
     ],
     "DEPENDS": null,
     "url": "https://pkg.devkitpro.org/packages/devkita64-newlib-4.6.0.20260123-4-any.pkg.tar.zst"
+  },
+  "switch-curl": {
+    "NAME": [
+      "switch-curl"
+    ],
+    "FILENAME": [
+      "switch-curl-7.69.1-5-any.pkg.tar.zst"
+    ],
+    "CSIZE": [
+      "330124"
+    ],
+    "SHA256SUM": [
+      "062f683cc9925e6c27e38a9dc9c97fabe17a9eae6002c355000f5cff5886c81e"
+    ],
+    "DEPENDS": [
+      "switch-zlib",
+      "libnx"
+    ],
+    "url": "https://pkg.devkitpro.org/packages/switch-curl-7.69.1-5-any.pkg.tar.zst"
   }
 }

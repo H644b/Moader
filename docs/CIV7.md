@@ -48,7 +48,7 @@ An already-current **FS-only held session** from the exact s8n revision is a can
 
 ## Prepare the local dependencies
 
-Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.3** backend kit or a matching source checkout. Keep the app, resident and backend from the same release; [Validation](VALIDATION.md) records the scope of their checks.
+Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.2.0** backend kit or a matching source checkout. Keep the app, resident and backend from the same release; [Validation](VALIDATION.md) records the scope of their checks.
 
 To fetch or verify only the pinned host source, without Node/SDK setup, acquisition or console contact:
 
@@ -72,7 +72,7 @@ These commands fetch/check the pinned source and inputs locally; they do not lau
 
 ## Experimental setup
 
-Download and extract the [v0.1.3 backend kit](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) or use its matching source checkout. Check the [game and firmware requirements](#requirements-and-version-boundaries) first.
+Download and extract the [v0.2.0 backend kit](https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-backend-v0.2.0.zip) or use its matching source checkout. Check the [game and firmware requirements](#requirements-and-version-boundaries) first.
 
 ### macOS and Linux
 

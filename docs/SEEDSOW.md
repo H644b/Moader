@@ -1,6 +1,6 @@
 # Install Moader through Seedsow Lullaby
 
-Download the [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) for Seedsow Lullaby Demo or the full game. It contains the prebuilt Moader app, resident and matched RO/HEN/bootstrap set. Its helper provisions Moader's patched [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen) from the exact upstream revision. The upstream GUI and source are fetched during preparation; they are not redistributed in the ZIP.
+Download the [v0.2.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.0/Moader-backend-v0.2.0.zip) for Seedsow Lullaby Demo or the full game. It contains the prebuilt Moader app, resident and matched RO/HEN/bootstrap set. Its helper provisions Moader's patched [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen) from the exact upstream revision. The upstream GUI and source are fetched during preparation; they are not redistributed in the ZIP.
 
 The full game's program ID is admitted by the same current-process qualification that accepts the Demo, while unrelated program IDs still stop. The code profile is checked anew on each boot. One **Demo** installation on firmware 23.0.1 was verified from macOS; a complete Moader installation from the **full game** has not yet been observed. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
 
@@ -27,7 +27,7 @@ python3 --version
 
 ### Linux x86_64 or Windows with WSL2
 
-On Ubuntu or Debian, keep the extracted kit in the Linux filesystem (for example under `~/Moader-backend-v0.1.3`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
+On Ubuntu or Debian, keep the extracted kit in the Linux filesystem (for example under `~/Moader-backend-v0.2.0`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
 
 ```sh
 sudo apt-get update
@@ -74,7 +74,7 @@ tools/start-seedsow-gui.sh "$MOADER_SEEDSOW_GUI"
 
 Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Seedsow launcher starts. Select **Auto-Download Moader kaiHEN**. It stages the ZIP's exact RO/HEN/bootstrap and Moader binaries with the checksum-pinned official base. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
 
-The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. For the refreshed v0.1.3 backend ZIP, choose a new `MOADER_SEEDSOW_GUI` folder path because an older patched GUI will not pass the new patch hash check.
+The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. v0.2.0 retains the reviewed GUI patch; provision a new folder if an existing checkout fails that check.
 
 ## Install on one fresh boot
 

@@ -14,7 +14,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 VENDOR = ROOT / 'vendor'
 SDK = VENDOR / 'devkitpro'
 NAMES = ['devkitA64', 'devkita64-binutils', 'devkita64-gcc', 'devkita64-newlib',
-         'devkita64-rules', 'switch-tools', 'general-tools', 'dkp-toolchain-vars', 'switch-zlib']
+         'devkita64-rules', 'switch-tools', 'general-tools', 'dkp-toolchain-vars', 'switch-zlib', 'switch-curl']
 OUNCE_URL = 'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261114/ounce-devkit-20261114.tar.xz'
 OUNCE_SHA256 = 'f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59'
 

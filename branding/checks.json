@@ -1,37 +1,9 @@
 {
-  "canonical_viewbox": [
-    0,
-    0,
-    64,
-    64
-  ],
-  "canonical_ink_bounds": [
-    8,
-    12,
-    56,
-    52
-  ],
-  "canonical_path_sha256": "fa0a6969ccb73883ab345a49f869b6532a5851d04fd8ffe553ffb0c0a57ad299",
-  "native_mask_dimensions": [
-    96,
-    96
-  ],
-  "native_mask_bytes": 9216,
-  "native_mask_sha256": "7e0ad290bc6f7ac6ac9d337c30e9c49109c0d1d1f2b4eaf8d9f0a7b3c3e2f13d",
-  "native_alpha_range": [
-    0,
-    255
-  ],
-  "native_alpha_nonzero_bounds_including_lanczos_fringe": [
-    9,
-    15,
-    87,
-    81
-  ],
-  "hbmenu_size": [
-    256,
-    256
-  ],
-  "hbmenu_mode": "RGB",
-  "export_geometry_matches": true
+  "mark.svg": "7316a016ef247a322fc10c80d66058de3edd40bf75c2f34ff68e730795867bcf",
+  "lockup.svg": "c2b620b95d4ba62625966264194daeba0b2100eeff0f28e9d425de2ce47f751e",
+  "store.svg": "38e2b43138564830c2145db8d75d44aaea6cb1d2ff8cd9f89bbefdf8bbf16a76",
+  "hbmenu-source.svg": "9f37bff231ad3581d02dc0950c45d95d146d62d00d99b225f489da70b6d32325",
+  "hbmenu.jpg": "3c94c519c8ae931c4af076c27229da59bba226125831229f6f12535ff3e9205a",
+  "mark-alpha.hpp": "be860805171bbfc8559f4d56b8b7069b3bde0229076113538c3dd629ea8be9cc",
+  "favicon.svg": "9f37bff231ad3581d02dc0950c45d95d146d62d00d99b225f489da70b6d32325"
 }

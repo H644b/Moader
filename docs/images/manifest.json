@@ -1,20 +1,53 @@
 {
-  "schema": 1,
+  "schema": 2,
   "illustrations": [
     {
-      "file": "native-settings.png",
-      "sha256": "1426098fc9ff124b3cab54b6b2182787610ab1cc94dadaca0f40d4e576d15f6f",
-      "scope": "Synthetic sample library rendered by the actual interface; not a gameplay or device capture."
+      "file": "native-workbench.png",
+      "width": 1280,
+      "height": 720,
+      "scope": "Native framebuffer, fixture library",
+      "sha256": "feceef14f53499055aad6df656ada034bd0b2376f3e278c168f440de7dd127eb"
     },
     {
-      "file": "native-workbench.png",
-      "sha256": "5186b7002547a4f2260ed163f0e1a8e4d5a7185f678d9fc72e54467ab61a8043",
-      "scope": "Synthetic sample library rendered by the actual interface; not a gameplay or device capture."
+      "file": "native-settings.png",
+      "width": 1280,
+      "height": 720,
+      "scope": "Native framebuffer, fixture settings",
+      "sha256": "74d44b0af8b3aa64b7681ed8d9a804c7e93e4b1ba1b33a45accec74aff5ebc10"
     },
     {
       "file": "web-workbench.png",
-      "sha256": "0f25877b9ed7dca906840f9fc2541c9432995cbadaf385b544b4fb59260b2546",
-      "scope": "Synthetic sample library rendered by the actual interface; not a gameplay or device capture."
+      "width": 1440,
+      "height": 810,
+      "scope": "Paired Chromium window, loopback fixture library",
+      "sha256": "d34855ab18e3f3d7f2f4250905f5882c4195bb8aed7e2281a76cb4cee2a44c3a"
+    }
+  ],
+  "exampleCoverSources": [
+    {
+      "title": "Mario Kart World",
+      "url": "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-2-games/Mario-Kart-World-2790000.html",
+      "image": "https://www.nintendo.com/eu/media/images/assets/nintendo_switch_2_games/mariokartworld/1x1_NSwitch2_MarioKartWorld_image500w.jpg"
+    },
+    {
+      "title": "Metroid Dread",
+      "url": "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-games/Metroid-Dread-1987653.html",
+      "image": "https://www.nintendo.com/eu/media/images/11_square_images/games_18/nintendo_switch_5/SQ_NSwitch_MetroidDread_image500w.jpg"
+    },
+    {
+      "title": "The Legend of Zelda: Tears of the Kingdom",
+      "url": "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-games/The-Legend-of-Zelda-Tears-of-the-Kingdom-1576884.html",
+      "image": "https://www.nintendo.com/eu/media/images/11_square_images/games_18/nintendo_switch_5/1x1_NSwitch_TloZTearsOfTheKingdom_BASE_image500w.jpg"
+    },
+    {
+      "title": "Animal Crossing: New Horizons",
+      "url": "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-games/Animal-Crossing-New-Horizons-1438623.html",
+      "image": "https://www.nintendo.com/eu/media/images/11_square_images/games_18/nintendo_switch_5/SQ_NSwitch_AnimalCrossingNewHorizons_image500w.jpg"
+    },
+    {
+      "title": "Pokémon Legends: Z-A",
+      "url": "https://www.nintendo.com/en-gb/Games/Nintendo-Switch-games/Pokemon-Legends-Z-A-2533423.html",
+      "image": "https://www.nintendo.com/eu/media/images/assets/nintendo_switch_games/pokemonlegendsza/1x1_NSwitch2_PokemonLegendsZA_KV_GB_en_image500w.jpg"
     }
   ]
 }

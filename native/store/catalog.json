@@ -1,0 +1,438 @@
+{
+  "format": "moader.catalog.v1",
+  "name": "Moader community listings",
+  "games": [
+    {
+      "titleId": "01006F8002326000",
+      "title": "Animal Crossing: New Horizons",
+      "mods": [
+        {
+          "id": "651268",
+          "title": "Stone Plaza Recolor",
+          "author": "PepperPepperPepper",
+          "category": "Visuals",
+          "summary": "Give the plaza the same stone finish as the paths around it.",
+          "description": "This recolor changes the plaza floor. The surrounding buildings and the rest of the island keep their original textures.",
+          "version": "",
+          "published": "6 Feb 2026",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/651268"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/69864ecb88ee6.jpg",
+            "https://images.gamebanana.com/img/ss/mods/69864ea4baf2e.jpg"
+          ]
+        },
+        {
+          "id": "401159",
+          "title": "iHud",
+          "author": "inconsistent",
+          "category": "Interface",
+          "summary": "Hide the map, phone, clock and date for a clear island view.",
+          "description": "Made for screenshots and video, iHud removes the usual heads-up display while you move around the island.",
+          "version": "",
+          "published": "11 Sep 2022",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/401159"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/631d4e833c5ab.jpg",
+            "https://images.gamebanana.com/img/ss/mods/631d4e830a14a.jpg"
+          ]
+        },
+        {
+          "id": "337589",
+          "title": "Square grass",
+          "author": "Praecantetia",
+          "category": "Visuals",
+          "summary": "Bring the square grass pattern from earlier Animal Crossing games to your island.",
+          "description": "The new ground texture replaces the default grass pattern with a repeating square motif.",
+          "version": "",
+          "published": "21 Nov 2021",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/337589"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/619a72a9eec09.jpg",
+            "https://images.gamebanana.com/img/ss/mods/619a729852b5e.jpg"
+          ]
+        },
+        {
+          "id": "54570",
+          "title": "360° Outdoor Cam",
+          "author": "Alree",
+          "category": "Camera",
+          "summary": "Rotate the outdoor camera all the way around your character.",
+          "description": "Alree lists support for game versions 1.2 through 1.6 and describes interaction limits on the release page.",
+          "version": "",
+          "published": "11 Dec 2020",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/54570"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/5fd3f16d6f3fb.jpg"
+          ]
+        }
+      ]
+    },
+    {
+      "titleId": "0100F2C0115B6000",
+      "title": "The Legend of Zelda: Tears of the Kingdom",
+      "mods": [
+        {
+          "id": "605379",
+          "title": "Hyrule Rebeautified",
+          "author": "WarioSnap",
+          "category": "Visuals",
+          "summary": "Rework Hyrule’s biomes, weather and light with a customizable visual overhaul.",
+          "description": "The project offers options for atmosphere, fog, clouds and lighting. Version 2.0.0 exposes the visual choices through TKMM.",
+          "version": "2.0.0",
+          "published": "7 Jul 2025",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/605379"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6a9e437a2047d.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6a9e437805bdc.jpg"
+          ]
+        },
+        {
+          "id": "548552",
+          "title": "UI Dark Mode",
+          "author": "anoeye",
+          "category": "Interface",
+          "summary": "Darken the loading screen used when Link teleports.",
+          "description": "This is a focused color change to the teleport loading interface.",
+          "version": "",
+          "published": "14 Oct 2024",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/548552"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/670cdae8da159.jpg",
+            "https://images.gamebanana.com/img/ss/mods/670cdad58231a.jpg"
+          ]
+        },
+        {
+          "id": "514343",
+          "title": "Vanilla+",
+          "author": "VyraNightingale",
+          "category": "Gameplay",
+          "summary": "A collection of balance and quality-of-life changes for another trip through Hyrule.",
+          "description": "VyraNightingale adjusts items and game systems while keeping the overall structure of the original adventure. The host maintains the full change list and creator credits.",
+          "version": "1.7",
+          "published": "18 May 2024",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/514343"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6648d1a05a150.jpg",
+            "https://images.gamebanana.com/img/ss/mods/66579b89d7572.jpg"
+          ]
+        },
+        {
+          "id": "450147",
+          "title": "Clean UI / Minimal UI",
+          "author": "Dziggy",
+          "category": "Interface",
+          "summary": "Choose how much of the interface stays on screen.",
+          "description": "Dziggy publishes several HUD arrangements. The original listing explains what each variant changes and which game versions it covers.",
+          "version": "1.1.0",
+          "published": "15 Jun 2023",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/450147"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/648ad534e48d4.jpg",
+            "https://images.gamebanana.com/img/ss/mods/648ad5399ab33.jpg"
+          ]
+        }
+      ]
+    },
+    {
+      "titleId": "0400F43008C44001",
+      "title": "Pokémon Legends: Z-A",
+      "mods": [
+        {
+          "id": "640200",
+          "title": "Squirtle with Glasses",
+          "author": "IvoNewmaN",
+          "category": "Visuals",
+          "summary": "Give Squirtle, Wartortle and Blastoise their own Squirtle Squad shades.",
+          "description": "IvoNewmaN modeled sunglasses for the entire evolution line. The creator publishes the pack on Nexus Mods and GameBanana and lists Trinity Mod Loader in the release instructions.",
+          "version": "1.0",
+          "published": "3 Feb 2026",
+          "sources": [
+            {
+              "label": "Nexus Mods",
+              "url": "https://www.nexusmods.com/pokemonlegendsza/mods/10"
+            },
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/640200"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6943cdde91431.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6943cddeab050.jpg"
+          ]
+        },
+        {
+          "id": "634430",
+          "title": "New Shiny Dragonite",
+          "author": "Miowo",
+          "category": "Visuals",
+          "summary": "Recolor shiny Dragonite using Dragonair’s palette.",
+          "description": "Miowo includes the main recolor and an alternate cyan version. The gallery shows the creator’s thumbnail and an in-game preview.",
+          "version": "1.2",
+          "published": "18 Nov 2025",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/634430"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/691caa700b85b.jpg",
+            "https://images.gamebanana.com/img/ss/mods/691caa6fce139.jpg"
+          ]
+        },
+        {
+          "id": "633026",
+          "title": "Bye Bye CrossHair",
+          "author": "ElChicoEevee",
+          "category": "Interface",
+          "summary": "Remove the crosshair when the camera interface is hidden.",
+          "description": "The change leaves a clear frame for recording or photographing a scene in camera mode.",
+          "version": "",
+          "published": "11 Nov 2025",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/633026"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/691368e1bcfe6.jpg",
+            "https://images.gamebanana.com/img/ss/mods/69136949d2f7f.jpg"
+          ]
+        },
+        {
+          "id": "735659",
+          "title": "Legends ZA Kaizo",
+          "author": "pokemonjohn56",
+          "category": "Gameplay",
+          "summary": "A harder campaign with revised Pokémon typings, moves and evolutions.",
+          "description": "The host links the project’s trainer data and change notes, including updates to evolution methods and selected Pokémon forms.",
+          "version": "1",
+          "published": "2 Nov 2026",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/735659"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6aea38d1c10dd.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6ae901fc08b2f.jpg"
+          ]
+        }
+      ]
+    },
+    {
+      "titleId": "0400C3F00006E000",
+      "title": "Mario Kart World",
+      "mods": [
+        {
+          "id": "740488",
+          "title": "Aviator Daisy",
+          "author": "Z_444",
+          "category": "Visuals",
+          "summary": "Give Daisy’s Aero outfit a new aviator look.",
+          "description": "Z_444’s release replaces the outfit model and includes matching interface art and a name change.",
+          "version": "",
+          "published": "14 Nov 2026",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/740488"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6af8684c3246c.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6af86832b8446.jpg"
+          ]
+        },
+        {
+          "id": "742301",
+          "title": "Looping Routes",
+          "author": "LiamWins",
+          "category": "Gameplay",
+          "summary": "Race custom routes that curve back to their starting track.",
+          "description": "LiamWins designed these routes to feel like complete loops. The host credits Shortcat as an inspiration and lists the available routes.",
+          "version": "1.0.1",
+          "published": "18 Nov 2026",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/742301"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6afd4d0cef640.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6afd4d0b3a065.jpg"
+          ]
+        },
+        {
+          "id": "741659",
+          "title": "Quiet Kart World",
+          "author": "fungiazz",
+          "category": "Audio",
+          "summary": "Turn off background music while keeping engines, drifting, items and voices audible.",
+          "description": "This release changes the race sound mix. The original listing describes its RomFS edition and the sounds it preserves.",
+          "version": "1.0",
+          "published": "16 Nov 2026",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/741659"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6afb58c516fe4.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6afb58c6df9f2.jpg"
+          ]
+        },
+        {
+          "id": "741234",
+          "title": "Daisy’s Palace",
+          "author": "hydro sucks",
+          "category": "Gameplay",
+          "summary": "Race a semi-custom palace course in place of Shy-Guy Bazaar.",
+          "description": "The creator’s page lists game version 1.0.0 and the race modes used for this track.",
+          "version": "1.0.0",
+          "published": "15 Nov 2026",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/741234"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6afa1b1b9277a.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6afa1b1d513be.jpg"
+          ]
+        }
+      ]
+    },
+    {
+      "titleId": "010093801237C000",
+      "title": "Metroid Dread",
+      "mods": [
+        {
+          "id": "535792",
+          "title": "Redesign: Grown Suit",
+          "author": "Greedalf",
+          "category": "Visuals",
+          "summary": "Watch Samus’s armor take on a more organic look as her suit progresses.",
+          "description": "Greedalf redesigns the suit stages to evoke the original Varia silhouette and make the changes between upgrades more visible.",
+          "version": "2",
+          "published": "16 Aug 2024",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/535792"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/66bfbc1572eb6.jpg",
+            "https://images.gamebanana.com/img/ss/mods/66bfbc1621eff.jpg"
+          ]
+        },
+        {
+          "id": "334739",
+          "title": "Fusion Varia Suit colors",
+          "author": "ToaRex",
+          "category": "Visuals",
+          "summary": "Bring the Varia Suit palette from Metroid Fusion into Dread.",
+          "description": "ToaRex applies the earlier game’s colors to the Dread Varia Suit. Additional screenshots and contributor credits are on the host.",
+          "version": "1.1",
+          "published": "10 Nov 2021",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/334739"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/618b176941869.jpg",
+            "https://images.gamebanana.com/img/ss/mods/618b1785bfd3c.jpg"
+          ]
+        },
+        {
+          "id": "randovania",
+          "title": "Dread Randomizer",
+          "author": "Randovania team",
+          "category": "Gameplay",
+          "summary": "Shuffle item locations, transit destinations, door locks and starting positions.",
+          "description": "The community project also offers a DNA Hunt goal. Its Dread page lists the supported game versions and the tools needed to play a generated seed.",
+          "version": "",
+          "published": "",
+          "sources": [
+            {
+              "label": "Randovania",
+              "url": "https://randovania.org/games/dread/"
+            }
+          ],
+          "previews": [
+            "https://randovania.org/assets/games/dread.png"
+          ]
+        },
+        {
+          "id": "399610",
+          "title": "Gravity Suit Redesign",
+          "author": "Hario337",
+          "category": "Visuals",
+          "summary": "Give the Gravity Suit a design inspired by earlier Metroid armor.",
+          "description": "Hario337’s visual redesign changes the look of the Gravity Suit. The original listing includes the creator’s comparison images.",
+          "version": "",
+          "published": "2 Sep 2022",
+          "sources": [
+            {
+              "label": "GameBanana",
+              "url": "https://gamebanana.com/mods/399610"
+            }
+          ],
+          "previews": [
+            "https://images.gamebanana.com/img/ss/mods/6311eb3c9639d.jpg",
+            "https://images.gamebanana.com/img/ss/mods/6311eb0714ab0.jpg"
+          ]
+        }
+      ]
+    }
+  ]
+}

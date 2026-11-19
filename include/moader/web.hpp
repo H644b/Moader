@@ -9,7 +9,7 @@ struct WebAsset { std::string path, type, contents; };
 class WebServer {
 public:
     WebServer(Library& library, std::string root, std::string pairing_token,
-              std::vector<WebAsset> assets);
+              std::vector<WebAsset> assets, std::function<std::string(const std::string&)> artwork = {});
     ~WebServer();
     WebServer(const WebServer&) = delete;
     WebServer& operator=(const WebServer&) = delete;

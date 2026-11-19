@@ -5,6 +5,9 @@
 #include "foreground.hpp"
 #include "reload_client.hpp"
 #include "ui.hpp"
+#include "cover_loader.hpp"
+#include "store_client.hpp"
+#include <cmath>
 #include "ui_bitmap.hpp"
 #include <arpa/inet.h>
 #include <cstdio>
@@ -159,7 +162,7 @@ void refresh_reload_diagnostics(){
 }
 void save_debug(){if(ui.connected)refresh_debug();refresh_reload_diagnostics();sync_reload_ui();
     std::ofstream file("sdmc:/moader/app-diagnostics.txt",std::ios::binary);
-    file<<"Moader 0.1.3\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
+    file<<"Moader 0.2.0\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
         <<"\nFS acknowledged generation: "<<ui.summary.applied_generation<<"\nBackend channel connected (summary): "<<bool(ui.summary.flags&moader::ipc::BackendConnected)
         <<"\nRuntime result: 0x"<<std::hex<<ui.summary.last_result<<std::dec
         <<"\nLibrary inventory: "<<(ui.inventory_unavailable()?"unavailable or retained; changes paused":"current")
@@ -241,6 +244,7 @@ Result refresh(){
     if(next.version!=moader::ipc::Version)return MAKERESULT(Module_Libnx,LibnxError_BadInput);
     if(ui.confirm_remove&&next.generation!=ui.summary.generation){ui.confirm_remove=false;message("The library changed; removal was cancelled.");}
     const uint64_t old_generation=ui.summary.generation;
+    const std::string old_id=ui.selected()<ui.mods.size()?ui.mods[ui.selected()].id:"";
     const uint64_t old_game=ui.game<ui.games.size()?ui.games[ui.game].id:0;
     auto retain=[&](const moader::ipc::SummaryReply& latest,const std::string& detail){
         ui.retain_inventory(latest); ui.address=address();
@@ -275,7 +279,14 @@ Result refresh(){
         return retain(latest,"The library changed during refresh. Keeping the previous list and retrying.");
     const bool was_pending=ui.inventory_refresh_pending;
     ui.summary=latest;ui.inventory_refresh_pending=false;
-    ui.mods=std::move(mods);ui.regroup(old_game);ui.address=address();
+    ui.mods=std::move(mods);ui.regroup(old_game);
+    if(ui.game<ui.games.size()&&ui.games[ui.game].id==old_game){
+        const auto& group=ui.games[ui.game].mods;
+        auto it=std::find_if(group.begin(),group.end(),[&](unsigned i){return ui.mods[i].id==old_id;});
+        if(it!=group.end())ui.row=it-group.begin();
+        else if(ui.view==moader_ui::View::Details){ui.view=moader_ui::View::Mods;ui.confirm_remove=false;}
+    }
+    ui.address=address();
     if(was_pending)message("");
     ui.runtime_detail=text_chunks(moader::ipc::RuntimeDetail,0,0,latest.detail);refresh_debug();ui.connected=true;refresh_game_source();return 0;
 }
@@ -359,6 +370,10 @@ int main(){
     Framebuffer framebuffer{};Result rc=framebufferCreate(&framebuffer,nwindowGetDefault(),1280,720,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc))return framebuffer_failure(pad,nullptr);
     rc=framebufferMakeLinear(&framebuffer);if(R_FAILED(rc))return framebuffer_failure(pad,&framebuffer);
+    hidInitializeTouchScreen();
+    struct Touch {bool down=false, cancel=false; u32 id=0; float x=0,y=0,last_x=0,last_y=0;} touch;
+    moader_native::CoverLoader covers;
+    moader_native::StoreClient store_client;
     moader_ui::Renderer renderer;Result connection=establish();if(R_SUCCEEDED(connection))connection=refresh();
     if(R_FAILED(connection)){ui.connected=false;if(modern_hen)message(reload.detail,true);else error(connection);}
     u64 next_refresh=0,last_tick=armGetSystemTick(),repeat_at=0;u64 previous_direction=0;
@@ -382,69 +397,85 @@ int main(){
                 "Checking the existing Loader state. No new reload request was sent.",reload.shutdown_required());
             down&=~u64(HidNpadButton_Y);
         }
-        constexpr u64 directions=HidNpadButton_Up|HidNpadButton_Down|HidNpadButton_Left|HidNpadButton_Right;
+        constexpr u64 directions=HidNpadButton_AnyUp|HidNpadButton_AnyDown|HidNpadButton_AnyLeft|HidNpadButton_AnyRight;
         const u64 direction=held&directions;
         if(direction!=previous_direction){repeat_at=now+armNsToTicks(350000000);previous_direction=direction;}
         else if(direction&&now>=repeat_at){down|=direction;repeat_at=now+armNsToTicks(110000000);}
         uint32_t local=0;
         if(down&HidNpadButton_B)local|=moader_ui::BackInput;
         if(down&HidNpadButton_ZL)local|=moader_ui::DebugInput;
-        if(down&HidNpadButton_Up)local|=moader_ui::UpInput;
-        if(down&HidNpadButton_Down)local|=moader_ui::DownInput;
+        if(down&HidNpadButton_AnyUp)local|=moader_ui::UpInput;
+        if(down&HidNpadButton_AnyDown)local|=moader_ui::DownInput;
         if(down&HidNpadButton_A)local|=moader_ui::ActivateInput;
         if(down&HidNpadButton_StickL)local|=moader_ui::SettingsInput;
-        if(down&HidNpadButton_Left)local|=moader_ui::LeftInput;
-        if(down&HidNpadButton_Right)local|=moader_ui::RightInput;
-        const auto local_actions=ui.local_input(local,renderer.scroll_limit(ui,moader_ui::View::Debug));
-        if((local&moader_ui::SettingsInput)&&ui.view==moader_ui::View::Settings)refresh_game_source();
-        if(local_actions&moader_ui::RefreshEvents)refresh_debug();
-        if(local_actions&moader_ui::SaveReport)save_debug();
-        if(local_actions&moader_ui::SavePreferences)save_preferences();
-        if(local_actions&moader_ui::ReloadService)begin_reload();
-        if(local_actions&moader_ui::SaveGameSource){
+        if(down&HidNpadButton_AnyLeft)local|=moader_ui::LeftInput;
+        if(down&HidNpadButton_AnyRight)local|=moader_ui::RightInput;
+        using namespace moader_ui;
+        if(down&HidNpadButton_L)local|=PreviousInput;
+        if(down&HidNpadButton_R)local|=NextInput;
+        if(down&HidNpadButton_X)local|=RemoveInput;
+        if(down&HidNpadButton_Y)local|=WebInput;
+        if(down&HidNpadButton_ZR)local|=ConnectionInput;
+        if(down&HidNpadButton_StickR)local|=DetailInput;
+        if(local && !ui.reload_busy && !ui.reload_shutdown_required)ui.message.clear();
+        auto actions=ui.local_input(local,local?renderer.scroll_limit(ui,ui.view):0);
+        HidTouchScreenState ts{};
+        if(hidGetTouchScreenStates(&ts,1)){
+            if(ts.count>0){
+                const auto& t=ts.touches[0];
+                if(!touch.down){touch.down=true;touch.id=t.finger_id;touch.x=t.x;touch.y=t.y;}
+                if(ts.count!=1||t.finger_id!=touch.id||local)touch.cancel=true;
+                touch.last_x=t.x;touch.last_y=t.y;
+            }else if(touch.down){
+                float dx=touch.last_x-touch.x,dy=touch.last_y-touch.y;
+                if(!touch.cancel&&!local){
+                    ui.message.clear();
+                    if(ui.view==View::Library&&std::abs(dx)>60&&std::abs(dx)>std::abs(dy)*1.5f)
+                        actions|=ui.local_input(dx<0?NextInput:PreviousInput,0);
+                    else if(std::abs(dy)>55&&std::abs(dy)>std::abs(dx)*1.5f)
+                        actions|=ui.local_input(dy<0?DownInput:UpInput,renderer.scroll_limit(ui,ui.view));
+                    else if(std::abs(dx)<23&&std::abs(dy)<23)actions|=renderer.tap(ui,touch.last_x/1280.f,touch.last_y/720.f);
+                }
+                touch={};
+            }
+        }
+        if(actions&RefreshEvents)refresh_debug();
+        if(actions&SaveReport)save_debug();
+        if(actions&SavePreferences)save_preferences();
+        if(actions&ReloadService)begin_reload();
+        if(actions&GetGameSource)refresh_game_source();
+        if(actions&GetPairing)pairing();
+        if((actions&SaveGameSource)&&ui.can_save_game_source()){
             const moader::ipc::Selection input{ui.summary.generation,ui.selected(),ui.game_source};
             const auto result=sendIn(moader::ipc::SetGameSource,input);
-            if(R_FAILED(result))error(result);else message("Game copy saved. Digital selection does not verify ownership.");
+            if(R_FAILED(result))error(result);else message("Game copy saved.");
             update(connection);
         }
-        if(!ui.connected){if(down&HidNpadButton_Y){
-            if(reload.active){reload.resume(monotonic_ms());sync_reload_ui();message("Checking the existing reload operation. No new request was sent.");}
+        if(actions&Reconnect){
+            if(reload.active){reload.resume(monotonic_ms());sync_reload_ui();}
             else {message("");connection=establish();if(R_SUCCEEDED(connection))update(connection);else if(modern_hen)message(reload.detail,true);else error(connection);}
-        }}
-        else{
-            if(down&HidNpadButton_ZR){ui.view=ui.view==moader_ui::View::Connection?moader_ui::View::Library:moader_ui::View::Connection;ui.confirm_remove=false;if(ui.view==moader_ui::View::Connection)pairing();}
-            if(down&HidNpadButton_Y){u32 enabled=ui.summary.flags&moader::ipc::WebRunning?0:1;const auto result=sendIn(moader::ipc::WebEnabled,enabled);
-                if(R_FAILED(result))error(result);else message(enabled?"Web interface started. ZR shows the address and pairing code.":"Web interface stopped.");
-                update(connection);if(ui.view==moader_ui::View::Connection&&enabled)pairing();}
-            if(ui.view==moader_ui::View::Details){
-                if(down&HidNpadButton_Up)ui.detail_first=ui.detail_first?ui.detail_first-1:0;
-                if(down&HidNpadButton_Down)ui.detail_first=std::min(ui.detail_first+1,renderer.scroll_limit(ui,moader_ui::View::Details));
-            }else if(ui.view==moader_ui::View::Library){
-                if(down&HidNpadButton_Left){ui.rail_focus=true;ui.confirm_remove=false;}
-                if(down&HidNpadButton_Right){ui.rail_focus=false;ui.confirm_remove=false;}
-                if(down&HidNpadButton_L)ui.move_game(-1);
-                if(down&HidNpadButton_R)ui.move_game(1);
-                if(down&HidNpadButton_Up){if(ui.rail_focus)ui.move_game(-1);else ui.move_row(-1);}
-                if(down&HidNpadButton_Down){if(ui.rail_focus)ui.move_game(1);else ui.move_row(1);}
-                if((down&HidNpadButton_StickR)&&ui.selected()<ui.mods.size()){ui.view=moader_ui::View::Details;ui.detail_first=0;ui.confirm_remove=false;}
-                if((down&HidNpadButton_A)&&ui.rail_focus)ui.rail_focus=false;
-                else if((down&HidNpadButton_A)&&ui.selected()<ui.mods.size()){
-                    if(ui.inventory_unavailable())message("Library inventory is unavailable. Changes are paused; inspect Debug and wait for a successful refresh.",true);
-                    else {
-                    const moader::ipc::Selection input{ui.summary.generation,ui.selected(),ui.mods[ui.selected()].data.flags&moader::ipc::Requested?0u:1u};
-                    const auto result=sendIn(moader::ipc::SetEnabled,input);if(R_FAILED(result))error(result);else message("Request saved. Apply state shows the runtime acknowledgement.");
-                    ui.confirm_remove=false;update(connection);
-                    }
-                }
-                if((down&HidNpadButton_X)&&!ui.rail_focus&&ui.selected()<ui.mods.size()){
-                    if(ui.inventory_unavailable())message("Library inventory is unavailable. Removal is paused until refresh succeeds.",true);
-                    else if(ui.confirm_remove){const moader::ipc::Selection input{ui.summary.generation,ui.selected(),0};const auto result=sendIn(moader::ipc::Remove,input);
-                        if(R_FAILED(result))error(result);else message("Removed from the library. Files remain in recovery storage.");ui.confirm_remove=false;update(connection);
-                    }else ui.confirm_remove=true;
-                }
-            }
-            if(now>=next_refresh){next_refresh=now+armNsToTicks(2000000000);update(connection);}
         }
+        if((actions&ToggleWeb)&&ui.connected){
+            u32 enabled=ui.summary.flags&moader::ipc::WebRunning?0:1;auto result=sendIn(moader::ipc::WebEnabled,enabled);
+            if(R_FAILED(result))error(result);else message(enabled?"Web listener started.":"Web listener stopped.");
+            update(connection);if(enabled&&(ui.summary.flags&moader::ipc::WebRunning))pairing();
+        }
+        if((actions&(ToggleMod|RemoveMod))&&ui.connected&&!ui.inventory_unavailable()&&ui.selected()<ui.mods.size()){
+            const bool remove=actions&RemoveMod;
+            moader::ipc::Selection input{ui.summary.generation,ui.selected(),remove||ui.mods[ui.selected()].data.flags&moader::ipc::Requested?0u:1u};
+            auto result=sendIn(remove?moader::ipc::Remove:moader::ipc::SetEnabled,input);
+            if(R_FAILED(result))error(result);else message(remove?"Mod removed. Files are in recovery storage.":"Request saved. The runtime state shows its acknowledgement.");
+            update(connection);
+        }
+        if(StoreAvailable&&(actions&OpenStoreHost)&&ui.view==View::Store){
+            const auto url=ui.store.host_url();WebCommonConfig config{};
+            Result result=webPageCreate(&config,url.c_str());
+            if(R_SUCCEEDED(result))result=webConfigShow(&config,nullptr);
+            if(R_FAILED(result))message("The community host page could not be opened.",true);
+        }
+        if(ui.connected&&now>=next_refresh){next_refresh=now+armNsToTicks(2000000000);update(connection);}
+        covers.poll(ui,monotonic_ms());
+        store_client.poll(ui);
         u32 stride=0;auto* pixels=static_cast<uint32_t*>(framebufferBegin(&framebuffer,&stride));
         if(!pixels){
             if(reload.can_exit()&&allow_hbmenu_return())break;
@@ -454,7 +485,7 @@ int main(){
             continue;
         }
         renderer.draw(pixels,1280,720,stride,ui,float(armTicksToNs(now-last_tick))/1000000000.f);last_tick=now;
-        if((down&HidNpadButton_Minus)||(local_actions&moader_ui::SaveScreenshot))save_screenshot(pixels,stride);
+        if((down&HidNpadButton_Minus)||(actions&moader_ui::SaveScreenshot))save_screenshot(pixels,stride);
         framebufferEnd(&framebuffer);
     }
     foreground.reset();if(serviceIsActive(&service))serviceClose(&service);if(serviceIsActive(&hen))serviceClose(&hen);framebufferClose(&framebuffer);return 0;

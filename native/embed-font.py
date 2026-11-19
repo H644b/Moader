@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
-"""Embed the pinned OFL font so the NRO has no SD font dependency."""
+"""Embed the pinned OFL typefaces used by both the console and host renderer."""
+
 from pathlib import Path
+
 root = Path(__file__).resolve().parents[1]
-font = (root / 'native/assets/NotoSans-Regular.ttf').read_bytes()
-out = root / 'build/generated/native_font.hpp'
+out = root / "build/generated/native_font.hpp"
 out.parent.mkdir(parents=True, exist_ok=True)
-out.write_text('// Generated from native/assets/NotoSans-Regular.ttf (SIL OFL 1.1).\n'
-               '#pragma once\ninline constexpr unsigned char moader_font[] = {\n' +
-               '\n'.join(','.join(str(b) for b in font[n:n+32])+',' for n in range(0,len(font),32)) + '\n};\n')
+with out.open("w") as header:
+    header.write("// Generated from native/assets, SIL OFL 1.1.\n#pragma once\n")
+    for name, file in [
+        ("text", "Text"),
+        ("strong", "Strong"),
+        ("display", "Display"),
+        ("fallback", "NotoSans-Regular"),
+    ]:
+        data = (root / ("native/assets/" + file + ".ttf")).read_bytes()
+        header.write("inline constexpr unsigned char font_" + name + "[] = {\n")
+        for start in range(0, len(data), 40):
+            header.write(",".join(map(str, data[start : start + 40])) + ",\n")
+        header.write("};\n")
