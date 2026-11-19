@@ -12,7 +12,7 @@ The **Moader app** opens from hbmenu, the homebrew launcher. It can manage the l
 | Set up the backend for this boot | [Moader-backend-v0.1.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) | [Choose a setup method](docs/INSTALLATION.md#start-the-backend-for-this-boot) |
 | Update a compatible running service | [Moader-v0.1.3.zip](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-v0.1.3.zip) | [Reload the resident service](docs/PLUGIN_RELOAD.md#use-it) |
 
-The backend kit includes the matched Seedsow Demo RO/HEN/bootstrap set and the helper that provisions the pinned patched GUI. SmileBASIC and experimental CivSwitch use the same kit with their own source profiles. [Seedsow guide](docs/SEEDSOW.md) · [Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v0.1.3) · [Validation scope](docs/VALIDATION.md)
+The backend kit includes the matched Seedsow RO/HEN/bootstrap set and the helper that provisions the pinned patched GUI. Its current-process gate accepts Seedsow Lullaby Demo and full game IDs; only the Demo has a completed Moader installation record. SmileBASIC and experimental CivSwitch use the same kit with their own source profiles. [Seedsow guide](docs/SEEDSOW.md) · [Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v0.1.3) · [Validation scope](docs/VALIDATION.md)
 
 ## Use Moader
 

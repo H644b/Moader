@@ -104,7 +104,7 @@ async function open({host, httpPort = 8080, rpcPort = 39380, run, preflightFile,
     preflight.fsAcquisitionAttempted === false && preflight.codeOrKernelPatchAttempted === false &&
     Number.isSafeInteger(preflight.moduleBases?.sdk) &&
     Number.isSafeInteger(preflight.moduleBases?.main),
-  'Current Seedsow read-only preflight does not match the requested Demo');
+  'Current Seedsow read-only preflight does not match the requested session');
   const shim = pinnedShim();
   // Refuse an inherited listener. There is no safe way to claim a socket that
   // another bridge or boot may own, even if its literal session says seedsow.

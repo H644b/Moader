@@ -130,6 +130,18 @@ test('actual pinned Seedsow consumer graph imports with one injected stop latch 
       assert.equal(typeof held.load('switch2/pipeline.cjs').main, 'function');
       assert.equal(typeof held.load('switch2/memory/probe-reserved-gap-seedsow.cjs').moaderMain, 'function');
       assert.equal(typeof held.load('switch2/process/qualify.cjs').main, 'function');
+      const qualificationSource = fs.readFileSync(path.join(run,
+        'switch2/process/qualify.cjs'), 'utf8');
+      const identityGate = /check\(!proof\.app\.result && ([^\n]+),\n\s+'The transferred current-process handle is not Seedsow Lullaby Demo or full game'\);/
+        .exec(qualificationSource);
+      assert.ok(identityGate, 'The materialized process gate must retain its result and title checks');
+      const qualifies = (programId, result = 0) => vm.runInNewContext(
+        'Boolean(!proof.app.result && ' + identityGate[1] + ')',
+        {proof: {app: {programId, result}}});
+      assert.equal(qualifies('010042d022aea000'), true);
+      assert.equal(qualifies('0100ee5021c9e000'), true);
+      assert.equal(qualifies('0100c9100b06a000'), false);
+      assert.equal(qualifies('0100ee5021c9e000', 1), false);
       assert.equal(typeof held.load('switch2/app/inspect-mounts.cjs').moaderMain, 'function');
       for (const relative of require('./seedsow-source-transforms.cjs').STAGE_ENTRYPOINTS)
         assert.equal(typeof held.load(relative).moaderMain, 'function', relative);

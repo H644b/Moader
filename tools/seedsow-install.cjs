@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // SPDX-License-Identifier: GPL-2.0-only
 'use strict';
-// One Moader-owned Seedsow Demo attempt. --check performs source/build/run
+// One Moader-owned Seedsow Lullaby attempt. --check performs source/build/run
 // graph qualification without touching the console. --start starts one saved
 // launcher RPC loop, one acquisition, the restored FS challenge, and then the
 // Moader installer in the same owner process. It never retires automatically.

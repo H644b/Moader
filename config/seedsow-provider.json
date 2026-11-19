@@ -285,7 +285,7 @@
     "switch2/tools/test-retained-dump.cjs": "88df63751e2884bdfadcbcd05d05c1d699c48b4762b7c0f9d61bb5c684a7b1cf"
   },
   "codeQualification": {
-    "status": "requires-current-boot-demo-signatures",
+    "status": "requires-current-boot-seedsow-signatures",
     "signatures": [
       {
         "name": "pthread-create",
@@ -371,7 +371,7 @@
         "offset": 2498992
       }
     ],
-    "note": "This static source profile alone does not authorize acquisition. The live installer requires a fresh Demo signature preflight and must qualify required primitives on the current boot."
+    "note": "This static source profile alone does not authorize acquisition. The live installer requires a fresh Seedsow Demo or full-game signature preflight and must qualify required primitives on the current boot. Only the Demo has a completed Moader installation record."
   },
   "validation": {
     "status": "combined-demo-installation-tested",

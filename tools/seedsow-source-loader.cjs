@@ -18,7 +18,7 @@ const BUILTINS = new Set(['assert', 'assert/strict', 'buffer', 'crypto', 'events
 const TRANSFORMED = Object.freeze({
   'switch2/pipeline.cjs': 'af683824697d22c307421d735ba9d5d2aa0e3287a72e5cdfce0059d1b4deb1f4',
   'switch2/app/inspect-mounts.cjs': 'f9208ac6174e27d76e065af702a47163c9f0c72ed6a8708b7a90e3e1de0da012',
-  'switch2/process/qualify.cjs': '32b97e4392cdd0b6a22ad831c0b8ae874d9227b69a819d92ac56c4af395606fe',
+  'switch2/process/qualify.cjs': 'b429712a8fe0f35d2cd22f0b3b04ae1ccb917c1c61b4d7b53aa41f3a695ad49c',
   'switch2/ro/launch.cjs': 'e45fd6a5de2af68ebe23ec32a440fce52ee539ddea4387f55a251df8706c9fa1',
   'switch2/ro/runtime.cjs': '90f1c99bf615b38e50c130e3686a058fdead3fe1099a612fbfe73016899b3bc9',
   'switch2/ro/nro.cjs': '5bf88f0c0bdb68d18f2f6e2e7d2804ab2ffc5835c37722514a1646e278d6b9c5',

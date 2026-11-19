@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Demo backend](SEEDSOW.md). The v0.1.3 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.1.3 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 

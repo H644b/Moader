@@ -24,7 +24,7 @@ index ac4aa44..c7e9567 100644
  const state = {
    phase: 'idle',
 -  message: 'Start Seedsow, press Y, then press Start.',
-+  message: 'Open Seedsow Demo, press Y, then choose Install Moader on this boot.',
++  message: 'Open Seedsow Lullaby Demo or full game, press Y, then choose Install Moader on this boot.',
    consoleUp: null,
    stage: '',
    stages: [],
@@ -134,13 +134,13 @@ index ac4aa44..c7e9567 100644
 +      {flag: 'wx', mode: 0o600});
 +    moaderAttempted = true;
 +    bootFresh = false;
-+    setState({phase: 'moader-preflight', message: 'Capturing current Demo code signatures once ...'});
++    setState({phase: 'moader-preflight', message: 'Capturing current Seedsow code signatures once ...'});
 +    await oneCommand('python3', [path.join(selected.root, 'tools/seedsow-preflight.py'),
 +      '--console', CONSOLE, '--output', preflightDir], '[moader] ');
 +    const capture = JSON.parse(fs.readFileSync(preflightFile, 'utf8'));
 +    if (!capture.complete || !capture.allRequiredPinnedSignaturesMatch ||
 +        capture.fsAcquisitionAttempted || capture.codeOrKernelPatchAttempted)
-+      throw Error('Current Demo read-only preflight did not qualify');
++      throw Error('Current Seedsow read-only preflight did not qualify');
 +    const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
 +      !key.startsWith('NS2_') && !key.startsWith('KAIHEN_')));
 +    const args = [path.join(selected.root, 'tools/seedsow-install.cjs'), '--start',
@@ -398,7 +398,7 @@ index ac4aa44..c7e9567 100644
 +      moaderAttempted = false;
 +      bootFresh = true;
 +      addLine('[moader] prior boot marker archived at ' + archive + '; retained owner was not stopped.');
-+      setState({phase: 'idle', message: 'Full reboot confirmed. Open Seedsow Demo, press Y, then install Moader.',
++      setState({phase: 'idle', message: 'Full reboot confirmed. Open Seedsow Lullaby Demo or full game, press Y, then install Moader.',
 +        stage: '', report: null, pipeline: null, progress: null});
 +      return send(200, JSON.stringify({ok: true, fresh: true}));
 +    }
@@ -477,7 +477,7 @@ index da70953..79b593e 100644
      <div class="buttons">
 -      <button id="start">Start on this boot</button>
 +      <button id="moaderStart" class="primary" title="One source-qualified Seedsow acquisition, Moader FS backend install, then matched kaiHEN startup">Install Moader on this boot</button>
-+      <button id="moaderNewBoot" class="small" style="display:none" title="Use only after a full Switch reboot and reopening Seedsow Demo">Full reboot completed</button>
++      <button id="moaderNewBoot" class="small" style="display:none" title="Use only after a full Switch reboot and reopening Seedsow Lullaby Demo or full game">Full reboot completed</button>
 +      <button id="start">Start regular kaiHEN</button>
        <button id="failed">Attempt failed</button>
        <button id="stop">Stop run</button>
