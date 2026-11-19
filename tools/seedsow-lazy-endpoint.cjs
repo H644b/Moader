@@ -24,6 +24,7 @@ function create(guard) {
     get socketPath() { return owner?.socketPath; },
     get socketIdentity() { return owner?.socketIdentity; },
     request(command, timeoutMs) { return requireOwner().request(command, timeoutMs); },
+    retireOnce(timeoutMs) { return requireOwner().retireOnce(timeoutMs); },
     read(address, length, run) { return requireOwner().read(address, length, run); },
   });
 }

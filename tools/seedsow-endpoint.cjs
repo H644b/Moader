@@ -80,6 +80,7 @@ function create({socketPath, guard}) {
     typeof guard.subscribe === 'function', 'Seedsow endpoint requires the shared transport guard');
   const original = canonical(socketPath, 'endpoint'), socketIdentity = identity(original);
   let active = null;
+  let retireRequested = false;
   guard.subscribe(error => {
     if (!active) return;
     const current = active;
@@ -88,12 +89,15 @@ function create({socketPath, guard}) {
     current.socket.pause();
     current.reject(error);
   });
-  function request(command, timeoutMs = 60000) {
+  function send(command, timeoutMs = 60000, retirement = false) {
     if (guard.error) return Promise.reject(guard.error);
     let bytes;
     try {
+      check(!retireRequested, 'Seedsow retained endpoint retirement already requested');
       check(command && typeof command === 'object' && !Array.isArray(command) &&
-        ALLOWED.has(command.command), 'Unsupported Seedsow retained command');
+        (ALLOWED.has(command.command) || retirement && command.command === 'retire' &&
+          !retireRequested), 'Unsupported Seedsow retained command');
+      if (retirement) retireRequested = true;
       check(Number.isInteger(timeoutMs) && timeoutMs > 0 && timeoutMs <= 20 * 60 * 1000,
         'Invalid Seedsow endpoint deadline');
       bytes = Buffer.from(JSON.stringify(command, (_, value) =>
@@ -141,6 +145,15 @@ function create({socketPath, guard}) {
       });
     }, 'endpoint');
   }
+  function request(command, timeoutMs) { return send(command, timeoutMs); }
+  async function retireOnce(timeoutMs = 120000) {
+    try {
+      const result = await send({command: 'retire'}, timeoutMs, true);
+      check(result.retired === true || result.retiring === true,
+        'Seedsow retained endpoint did not acknowledge retirement');
+      return result;
+    } catch (error) { throw guard.fail(error); }
+  }
   async function read(address, length, runDirectory, command = 'read') {
     check(Number.isSafeInteger(address) && address > 0 && Number.isInteger(length) &&
       length > 0 && length <= 0x600000, 'Invalid Seedsow retained read');
@@ -163,6 +176,6 @@ function create({socketPath, guard}) {
       return {result, bytes};
     } catch (error) { throw guard.fail(error); }
   }
-  return Object.freeze({request, read, guard, socketPath, socketIdentity});
+  return Object.freeze({request, read, retireOnce, guard, socketPath, socketIdentity});
 }
 module.exports = {create, ALLOWED, MAX_REQUEST, MAX_REPLY, validateReply};

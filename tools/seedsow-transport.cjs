@@ -142,7 +142,8 @@ function create(socket, guard = createGuard()) {
   function request(command, options = {}, decode = reply => reply) {
     // Snapshot bytes/scalars before queueing so a queued command cannot drift.
     // No script-eval or reconnect opcode is exposed here. The one stop opcode
-    // is reserved for a proven idle, pre-FS failure and cannot be replayed.
+    // is issued only after a qualified pre-FS failure or completed FS/HEN
+    // retirement, and cannot be replayed.
     if (guard.error) return Promise.reject(guard.error);
     let body, timeoutMs, maxReplyBytes, replyBytes;
     try {

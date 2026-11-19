@@ -84,6 +84,19 @@ test('one retained request uses its exact owned socket and rejects retirement', 
   assert.ok(endpoint.guard.error?.nativeRequestUncertain);
 }));
 
+test('success retirement is one explicit request and cannot be replayed', () => {
+  let sends = 0;
+  return fixture((request, socket) => {
+    sends++;
+    assert.deepEqual(request, {command: 'retire'});
+    socket.end('{"retired":true}\n');
+  }, async ({endpoint}) => {
+    assert.deepEqual(await endpoint.retireOnce(500), {retired: true});
+    await assert.rejects(endpoint.retireOnce(500), /retirement already requested/);
+    assert.equal(sends, 1);
+  });
+});
+
 test('pinned native worker bind and cancel arrays keep the same owner transport', () => {
   const workers = Array.from({length: 7}, (_, i) => ({
     address: 0x100000 + i * 0x100, sourceHandle: i + 1, id: 70 + i,

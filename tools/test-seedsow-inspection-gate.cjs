@@ -12,6 +12,7 @@ function fixture() {
       complete: true, controllerHandlesClosed: true, resourcesRetained: false,
       borrowedRoRetained: true, borrowedRo: {sessionId: 'seedsow', file},
       hen: {pid: '218', protocol: 7, result: 0},
+      game: {phase: 3, result: 0},
       plugins: {names: ['moader'], enumerationComplete: true},
       moader: {listed: true, resident: true, serviceReachable: true,
         summary: {backendConnected: true, routingGenerationCurrent: true}},
@@ -36,6 +37,8 @@ test('foreign lease, failed HEN, absent resident or stale routing fails closed',
     x => { x.inspection.moader.serviceReachable = false; },
     x => { x.inspection.moader.summary.backendConnected = false; },
     x => { x.inspection.moader.summary.routingGenerationCurrent = false; },
+    x => { x.inspection.game.phase = 5; },
+    x => { x.inspection.game.result = 1; },
   ];
   for (const mutate of mutations) {
     const sample = fixture(); mutate(sample);

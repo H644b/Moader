@@ -7,6 +7,7 @@ const {guardTransports}=require('./ready-kaihen.cjs');
 const {guardSession,isUncertain}=require('../runtime/modloader/lib/game-files/uncertain.cjs');
 const root=path.resolve(__dirname,'..'),utf8=new TextDecoder('utf-8',{fatal:true});
 const check=(condition,message)=>{if(!condition)throw Error(message);};
+const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
 // Derive command IDs from retained owning sources before loading a live module.
 async function readProtocol(){
@@ -23,9 +24,15 @@ async function readProtocol(){
  check(/static_assert\(sizeof\(SummaryReply\)\s*==\s*64\)/.test(moader),'Moader Summary ABI changed');
  check(/sizeof\(HenStatus\)\s*==\s*16/.test(hen)&&/sizeof\(HenGameStatus\)\s*==\s*24/.test(game)&&
   /sizeof\(GameTraceSnapshot\)\s*==\s*24/.test(trace),'Retained HEN status ABI changed');
+ const phases=game.match(/enum HenGamePhase\s*:\s*u32\s*\{([^}]+)\}/)?.[1]
+  .match(/HenGamePhase_[A-Za-z]+/g);
+ check(phases?.[3]==='HenGamePhase_WaitingForGame' &&
+  phases?.[5]==='HenGamePhase_Fault','Retained HEN game phases changed');
  const protocol={
   initialize:number(ro,'RoCmd_Initialize'),homebrew:number(hen,'KaihenRoCommand_GetHomebrewSession'),
   status:number(hen,'HenHomebrewCommand_GetStatus'),game:number(control,'HenControlCommand_GetGameStatus'),
+  gameReady:phases.indexOf('HenGamePhase_WaitingForGame'),
+  gameFault:phases.indexOf('HenGamePhase_Fault'),
   trace:number(control,'HenControlCommand_MoaderGameTrace'),count:number(hen,'HenHomebrewCommand_GetPluginCount'),
   name:number(hen,'HenHomebrewCommand_GetPluginName'),open:number(hen,'HenHomebrewCommand_OpenPlugin'),
   henVersion:number(hen,'HEN_PROTOCOL_VERSION'),maxPlugins:number(hen,'HEN_MAX_PLUGINS'),nameBytes:number(hen,'HEN_PLUGIN_NAME_SIZE'),
@@ -119,8 +126,16 @@ async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuar
   const status=success(await request('Read HEN startup',hen,p.status,{bytes:16}),'HEN status').data;
   result.hen={pid:status.readBigUInt64LE().toString(),protocol:status.readUInt32LE(8),result:status.readUInt32LE(12)};
   check(result.hen.protocol===p.henVersion,'Running HEN protocol differs from retained source');
-  const game=success(await request('Read HEN game state',hen,p.game,{bytes:24}),'HEN game state').data;
-  result.game={phase:game.readUInt32LE(),result:game.readUInt32LE(4),serial:game.readUInt32LE(8),mounts:game.readUInt32LE(12),pid:game.readBigUInt64LE(16).toString()};
+  const gameDeadline=Date.now()+15000;
+  for(;;){
+   const game=success(await request('Read HEN game state',hen,p.game,{bytes:24}),'HEN game state').data;
+   result.game={phase:game.readUInt32LE(),result:game.readUInt32LE(4),serial:game.readUInt32LE(8),mounts:game.readUInt32LE(12),pid:game.readBigUInt64LE(16).toString()};
+   if(result.game.phase===p.gameReady && result.game.result===0)break;
+   check(result.game.phase!==p.gameFault && result.game.result===0,
+    'HEN game arm faulted before R launch was ready');
+   check(Date.now()<gameDeadline,'HEN game arm did not reach the waiting-for-game state');
+   await delay(250);
+  }
   const trace=await request('Read Moader game trace',hen,p.trace,{bytes:24});result.traceResult=trace.result;
   if(!trace.result)result.trace=Object.fromEntries(['sequence','point','result','value','requests','steps'].map((name,i)=>[name,trace.data.readUInt32LE(i*4)]));
   const count=success(await request('Read published plugin count',hen,p.count,{bytes:4}),'Plugin count').data.readUInt32LE();

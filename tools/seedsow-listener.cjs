@@ -117,7 +117,8 @@ async function open({host, httpPort = 8080, rpcPort = 39380, run, preflightFile,
     check(error.code === 'ECONNREFUSED',
       'Seedsow binary listener state is uncertain: ' + error.message);
   }
-  const stopState = {requested: false, confirmed: false, ended: false, response: null};
+  const stopState = {requested: false, confirmed: false, ended: false,
+    tcpClosed: false, response: null};
   const serveRequest = startServe(host, httpPort, rpcPort, guard, run, shim, stopState);
   let socket = null;
   for (let attempt = 0; attempt < 60 && !guard.error; ++attempt) {
@@ -128,6 +129,7 @@ async function open({host, httpPort = 8080, rpcPort = 39380, run, preflightFile,
     }
   }
   if (!socket) throw guard.fail(Error('Seedsow listener did not accept a single owned connection'));
+  socket.once('close', () => { stopState.tcpClosed = true; });
   const wire = transport.create(socket, guard);
   const observed = await wire.request('status', {maxReplyBytes: 256}, decodeStatus);
   if (observed.sdk !== preflight.moduleBases.sdk ||
@@ -144,7 +146,7 @@ async function open({host, httpPort = 8080, rpcPort = 39380, run, preflightFile,
   const connectionFile = path.join(run, 'connection.json');
   const bytes = Buffer.from(JSON.stringify(snapshot, null, 2) + '\n');
   fs.writeFileSync(connectionFile, bytes, {flag: 'wx', mode: 0o400});
-  async function stopAfterProvenFailure() {
+  async function stopOwned() {
     check(!stopState.requested && !guard.error, 'Seedsow listener is not available for a unique stop');
     stopState.requested = true;
     await wire.request('stop', {replyBytes: 0, timeoutMs: 8000}, reply => {
@@ -160,11 +162,15 @@ async function open({host, httpPort = 8080, rpcPort = 39380, run, preflightFile,
       return true;
     });
     const deadline = Date.now() + 8000;
-    while (!stopState.ended && !guard.error && Date.now() < deadline) await delay(50);
-    if (!stopState.ended) throw guard.fail(Error('Seedsow listener stop was acknowledged but serve completion is uncertain'));
-    return {stopped: true, response: path.join(run, 'moader-listener-response.json')};
+    while ((!stopState.ended || !stopState.tcpClosed) && !guard.error && Date.now() < deadline)
+      await delay(50);
+    if (!stopState.ended || !stopState.tcpClosed)
+      throw guard.fail(Error('Seedsow listener stop was acknowledged but TCP/serve closure is uncertain'));
+    return {stopped: true, tcpClosed: true, serveEnded: true,
+      response: path.join(run, 'moader-listener-response.json')};
   }
   return Object.freeze({rpc, guard, socket, serveRequest, connectionFile,
-    connectionSha256: sha(bytes), snapshot, stopAfterProvenFailure});
+    connectionSha256: sha(bytes), snapshot,
+    stopAfterProvenFailure: stopOwned, stopAfterProvenSuccess: stopOwned});
 }
 module.exports = {open, connection, decodeStatus, SERVE_SECONDS, IDLE_SECONDS};

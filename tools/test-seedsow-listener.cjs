@@ -81,8 +81,9 @@ test('one launcher serve POST yields one owned binary socket and a fresh status 
       require('./seedsow-provider.cjs').resolveProfile(path.resolve(__dirname, '..')).files['console/n2h_rpc.lua']);
     assert.equal(result.guard.error, null);
     assert.ok(fs.statSync(result.connectionFile).isFile());
-    assert.deepEqual(await result.stopAfterProvenFailure(),
-      {stopped: true, response: path.join(run, 'moader-listener-response.json')});
+    assert.deepEqual(await result.stopAfterProvenSuccess(),
+      {stopped: true, tcpClosed: true, serveEnded: true,
+        response: path.join(run, 'moader-listener-response.json')});
     assert.deepEqual(nativeCommands, [1, 1, 10, 11]);
     assert.equal(result.guard.error, null);
   } finally {

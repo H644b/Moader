@@ -111,8 +111,9 @@ class SetupTests(unittest.TestCase):
         result = backend.setup(self.args()); self.assertTrue(result['readyForInstallerCheck']); self.assertFalse(result['consoleConnected'])
         self.assertEqual((self.root / 'vendor/kaihen-mo/hen/main').read_bytes(), self.hen)
         self.assertEqual(backend.tree_files(self.root / 'research/sources/ns2jb/engine'), self.engine)
-        self.assertEqual(backend.tree_files(self.root / 'vendor/kaihen-mo/programs'), {})
-        self.assertEqual(result['bundledPrograms'], [])
+        self.assertEqual(backend.tree_files(self.root / 'vendor/kaihen-mo/programs'),
+                         {'ounceshell.nro': self.official['programs/ounceshell.nro']})
+        self.assertEqual(result['bundledPrograms'], ['ounceshell.nro'])
         self.assertFalse((self.root / 'vendor/kaihen-mo/licenses').exists())
         self.assertFalse((self.root / 'research/sources/ns2jb/runs').exists())
         before = self.snapshot(); self.assertEqual(backend.setup(self.args())['newFiles'], 0); self.assertEqual(self.snapshot(), before)
@@ -158,9 +159,10 @@ class SetupTests(unittest.TestCase):
         with patch.object(backend, 'download', side_effect=fetch), patch.object(backend, 'build_inputs', side_effect=AssertionError()):
             result = backend.setup(args)
         self.assertEqual(calls, [(backend.KAIHEN_URL, backend.KAIHEN_SHA), (backend.ENGINE_URL, None)])
-        self.assertEqual(result['bundledPrograms'], [])
+        self.assertEqual(result['bundledPrograms'], ['ounceshell.nro'])
         self.assertTrue(all(self.snapshot()[name] == value for name, value in tested.items()))
-        self.assertEqual(backend.tree_files(self.root / 'vendor/kaihen-mo/programs'), {})
+        self.assertEqual(backend.tree_files(self.root / 'vendor/kaihen-mo/programs'),
+                         {'ounceshell.nro': self.official['programs/ounceshell.nro']})
 
     def test_optional_existing_programs_preserved_and_reported(self):
         backend.setup(self.args()); self.put('vendor/kaihen-mo/programs/ounceshell.nro', self.official['programs/ounceshell.nro'])
