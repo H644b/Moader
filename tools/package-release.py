@@ -191,9 +191,11 @@ as one source-qualified set. The Seedsow guide provisions the pinned patched
 GUI from upstream and installs the SDK needed by its live helper.
 
 Run preparation from this outer folder (the one containing tools/).
-Preparation checks files on your computer and prints the command that
-installs on the Switch. Follow the completion steps for your method in
-docs/INSTALLATION.md, docs/SEEDSOW.md or docs/CIV7.md.
+For SmileBASIC and CivSwitch, preparation checks local files and prints
+one installation command. For Seedsow, the pinned GUI performs the one
+owned installation after its local preparation. Follow the completion
+steps for your method in docs/INSTALLATION.md, docs/SEEDSOW.md or
+docs/CIV7.md.
 
 Mod layout and controls: docs/USAGE.md
 Test results: docs/VALIDATION.md

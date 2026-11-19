@@ -130,7 +130,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-Use the direct kurumuz ns2jb route on Linux or WSL. macOS users can choose ns2jb or mac2jb. Both routes use the same precompiled Moader backend kit. [Installation](Installation) covers the host prerequisites and WSL networking.
+No. The v0.1.3 backend kit supports direct ns2jb and Seedsow Demo from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. Seedsow needs its pinned GUI and host SDK preparation. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 
