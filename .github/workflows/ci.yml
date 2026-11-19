@@ -99,6 +99,8 @@ jobs:
         run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/hen/test.sh
       - name: Actual RO wire, image, session and mapping lifecycle
         run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/ro/test.sh
+      - name: Bootstrap Loader service and launch mount checks
+        run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/bootstrap/test.sh
 
   installer-runtime:
     name: Installer and runtime
@@ -115,6 +117,8 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install Seedsow source-test assembler tools
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y clang binutils-aarch64-linux-gnu
       - name: Verify checked-in prebuilt sources and component hashes
         run: node -e "require('./runtime/modloader/lib/native/artifacts.cjs').artifacts(); console.log('Prebuilt source/component hashes verified.')"
       - name: Prepare checksum-pinned upstream installer inputs
@@ -123,6 +127,20 @@ jobs:
         run: |
           python3 tools/setup-backend.py --sources-only
           python3 tools/setup-backend.py --host-profile civ7-s8n --sources-only
+          python3 tools/setup-backend.py --host-profile seedsow-malev0 --sources-only
+      - name: Seedsow source graph and no-replay host checks
+        env:
+          MOADER_AARCH64_CLANG: clang
+          MOADER_AARCH64_OBJCOPY: aarch64-linux-gnu-objcopy
+        run: |
+          python3 tests/test_seedsow_preflight.py
+          for test in tools/test-seedsow-*.cjs; do
+            node "$test"
+          done
+      - name: Verify Seedsow GUI patch against its pinned source
+        run: |
+          node tools/prepare-seedsow-gui.cjs --provision "$RUNNER_TEMP/seedsow-gui"
+          node tools/prepare-seedsow-gui.cjs --check "$RUNNER_TEMP/seedsow-gui"
       - name: Independently verify Civ7 source, materialization and native qualification gates
         run: |
           python3 tools/test-civ7-host.py --node node

@@ -5,7 +5,7 @@ const {guardSession,isUncertain}=require('../runtime/modloader/lib/game-files/un
 // requests in finally blocks. One child-process-wide latch covers both native
 // transports, including those helpers, without editing the pinned sources.
 function guardTransports({rpc,endpoint},state={error:null}){
- for(const [object,names]of [[rpc,['request','call','callAddress','callAddress6','pair','read','write','query','log']],[endpoint,['request','read']]]){
+ for(const [object,names]of [[rpc,['request','call','callAddress','callAddress6','pair','read','write','query','log','say','status','ping','verifyFunction','startWorkers','joinWorkers']],[endpoint,['request','read']]]){
   for(const name of names){
    if(typeof object[name]!=='function')continue;
    const operation=object[name].bind(object);
@@ -14,7 +14,9 @@ function guardTransports({rpc,endpoint},state={error:null}){
     try{return await operation(...args);}catch(error){
      // A malformed/truncated transport reply also leaves dispatch completion
      // unknown. Error codes may carry disconnect identity absent its message.
-     if(isUncertain(error)||error instanceof SyntaxError||
+     // A worker failure can follow partial creation or a still-running join.
+     // Even an ordinary bridge error must stop both transports in that case.
+     if(['startWorkers','joinWorkers'].includes(name)||isUncertain(error)||error instanceof SyntaxError||
        ['ECONNRESET','ECONNABORTED','EPIPE','ETIMEDOUT','ERR_STREAM_PREMATURE_CLOSE'].includes(error?.code)||
        /reply exceeded its limit|^aborted$|socket hang up/i.test(String(error?.message||error))){
       error.nativeRequestUncertain=true;state.error=error;

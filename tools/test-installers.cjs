@@ -5,7 +5,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs/promises'),sync=r
 const net=require('node:net'),http=require('node:http');
 let connections=0;
 net.createConnection=http.request=()=>{connections++;throw Error('Host installer tests cannot connect to an endpoint');};
-const inputs=require('./install-inputs.cjs'),{ready,guardTransports}=require('./ready-kaihen.cjs'),{verifyRoPackage,main:kaihenMain}=require('./install-kaihen.cjs');
+const inputs=require('./install-inputs.cjs'),{ready,guardTransports}=require('./ready-kaihen.cjs'),{verifyRoPackage,qualifyStagedRoReuse,main:kaihenMain}=require('./install-kaihen.cjs');
 const root=path.resolve(__dirname,'..'),tests=[];
 const originalReadFile=fs.readFile.bind(fs);
 let candidateReads=0;
@@ -96,6 +96,43 @@ test('a definite native failure retains the transport for qualified cleanup',asy
  const state=guardTransports({rpc,endpoint:{}});
  await assert.rejects(()=>rpc.call(),/Definite/);await rpc.write();assert.equal(state.error,null);assert.deepEqual(events,['restore']);
 });
+test('Seedsow worker creation and join failures quarantine all helper and retained paths',async()=>{
+ for(const failed of ['startWorkers','joinWorkers']){
+  const events=[],failure=Error(failed==='startWorkers'?'worker create failed after one launch':'worker is still running');
+  const rpc={};
+  for(const name of ['startWorkers','joinWorkers','verifyFunction','say','status','ping','write'])
+   rpc[name]=async()=>{events.push(name);if(name===failed)throw failure;};
+  const endpoint={async request(){events.push('retire');},async read(){events.push('retained-read');}};
+  const state=guardTransports({rpc,endpoint});
+  await assert.rejects(()=>rpc[failed](),error=>error===failure);
+  for(const operation of [...Object.keys(rpc).map(name=>()=>rpc[name]()),()=>endpoint.request(),()=>endpoint.read()])
+   await assert.rejects(operation,error=>error===failure);
+  assert.equal(state.error,failure);assert.equal(failure.nativeRequestUncertain,true);
+  assert.deepEqual(events,[failed]);
+ }
+});
+test('a prior retained uncertainty blocks Seedsow worker and verification helpers before dispatch',async()=>{
+ const events=[],failure=Object.assign(Error('lost reply'),{code:'ECONNRESET'});
+ const rpc={async startWorkers(){events.push('start');},async joinWorkers(){events.push('join');},
+  async verifyFunction(){events.push('verify');},async say(){events.push('say');}};
+ const endpoint={async request(){events.push('request');throw failure;}};
+ guardTransports({rpc,endpoint});
+ await assert.rejects(()=>endpoint.request(),error=>error===failure);
+ for(const operation of Object.values(rpc))await assert.rejects(operation,error=>error===failure);
+ assert.deepEqual(events,['request']);
+});
+test('unadmitted Seedsow runs never fall through to SmileBASIC live modules',()=>fixture(async directory=>{
+ const run=path.join(directory,'switch-ABCDE');await fs.mkdir(run);
+ await fs.writeFile(path.join(run,'moader-seedsow-session.json'),'{}');
+ const hosts=require('./host-session.cjs');
+ assert.equal(hosts.inferredId(run),'seedsow-malev0');
+ assert.throws(()=>require('../runtime/modloader/install.cjs').verifiedRun(run),/not admitted yet/);
+ await assert.rejects(()=>require('../runtime/modloader/lib/native/client.cjs').openClient(run),/not admitted yet/);
+ await assert.rejects(()=>require('./sd-install.cjs').stage(run,[]),/not admitted yet/);
+ assert.throws(()=>hosts.bind({profile:{id:'seedsow-malev0'},run}),/source-owned runtime binding is unavailable/);
+ assert.throws(()=>hosts.load({profile:{id:'seedsow-malev0'},run},'shared/rpc.cjs'),/not owned by the held producer/);
+ assert.equal(connections,0);
+}));
 test('malformed, truncated and code-only disconnected transport replies stop follow-on work',async()=>{
  for(const failure of [new SyntaxError('Unexpected end of JSON input'),Error('Memory reply exceeded its limit'),Object.assign(Error('connection failed'),{code:'ECONNRESET'}),Error('aborted')]){
   const events=[],rpc={async call(){events.push('call');throw failure;},async write(){events.push('restore');}};
@@ -244,6 +281,20 @@ test('versioned pair proof binds the source, patch, protocol and bounded exact c
  await fs.writeFile(path.join(directory,'runtime/kaihen/hen/source/main.cpp'),'changed source');
  await assert.rejects(()=>inputs.qualifyKaihenBuild(directory),/source identity differs/);
 }));
+test('schema-3 proof binds the RO image to the unchanged HEN/bootstrap pair',()=>fixture(async directory=>{
+ const {proof,file}=await pairedProof(directory);
+ const ro=Buffer.from('NSO0-qualified-RO-fixture');
+ const candidate={...proof,schema:3,components:{...proof.components,
+  'ro/main':{bytes:ro.length,sha256:inputs.digest(ro)}}};
+ const observed={sourceSha256:candidate.source_tree_sha256,patchSha256:candidate.patch_sha256};
+ const build=inputs.validateKaihenProof(candidate,observed);
+ assert.equal(build.schema,3);
+ assert.equal(build.components['ro/main'].sha256,inputs.digest(ro));
+ assert.throws(()=>inputs.validateKaihenProof({...candidate,components:proof.components},observed),
+  /RO\/HEN\/bootstrap/);
+ await fs.writeFile(file,JSON.stringify(candidate));
+ assert.equal((await inputs.qualifyKaihenBuild(directory)).schema,3);
+}));
 test('source proof ignores generated build outputs but rejects links and changed patch/header',()=>fixture(async directory=>{
  const f=await pairedProof(directory),before=await inputs.kaihenSourceDigest(directory);
  await fs.mkdir(path.join(directory,'runtime/kaihen/hen/build'));await fs.writeFile(path.join(directory,'runtime/kaihen/hen/build/main'),'generated');
@@ -285,6 +336,28 @@ test('RO package readback binds both image and this session’s signed policy be
   [entries[0],entries[0]],
  ])assert.throws(()=>verifyRoPackage({result:0,entries:invalid},image,policy),/both expected entries|readback differs/);
 });
+test('held Seedsow RO package is reused only with the same source and verified donor',()=>fixture(async directory=>{
+ const previous=path.join(directory,'switch2/ro/seedsow-kaihen-ro-exefs.nsp');
+ const candidate=path.join(directory,'candidate.nsp'),image=Buffer.from('NSO0ro'),policy=Buffer.from('signed policy');
+ const bytes=Buffer.concat([Buffer.from('PFS0'),image,policy]);
+ await fs.mkdir(path.dirname(previous),{recursive:true});
+ await fs.writeFile(previous,bytes);await fs.writeFile(candidate,bytes);
+ const packageSha=inputs.digest(bytes),entries=[
+  {name:'main',size:image.length,sha256:inputs.digest(image),verified:true},
+  {name:'main.npdm',size:policy.length,sha256:inputs.digest(policy),verified:true},
+ ];
+ const donor={ready:true,mount:'package',kind:'ro',files:entries,
+  image:{sha256:inputs.digest(image)},policy:{sha256:inputs.digest(policy)},
+  package:{file:previous,size:bytes.length,staged:{path:'@Sdcard:/kaihen/bin/ro/exefs.nsp',
+   size:bytes.length,sha256:packageSha}}};
+ const report={nativeRo:{donor}};
+ assert.equal((await qualifyStagedRoReuse(directory,report,candidate,image,policy)).sha256,packageSha);
+ await fs.writeFile(candidate,Buffer.concat([bytes,Buffer.from('changed')]));
+ await assert.rejects(()=>qualifyStagedRoReuse(directory,report,candidate,image,policy),/differs/);
+ await fs.writeFile(candidate,bytes);donor.files[0].verified=false;
+ await assert.rejects(()=>qualifyStagedRoReuse(directory,report,candidate,image,policy),/source-qualified/);
+ assert.equal(connections,0);
+}));
 test('metadata qualification rejects changed bytes before SD staging opens an endpoint',()=>fixture(async directory=>{
  const source=path.join(directory,'catalogue.bin');await fs.writeFile(source,'changed');
  await assert.rejects(()=>require('./sd-install.cjs').stage('/not-a-run',[{source,target:'/moader/runtime/catalogue.bin',bytes:7,sha256:'0'.repeat(64)}]),/Input changed/);

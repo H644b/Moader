@@ -36,8 +36,9 @@ async function readNativeText(c,handle,base,identity,mappings=[]){
  return bytes;
 }
 async function captureNative(run,directory,options={}){
- const session=path.basename(run),current=JSON.parse(await fs.readFile(path.join(run,'switch2/fs-execution-current.json'))),proof=JSON.parse(await fs.readFile(path.resolve(run,current.file)));
- check(current.verified&&proof.verified&&proof.session===session,'Missing same-session FS 4/4 proof');
+ const session=path.basename(run),sourceSession=require('../../../tools/host-session.cjs').inferredId(run)==='seedsow-malev0'?'seedsow':session;
+ const current=JSON.parse(await fs.readFile(path.join(run,'switch2/fs-execution-current.json'))),proof=JSON.parse(await fs.readFile(path.resolve(run,current.file)));
+ check(current.verified&&proof.verified&&proof.session===sourceSession,'Missing same-session FS 4/4 proof');
  const c=await require('./native/client.cjs').openClient(run);
  const output=path.join(directory,'native-fs/fs-4.bin');await fs.mkdir(path.dirname(output),{recursive:true,mode:0o700});
  let transferred=false,identity;

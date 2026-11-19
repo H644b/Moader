@@ -7,6 +7,11 @@ const Module = require('node:module');
 const rootDir = path.resolve(__dirname, '..');
 const inputs = require('./install-inputs.cjs');
 function guardKaihenTransports(run, load, host) {
+  if (host?.target === 'seedsow') {
+    if(host.guard?.error||host.loader?.run!==path.resolve(run))
+      throw Error('Seedsow HEN startup lost its live source-owned transport');
+    return host.guard;
+  }
   if (host) return require('./host-transport.cjs').install(host);
   const {guardTransports} = require('./ready-kaihen.cjs');
   const state = guardTransports({rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs')});
@@ -49,6 +54,33 @@ function verifyRoPackage(packageSession,image,policy) {
       throw Error('RO package '+name+' readback differs from its qualified input');
   }
 }
+async function qualifyStagedRoReuse(run, report, candidate, image, policy) {
+  // Seedsow has already staged this package as the diagnostic RO donor. Its
+  // open CodeFS locks the SD path, so deleting it here returns fs::TargetLocked.
+  // Reuse only the exact package verified by this held acquisition.
+  const donor = report?.nativeRo?.donor;
+  const previous = path.join(run, 'switch2/ro/seedsow-kaihen-ro-exefs.nsp');
+  const staged = donor?.package?.staged;
+  if (process.env.NS2_KAIHEN_SKIP_STAGE === '1' ||
+      donor?.ready !== true || donor.mount !== 'package' || donor.kind !== 'ro' ||
+      donor.package.file !== previous ||
+      staged?.path !== '@Sdcard:/kaihen/bin/ro/exefs.nsp' ||
+      !Number.isSafeInteger(staged.size) || staged.size <= 0 ||
+      !/^[0-9a-f]{64}$/.test(staged.sha256 || '') ||
+      !Array.isArray(donor.files) || donor.files.some(row => row.verified !== true))
+    throw Error('This held Seedsow run has no source-qualified staged RO donor');
+  verifyRoPackage({result: 0, entries: donor.files}, image, policy);
+  const [priorBytes, candidateBytes] = await Promise.all([fs.readFile(previous), fs.readFile(candidate)]);
+  const priorSha = inputs.digest(priorBytes), candidateSha = inputs.digest(candidateBytes);
+  if (priorBytes.length !== staged.size || donor.package.size !== staged.size ||
+      priorSha !== staged.sha256 || candidateSha !== priorSha ||
+      !priorBytes.equals(candidateBytes) ||
+      donor.image?.sha256 !== inputs.digest(image) ||
+      donor.policy?.sha256 !== inputs.digest(policy))
+    throw Error('Held Seedsow RO donor differs from the matched kaiHEN package');
+  return {path: staged.path, size: staged.size, sha256: priorSha,
+    source: previous, reusedFromHeldDonor: true};
+}
 async function main(args = process.argv.slice(2)) {
 const run = args[0];
 if (!run || args.length > 3) throw Error('Usage: node tools/install-kaihen.cjs RUN_DIRECTORY [KAIHEN_DIRECTORY] [EXTRA_MANIFEST]');
@@ -66,11 +98,13 @@ for (const [target,name] of [['/hbmenu.nro','hbmenu.nro'],['/kaihen/bin/game/mai
 for (const item of [...prepared.bundledPrograms,...prepared.programs]) stagedInputs.set(item.target, await inputs.readInput(item,true));
 process.env.NS2_RUN_DIR = path.resolve(run);
 const hosts = require('./host-session.cjs');
-const host = hosts.inferredId(run)==='civ7-s8n' ? hosts.qualifyRun(run,'civ7-s8n') : null;
+const profileId = hosts.inferredId(run);
+const host = profileId===hosts.DEFAULT ? null : hosts.qualifyRun(run,profileId);
 if(host) hosts.bind(host);
 const upstream = host?.runtimeRoot || path.join(rootDir, 'research/sources/ns2jb/engine');
 const ship = prepared.kaihen;
-const output = path.join(rootDir, 'evidence/kaihen/install-' + path.basename(process.env.NS2_RUN_DIR) + '.json');
+const runName = path.basename(process.env.NS2_RUN_DIR);
+const output = path.join(rootDir, 'evidence/kaihen/install-' + runName + '.json');
 const load = rel => host ? hosts.load(host,rel) : require(path.join(upstream, rel));
 const transportGuard = guardKaihenTransports(process.env.NS2_RUN_DIR,load,host);
 const {Session, live, check} = load('switch2/app/session.cjs');
@@ -109,6 +143,20 @@ async function execute() {
     execution.report === memory.reportFile, 'This session has no verified diagnostic RO');
   const runtime = load('switch2/ro/runtime.cjs');
   await step('Verify the current Loader session', () => runtime.handoff());
+  // Qualify package reuse from the held report and both host byte streams
+  // before allocating another application session or sending an SD operation.
+  const roPackage = path.join(rootDir, 'evidence/kaihen/ro-exefs-' + runName + '.nsp');
+  const policyPath = path.join(roDir, live.session + '-code-0400000000000037/main.npdm');
+  const expectedRo = await inputs.readInput(prepared.kaihenFiles.find(item=>item.source===path.join(ship,'ro/main')),true);
+  const expectedPolicy = await fs.readFile(policyPath);
+  record.roInputs = {imageSha256:inputs.digest(expectedRo.data),policySha256:inputs.digest(expectedPolicy)};
+  await step('Build RO package with this console’s signed policy', () => (host?require('./host-kaihen.cjs').buildPackage:load('switch2/ro/package-build.cjs').build)(
+    expectedRo.source, policyPath, roPackage));
+  if (host?.target === 'seedsow') {
+    record.roPackageReuse = await step('Verify and reuse held Seedsow RO package', () =>
+      qualifyStagedRoReuse(process.env.NS2_RUN_DIR, memory.report, roPackage,
+        expectedRo.data, expectedPolicy));
+  }
 
   const s = guardSession(new Session('moader-kaihen-install', 0x30000));
   await s.initialize();
@@ -136,15 +184,10 @@ async function execute() {
   };
   // The bootstrap uses the same checked endpoint; the older host need not be modified.
   memModule.connect = async () => memory;
-  const roPackage = path.join(rootDir, 'evidence/kaihen/ro-exefs-' + live.session + '.nsp');
-  const policyPath = path.join(roDir, live.session + '-code-0400000000000037/main.npdm');
-  const expectedRo = await inputs.readInput(prepared.kaihenFiles.find(item=>item.source===path.join(ship,'ro/main')),true);
-  const expectedPolicy = await fs.readFile(policyPath);
-  record.roInputs = {imageSha256:inputs.digest(expectedRo.data),policySha256:inputs.digest(expectedPolicy)};
-  await step('Build RO package with this console’s signed policy', () => (host?require('./host-kaihen.cjs').buildPackage:load('switch2/ro/package-build.cjs').build)(
-    expectedRo.source, policyPath, roPackage));
-  await step('Stage kaiHEN RO package on SD', () => memory.request({command: 'root-native-package-stage',
-    root: rootHandle, kind: 'ro', source: roPackage}));
+  if (host?.target !== 'seedsow') {
+    await step('Stage kaiHEN RO package on SD', () => memory.request({command: 'root-native-package-stage',
+      root: rootHandle, kind: 'ro', source: roPackage}));
+  }
   packageSession = await step('Open and verify RO package', () => memory.request({command: 'root-native-package-open',
     root: rootHandle, kind: 'ro', selectDonor: true}));
   verifyRoPackage(packageSession,expectedRo.data,expectedPolicy);
@@ -152,7 +195,7 @@ async function execute() {
   const typesPath = path.join(roDir, live.session + '-filesystem-types.json');
   const oldTypes = await read(typesPath);
   record.previousTypes = oldTypes;
-  await fs.writeFile(path.join(rootDir, 'evidence/kaihen/previous-filesystem-types-' + live.session + '.json'),
+  await fs.writeFile(path.join(rootDir, 'evidence/kaihen/previous-filesystem-types-' + runName + '.json'),
     JSON.stringify(oldTypes, null, 2), {flag: 'wx', mode: 0o600});
   const layout = await read(path.join(roDir, live.session + '-layout.json'));
   check(packageSession.root > 0 && packageSession.root <= layout.count, 'Package domain ID out of bounds');
@@ -234,7 +277,8 @@ async function execute() {
   record.complete = true;
   record.finished = new Date().toISOString();
   await persist();
-  console.log('HEN running. Keep '+(host?'Civilization VII':'SmileBASIC')+' open for the HEN status check before testing hbmenu.');
+  console.log('HEN running. Keep '+(host?.target==='seedsow'?'Seedsow Lullaby Demo':host?'Civilization VII':'SmileBASIC')+
+    ' open for the HEN status check before testing hbmenu.');
 }
 try { await execute(); }
 catch (error) {
@@ -248,5 +292,6 @@ catch (error) {
   throw error;
 }
 }
-module.exports = {main,prepareKaihen,qualifyRelease,verifyRoPackage,guardKaihenTransports};
+module.exports = {main,prepareKaihen,qualifyRelease,verifyRoPackage,
+  qualifyStagedRoReuse,guardKaihenTransports};
 if (require.main === module) main().catch(error => {console.error(error.stack);process.exitCode = 1;});

@@ -15,8 +15,11 @@ CXXFLAGS := $(ARCH) -std=gnu++20 -O2 -Wall -Wextra -Werror \
     -ffunction-sections -fdata-sections -MMD -MP \
     -D__SWITCH__ -D__SWITCH2__ \
     -I$(LIBOUNCE)/include -I$(DEVKITPRO)/libnx/include -I../libkaihen/include -Isource
+# The matched NSO embeds this ELF ID. The default GNU ID changes with the
+# isolated build path even when every loadable segment is identical.
 LDFLAGS := $(ARCH) -specs=$(OUT)/switch.specs -Wl,--gc-sections \
-    -Wl,-Map,$(OUT)/hen.map
+    -Wl,-Map,$(OUT)/hen.map \
+    -Wl,--build-id=0x42c1a27a0a85fa58bed657df168e235d3604b351
 
 all: $(OUT)/main
 

@@ -107,9 +107,11 @@ async function openServiceWithFallback({ s, sm, name }) {
 //attach to run from ns2jb, get handles for it's stuff
 async function attachGame(run) {
   const hosts = require('../../../../tools/host-session.cjs'); let context;
-  if (hosts.inferredId(run) === 'civ7-s8n') {
-    context = hosts.qualifyRun(run, 'civ7-s8n'); hosts.bind(context);
-    require('../../../../tools/host-transport.cjs').install(context);
+  const profileId = hosts.inferredId(run);
+  if (profileId !== hosts.DEFAULT) {
+    context = hosts.qualifyRun(run, profileId); hosts.bind(context);
+    if (context.target !== 'seedsow')
+      require('../../../../tools/host-transport.cjs').install(context);
   }
   const engine = path.join(run, 'switch2');
   const read = (file) => fs.readFile(file, 'utf8').then(JSON.parse);

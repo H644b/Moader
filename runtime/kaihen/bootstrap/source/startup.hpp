@@ -14,6 +14,7 @@ struct BootstrapInput {
     u32 flags;
     u8 storage_id;
     u64 (*pthread_create)(u64*, u64, void*(*)(void*), void*);
+    // Retained ABI slot; the bootstrap does not call it. Hosts may pass null.
     u64 (*pthread_trywait)(u64, u64, u64);
     u64 (*pthread_join)(u64, u64*, u64);
     Handle sm_session;

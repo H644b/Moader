@@ -52,7 +52,7 @@ function fixture(protocol,options={}){
   if(options.shortFrameAt===lastKey)reply=reply.subarray(0,10);
  }
  class Session{
-  constructor(){this.base=0;this.handles=new Set();}
+  constructor(label){this.label=label;this.base=0;this.bytes=0x20000;this.handles=new Set();}
   async initialize(){try{await this.call('allocate');this.base=0x10000;}finally{await this.write(0,Buffer.alloc(8));}}
   async openService(name){assert.equal(name,'ldr:ro');await rpc.call('open-ro');this.handles.add(10);return 10;}
   async write(at,data){await rpc.write();if(data.length===256)outbound=data;}
@@ -61,11 +61,17 @@ function fixture(protocol,options={}){
    return rpc.call(kind);
   }
   async readOwned(){await rpc.read();return reply;}
+  async close(handle){await this.call('close:'+handle);closed.push(handle);this.handles.delete(handle);}
   async cleanup(){events.push('cleanup');for(const handle of [...this.handles].reverse()){
-   await this.call('close:'+handle);closed.push(handle);this.handles.delete(handle);
+   await this.close(handle);
   }await this.call('free');this.base=0;}
  }
- return{Session,rpc,endpoint,transportGuard,events,closed,operation:()=>inspect({Session,packet,argumentsWithPid:()=>Buffer.alloc(8),protocol,transportGuard,run:'/current/switch2-Test'})};
+ const borrowed=options.borrowed?{session:new Session('hen-startup'),handle:10,
+  file:'/current/switch2-Test/switch2/ro/hen-startup.json',sessionId:'seedsow'}:null;
+ if(borrowed){borrowed.session.base=0x10000;borrowed.session.handles.add(10);}
+ return{Session,rpc,endpoint,transportGuard,events,closed,borrowed,
+  operation:()=>inspect({Session,packet,argumentsWithPid:()=>Buffer.alloc(8),protocol,
+   transportGuard,run:'/current/switch2-Test',borrowedRo:borrowed})};
 }
 function stubMain(overrides){
  const file=path.join(root,'tools/inspect-hen.cjs'),loaded=new Module(file,module),original=Module.createRequire(file);
@@ -84,6 +90,25 @@ function stubMain(overrides){
   assert.equal(r.moader.serviceReachable,true);assert.equal(r.moader.resident,true);assert.equal(r.moader.summary.ipv4,'192.0.2.22');
   assert.equal(r.moader.summary.port,7712);assert.equal(r.moader.summary.generation,'9');assert.equal(r.moader.summary.routingGenerationCurrent,true);
   assert.deepEqual(f.closed,[30,20,10]);assert(f.events.includes('send:summary'));
+ });
+ test('held Seedsow inspection reuses its initialized RO context and closes only new handles',async()=>{
+  const f=fixture(p,{borrowed:true}),r=await f.operation();
+  assert.equal(r.complete,true);assert.equal(r.controllerHandlesClosed,true);
+  assert.equal(r.borrowedRoRetained,true);assert.equal(r.moader.serviceReachable,true);
+  assert.deepEqual(f.closed,[30,20]);assert.deepEqual([...f.borrowed.session.handles],[10]);
+  assert(!f.events.includes('allocate')&&!f.events.includes('open-ro')&&
+   !f.events.includes('send:initialize-ro')&&!f.events.includes('cleanup'));
+ });
+ test('held Seedsow inspection refuses a foreign RO lease before any native request',async()=>{
+  const f=fixture(p,{borrowed:true});f.borrowed.handle=99;
+  await assert.rejects(f.operation,/not owned/);assert.deepEqual(f.events,[]);
+ });
+ test('uncertain borrowed RO status retains its original and new handles without cleanup',async()=>{
+  const f=fixture(p,{borrowed:true,failAt:'send:status'});
+  await assert.rejects(f.operation,error=>error.inspection.nativeOperationUncertain&&
+   error.inspection.resourcesRetained);
+  assert.deepEqual(f.closed,[]);assert.deepEqual([...f.borrowed.session.handles],[10,20]);
+  assert(!f.events.includes('cleanup')&&!f.events.includes('send:game'));
  });
  test('missing plugin reports absence without opening a fallback or launching anything',async()=>{
   const f=fixture(p,{names:[]}),r=await f.operation();assert.equal(r.complete,true);assert.equal(r.moader.listed,false);assert.equal(r.moader.serviceReachable,false);

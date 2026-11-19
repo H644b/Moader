@@ -1,26 +1,30 @@
 {
-  "schema": 2,
+  "schema": 3,
   "base_commit": "e897f991524590833b82fbe8d63a3c6775fb8101",
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "eda9d19f8a583b1e64c5042aa95ab079462f566dc5160253634ee3d4e723dcd0",
+  "patch_sha256": "3c3e44a19f89d9f547a4d40417d90cb5ce6eb1032d211cec989539953b6d0604",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "c5edbd505eec77b7a9ea525c5bb639aed9ed9166631f9687bb89024db4ec0dc4",
+  "source_tree_sha256": "2553c4dca89deff98e93209c1c357b539733ae119790143c5fb3613ae774b23b",
   "protocol_version": 7,
-  "hen_sha256": "621b8e4a373b8cef7c84cb07af8889d961f5bceb7b4566e3305c2dd38c021a24",
+  "hen_sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a",
   "components": {
     "hen/main": {
       "bytes": 130965,
-      "sha256": "621b8e4a373b8cef7c84cb07af8889d961f5bceb7b4566e3305c2dd38c021a24"
+      "sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a"
     },
     "bootstrap.bin": {
-      "bytes": 30080,
-      "sha256": "df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801"
+      "bytes": 30016,
+      "sha256": "4f18cb99ac810855de180bc6d4f5ec8d32fc40e9e2512e6cd23a33e2c79c8d57"
+    },
+    "ro/main": {
+      "bytes": 27420,
+      "sha256": "dde71459716d59cae8f13078e67f6172891d7f0c471fb5b11356fa8ea268d4e8"
     }
   },
   "native_build_passed": true,
-  "console_retest_passed": false,
-  "reason": "Source-matched v0.1.2 rebuild with the local pending-launch workaround removed; retained cooperative reload and matching-card integration.",
-  "validation_scope": "v0.1.2: isolated AArch64 HEN/bootstrap/app/resident rebuild from the recorded source snapshot, complete patch replay against the retained upstream base, bounded host regressions and binary/privacy checks. Hardware acceptance is false; this rebuilt component set has not been installed or console-tested. Earlier component results retain their original scope. Official release 20261117.1 was inspected but is not integrated."
+  "console_retest_passed": true,
+  "reason": "The exact matched RO/HEN/bootstrap pair passed one combined Seedsow Lullaby Demo installation with current-boot FS and RO proof, HEN startup and same-owner resident inspection.",
+  "validation_scope": "One Demo boot also opened Moader and kept its paired browser available after app exit. No same-boot replacement-file read trace or new-console-run proof of the corrected final GUI message is claimed."
 }

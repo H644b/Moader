@@ -22,7 +22,7 @@ function encodeSamples(samples,base,object,source,fsBase){
 }
 async function verifySamples(a,b,mount,samples,source){
  if(!samples.length)return;
- const layout=JSON.parse(await fs.readFile(path.join(a.run,'switch2/ro',path.basename(a.run)+'-layout.json')));
+ const layout=JSON.parse(await fs.readFile(path.join(a.run,'switch2/ro',a.live.session+'-layout.json')));
  const converted=await a.domain.send(a.s,'Locate owned verification object',mount.handle,a.domain.wire.control(0));
  check(!converted.result,'Cannot locate routing verification object');
  const id=converted.data.readUInt32LE();check(id>0&&id<=layout.count,'Invalid routing verification domain');

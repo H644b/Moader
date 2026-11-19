@@ -131,6 +131,243 @@ bool hasShape(const HipcParsedRequest& request, u32 copy_handles, u32 send_buffe
            meta.num_recv_buffers == recv_buffers && !meta.num_exch_buffers && !meta.num_recv_statics;
 }
 
+bool hasProbeShape(const HipcParsedRequest& request, bool pid, u32 copies, u32 receives) {
+    const HipcMetadata& meta = request.meta;
+    return meta.type == CmifCommandType_Request && meta.send_pid == pid &&
+           meta.num_copy_handles == copies && !meta.num_move_handles &&
+           !meta.num_send_statics && !meta.num_send_buffers &&
+           meta.num_recv_buffers == receives && !meta.num_exch_buffers &&
+           !meta.num_recv_statics;
+}
+
+void copyMemoryInfo(u64* out, const MemoryInfo& info) {
+    out[0] = info.addr;
+    out[1] = info.size;
+    out[2] = info.type | (static_cast<u64>(info.attr) << 32);
+    out[3] = info.perm | (static_cast<u64>(info.ipc_refcount) << 32);
+    out[4] = info.device_refcount;
+}
+
+Result queryProcess(Handle process, u64 address, MemoryInfo* info) {
+    u32 page = 0;
+    if (process == CUR_PROCESS_HANDLE)
+        return svcQueryMemory(info, &page, address);
+    return svcQueryProcessMemory(info, &page, process, address);
+}
+
+// The process probe reports a free page in both address spaces. Never maps
+// there until a later, separately checked command requests a mapping.
+u64 freeAddress(Handle process, u64 size) {
+    u64 start = 0, extent = 0, alias = 0, alias_size = 0, heap = 0, heap_size = 0;
+    if (R_FAILED(svcGetInfo(&start, InfoType_AslrRegionAddress, process, 0)) ||
+        R_FAILED(svcGetInfo(&extent, InfoType_AslrRegionSize, process, 0)) ||
+        R_FAILED(svcGetInfo(&alias, InfoType_AliasRegionAddress, process, 0)) ||
+        R_FAILED(svcGetInfo(&alias_size, InfoType_AliasRegionSize, process, 0)) ||
+        R_FAILED(svcGetInfo(&heap, InfoType_HeapRegionAddress, process, 0)) ||
+        R_FAILED(svcGetInfo(&heap_size, InfoType_HeapRegionSize, process, 0)) ||
+        !extent || start > UINT64_MAX - extent || alias > UINT64_MAX - alias_size ||
+        heap > UINT64_MAX - heap_size)
+        return 0;
+    const u64 end = start + extent;
+    u64 at = start ? start : PageSize;
+    for (u32 i = 0; i < 256 && at < end && size <= end - at; i++) {
+        MemoryInfo info = {};
+        if (R_FAILED(queryProcess(process, at, &info)) || !info.size ||
+            info.addr > at || info.size > UINT64_MAX - info.addr ||
+            info.addr + info.size <= at)
+            return 0;
+        const u64 next = info.addr + info.size;
+        if (alias_size && at < alias + alias_size && at + size > alias) {
+            at = alias + alias_size;
+            continue;
+        }
+        if (heap_size && at < heap + heap_size && at + size > heap) {
+            at = heap + heap_size;
+            continue;
+        }
+        if (info.type == MemType_Unmapped && size <= next - at)
+            return at;
+        at = next;
+    }
+    return 0;
+}
+
+Result runProbeCommand(u32 command, Handle process, const u64* input, u32 bytes,
+                       u64* out, u32* output_size, void* receive, u64 receive_size) {
+    *output_size = 64;
+    if (bytes < sizeof(RoProcessMemoryRequest) ||
+        (receive_size && command != RoProcessReadCommand))
+        return RoResult_BadRequest;
+    u64 pid = 0, program = 0;
+    const Result pid_rc = svcGetProcessId(&pid, process);
+    const Result program_rc = svcGetInfo(&program, InfoType_ProgramId, process, 0);
+    out[0] = pid;
+    out[1] = program;
+    out[2] = static_cast<u64>(pid_rc) | (static_cast<u64>(program_rc) << 32);
+    if (R_FAILED(pid_rc)) return pid_rc;
+    if (R_FAILED(program_rc)) return program_rc;
+    if (input[0] && input[0] != pid) return RoResult_BadRequest;
+
+    MemoryInfo info = {};
+    const Result queried = queryProcess(process, input[1], &info);
+    out[3] = queried;
+    if (command == 0x524f0010) {
+        copyMemoryInfo(out + 4, info);
+        *output_size = 104;
+        (void)svcGetInfo(&out[9], InfoType_AslrRegionAddress, process, 0);
+        (void)svcGetInfo(&out[10], InfoType_AslrRegionSize, process, 0);
+        out[11] = freeAddress(process, PageSize);
+        out[12] = freeAddress(CUR_PROCESS_HANDLE, PageSize);
+        return queried;
+    }
+    if (!input[0] || R_FAILED(queried))
+        return R_FAILED(queried) ? queried : RoResult_BadRequest;
+
+    if (command == 0x524f0011 || command == RoProcessReadCommand) {
+        const u64 address = input[1], length = input[2];
+        const bool bulk = command == RoProcessReadCommand;
+        const u64 limit = bulk ? MaximumReadSize : 128;
+        if (!length || length > limit || address > UINT64_MAX - length ||
+            address < info.addr || length > info.size || address - info.addr > info.size - length ||
+            (info.type != MemType_CodeStatic && info.type != MemType_CodeMutable) || info.attr ||
+            (bulk && (!receive || length > receive_size)) ||
+            (!bulk && (address & (PageSize - 1)) + length > PageSize))
+            return RoResult_BadRequest;
+        MappedRange range = {};
+        const Result mapped = mapRange(process, address, length, &range);
+        out[4] = mapped;
+        if (R_FAILED(mapped)) return mapped;
+        out[3] = reinterpret_cast<u64>(range.local);
+        void* destination = bulk ? receive : static_cast<void*>(reinterpret_cast<u8*>(out + 7));
+        std::memcpy(destination, range.bytes, length);
+        out[5] = unmapRange(process, range);
+        out[6] = length;
+        *output_size = bulk ? 64 : static_cast<u32>(56 + length);
+        return static_cast<Result>(out[5]);
+    }
+    if (command == 0x524f0012 || command == 0x524f0013) {
+        const u64 source = input[1], destination = input[2], size = input[3];
+        if (((source | destination) & (PageSize - 1)) || size != PageSize)
+            return RoResult_BadRequest;
+        if (command == 0x524f0013)
+            return svcUnmapProcessCodeMemory(process, destination, source, size);
+        if (info.type != MemType_Heap || info.perm != Perm_Rw || info.attr ||
+            source < info.addr || source - info.addr > info.size - size)
+            return RoResult_BadRequest;
+        MemoryInfo target = {};
+        const Result target_rc = queryProcess(process, destination, &target);
+        if (R_FAILED(target_rc) || target.type != MemType_Unmapped ||
+            destination < target.addr || size > target.size || destination - target.addr > target.size - size)
+            return R_FAILED(target_rc) ? target_rc : RoResult_BadRequest;
+        out[3] = svcMapProcessCodeMemory(process, destination, source, size);
+        if (out[3]) return static_cast<Result>(out[3]);
+        out[4] = svcSetProcessMemoryPermission(process, destination, size, Perm_Rx);
+        if (out[4]) out[5] = svcUnmapProcessCodeMemory(process, destination, source, size);
+        return static_cast<Result>(out[4]);
+    }
+    if (command == 0x524f0014) {
+        *output_size = 80;
+        const u64 address = input[1], size = input[2];
+        if (bytes < 64 || size != 16 || (address & 3) ||
+            (address & (PageSize - 1)) + size > PageSize ||
+            !(info.perm & Perm_X) || info.attr || address < info.addr ||
+            size > info.size || address - info.addr > info.size - size)
+            return RoResult_BadRequest;
+        MappedRange range;
+        out[4] = mapRange(process, address, size, &range);
+        if (out[4]) return static_cast<Result>(out[4]);
+        out[9] = reinterpret_cast<u64>(range.local);
+        MemoryInfo alias = {};
+        const Result queried_alias = queryProcess(CUR_PROCESS_HANDLE,
+            reinterpret_cast<u64>(range.local), &alias);
+        out[5] = alias.perm | (static_cast<u64>(alias.attr) << 32);
+        Result rc = queried_alias;
+        if (R_SUCCEEDED(rc) && (alias.perm != Perm_Rw || alias.attr)) rc = RoResult_BadRequest;
+        const u8* expected = reinterpret_cast<const u8*>(input + 4);
+        const u8* replacement = reinterpret_cast<const u8*>(input + 6);
+        if (R_SUCCEEDED(rc)) {
+            out[6] = std::memcmp(range.bytes, expected, size) == 0;
+            if (!out[6]) rc = RoResult_BadRequest;
+        }
+        if (R_SUCCEEDED(rc)) {
+            std::memcpy(range.bytes, replacement, size);
+            armDCacheClean(range.bytes, size);
+            armICacheInvalidate(range.bytes, size);
+            out[7] = std::memcmp(range.bytes, replacement, size) == 0;
+            if (!out[7]) rc = RoResult_BadRequest;
+        }
+        out[8] = unmapRange(process, range);
+        return out[8] ? static_cast<Result>(out[8]) : rc;
+    }
+    if (command == 0x524f0015) {
+        const u64 address = input[1], size = input[2], permission = input[3];
+        if (program != FilesystemProgramId || ((address | size) & (PageSize - 1)) ||
+            !size || size > 0x4000000 ||
+            (info.type != MemType_CodeStatic && info.type != MemType_CodeMutable) || info.attr ||
+            (info.perm != Perm_X && info.perm != Perm_Rx) ||
+            (permission != Perm_X && permission != Perm_Rx) || address < info.addr ||
+            size > info.size || address - info.addr > info.size - size)
+            return RoResult_BadRequest;
+        out[3] = info.perm;
+        out[4] = svcSetProcessMemoryPermission(process, address, size, permission);
+        if (out[4]) return static_cast<Result>(out[4]);
+        MemoryInfo after = {};
+        out[5] = queryProcess(process, address, &after);
+        copyMemoryInfo(out + 6, after);
+        *output_size = 88;
+        return static_cast<Result>(out[5]);
+    }
+    return RoResult_BadRequest;
+}
+
+/// Moader's source-qualified Seedsow proof uses the same private service as
+/// HEN, with a kernel PID descriptor on every diagnostic reply. HEN's older
+/// read/write shape has no incoming PID and keeps its original reply layout.
+bool serveProbe(void* message, const HipcParsedRequest& request) {
+    const CmifInHeader* header = getHeader(message, request, 0);
+    if (!header || header->magic != CMIF_IN_HEADER_MAGIC)
+        return false;
+    const u32 command = header->command_id;
+    if (command == 0x524f0001) {
+        if (!hasProbeShape(request, false, 0, 0) ||
+            !getHeader(message, request, sizeof(u64))) {
+            roWriteDiagnosticReply(message, RoResult_BadRequest, nullptr, 0);
+            return true;
+        }
+        u64 nonce = 0, pid = 0, thread = 0;
+        std::memcpy(&nonce, header + 1, sizeof(nonce));
+        const Result pid_rc = svcGetProcessId(&pid, CUR_PROCESS_HANDLE);
+        const Result thread_rc = svcGetThreadId(&thread, CUR_THREAD_HANDLE);
+        const u64 reply[6] = {0x4558454f5232534eULL, nonce ^ 0x9d7c3a51e6b2048fULL,
+                              pid, thread, svcGetSystemTick(), 0};
+        roWriteDiagnosticReply(message, R_FAILED(pid_rc) ? pid_rc : thread_rc,
+                               reply, sizeof(reply));
+        return true;
+    }
+    if (command < 0x524f0010 || command > RoProcessReadCommand ||
+        (command == RoProcessReadCommand && !request.meta.send_pid))
+        return false;
+    const u32 bytes = command == 0x524f0014 ? 64 : sizeof(RoProcessMemoryRequest);
+    if (!hasProbeShape(request, true, 1, command == RoProcessReadCommand ? 1 : 0) ||
+        !getHeader(message, request, bytes) ||
+        request.data.copy_handles[0] == INVALID_HANDLE) {
+        roWriteDiagnosticReply(message, RoResult_BadRequest, nullptr, 0);
+        return true;
+    }
+    u64 input[8] = {};
+    std::memcpy(input, header + 1, bytes);
+    u64 output[24] = {};
+    u32 size = 64;
+    void* receive = command == RoProcessReadCommand ?
+        hipcGetBufferAddress(&request.data.recv_buffers[0]) : nullptr;
+    const u64 capacity = command == RoProcessReadCommand ?
+        hipcGetBufferSize(&request.data.recv_buffers[0]) : 0;
+    const Result rc = runProbeCommand(command, request.data.copy_handles[0],
+                                      input, bytes, output, &size, receive, capacity);
+    roWriteDiagnosticReply(message, rc, output, size);
+    return true;
+}
+
 /// Answers RoDiagnosticsCommand, if that is the request.
 bool serveDiagnostics(void* message, const HipcParsedRequest& request) {
     const CmifInHeader* header = getHeader(message, request, 0);
@@ -195,6 +432,11 @@ void roFsMemoryDispatch(void* message) {
     const HipcParsedRequest request = hipcParseRequest(message);
     if (serveDiagnostics(message, request))
         return;
+
+    if (serveProbe(message, request)) {
+        closeRequestHandles(request);
+        return;
+    }
 
     const Result rc = runMemoryCommand(message, request);
     closeRequestHandles(request);

@@ -56,6 +56,13 @@ class PublicTreeTests(unittest.TestCase):
         for i, value in enumerate(values): self.put(f'notes/{i}.txt',value)
         self.assertEqual(len(checker.scan(self.root)),len(values))
 
+    def test_generic_macos_temp_prefix_is_public_but_a_concrete_path_is_not(self):
+        self.put('prefix.txt', "const alias = '/var/folders/'")
+        self.assertEqual(checker.scan(self.root), [])
+        self.put('actual.txt', '/private/' + 'var/folders/mz/opaque/T/file')
+        self.assertEqual(checker.scan(self.root),
+                         [{'path': 'actual.txt', 'reason': 'home or temporary user path'}])
+
     def test_pairing_and_session_are_not_exempt_in_generic_files(self):
         self.put('notes.md','pairingCode = "'+'654321'+'"\n'+'switch2-'+'Abc123')
         reasons = {i['reason'] for i in checker.scan(self.root)}

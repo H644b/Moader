@@ -76,10 +76,19 @@ function summary(data,p){
   webRunning:!!(flags&p.webFlag),backendConnected:!!(flags&p.backendFlag),foreground:!!(flags&p.foregroundFlag),
   routingGenerationCurrent:!!(flags&p.backendFlag)&&generation===appliedGeneration};
 }
-async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuard={error:null},run}){
+async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuard={error:null},run,
+  borrowedRo=null}){
  const result={at:new Date().toISOString(),run,complete:false,controllerHandlesClosed:false,resourcesRetained:false,
   plugins:{count:0,names:[],enumerationComplete:false},moader:{listed:false,opened:false,serviceReachable:false,resident:false}};
- const s=guardSession(new Session('moader-hen-inspect'));let error;
+ check(!borrowedRo||borrowedRo.session&&borrowedRo.sessionId==='seedsow'&&
+  borrowedRo.session.label?.startsWith('hen-startup')&&
+  Number.isSafeInteger(borrowedRo.handle)&&borrowedRo.handle>0&&
+  borrowedRo.session.handles?.has(borrowedRo.handle)&&borrowedRo.session.base>0&&
+  typeof borrowedRo.session.close==='function',
+ 'The borrowed HEN RO session is not owned by this completed startup');
+ const s=guardSession(borrowedRo?borrowedRo.session:new Session('moader-hen-inspect'));
+ const heldHandles=borrowedRo?new Set(s.handles):null;
+ let error;
  async function request(label,handle,id,{input=Buffer.alloc(0),options={},bytes=0,copies=0}={}){
   result.stage=label;
   await s.write(s.base,packet(id,input,options));
@@ -97,9 +106,15 @@ async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuar
  }
  function success(reply,label){check(!reply.result,label+' failed: 0x'+reply.result.toString(16));return reply;}
  try{
-  result.stage='initialize inspection session';await s.initialize();
-  const ro=await s.openService('ldr:ro');
-  success(await request('Initialize current process on RO',ro,p.initialize,{input:argumentsWithPid(),options:{pid:true,copies:[0xffff8001]}}),'RO Initialize');
+  let ro;
+  if(borrowedRo){
+   result.stage='use retained HEN RO session';ro=borrowedRo.handle;
+   result.borrowedRo={handle:ro,file:borrowedRo.file,sessionId:borrowedRo.sessionId};
+  }else{
+   result.stage='initialize inspection session';await s.initialize();
+   ro=await s.openService('ldr:ro');
+   success(await request('Initialize current process on RO',ro,p.initialize,{input:argumentsWithPid(),options:{pid:true,copies:[0xffff8001]}}),'RO Initialize');
+  }
   const hen=success(await request('Open HEN session',ro,p.homebrew,{input:Buffer.alloc(8),options:{pid:true},copies:1}),'Open HEN').copies[0];
   const status=success(await request('Read HEN startup',hen,p.status,{bytes:16}),'HEN status').data;
   result.hen={pid:status.readBigUInt64LE().toString(),protocol:status.readUInt32LE(8),result:status.readUInt32LE(12)};
@@ -131,9 +146,25 @@ async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuar
  }
  if(s.uncertainError||transportGuard.error){result.resourcesRetained=true;result.nativeOperationUncertain=true;}
  else try{
-  result.stage='close owned inspection handles';await s.cleanup();
-  check(!s.base&&!s.handles.size,'Inspection cleanup was deferred; inspect owned resources');result.controllerHandlesClosed=true;
- }catch(failure){if(error)result.cleanupError=String(failure.stack||failure);else error=failure;result.failedStage??=result.stage;result.resourcesRetained=true;result.nativeOperationUncertain=!!(s.uncertainError||transportGuard.error||isUncertain(failure));}
+  result.stage='close owned inspection handles';
+  if(borrowedRo){
+   for(const handle of [...s.handles].filter(handle=>!heldHandles.has(handle)).reverse())
+    await s.close(handle);
+   check([...heldHandles].every(handle=>s.handles.has(handle))&&
+    [...s.handles].every(handle=>heldHandles.has(handle)),
+   'Borrowed HEN RO session or inspection handles changed unexpectedly');
+   result.borrowedRoRetained=true;
+  }else{
+   await s.cleanup();
+   check(!s.base&&!s.handles.size,'Inspection cleanup was deferred; inspect owned resources');
+  }
+  result.controllerHandlesClosed=true;
+ }catch(failure){
+  if(isUncertain(failure)){failure.nativeRequestUncertain=true;s.uncertainError=failure;transportGuard.error=failure;}
+  if(error)result.cleanupError=String(failure.stack||failure);else error=failure;
+  result.failedStage??=result.stage;result.resourcesRetained=true;
+  result.nativeOperationUncertain=!!(s.uncertainError||transportGuard.error||isUncertain(failure));
+ }
  if(result.resourcesRetained)result.retainedResources={allocation:s.base,handles:[...s.handles]};
  result.complete=!error;
  if(error){result.error=String(error.stack||error);result.inspectBeforeRetry=true;error.inspection=result;throw error;}
@@ -142,7 +173,10 @@ async function inspect({Session,packet,argumentsWithPid,protocol:p,transportGuar
 async function main(args=process.argv.slice(2)){
  check(args.length===1&&args[0]&&!args[0].startsWith('--'),'Usage: node tools/inspect-hen.cjs CURRENT_RUN_DIRECTORY');
  const protocol=await readProtocol(),run=path.resolve(args[0]);process.env.NS2_RUN_DIR=run;
- const hosts=require('./host-session.cjs'),context=hosts.inferredId(run)==='civ7-s8n'?hosts.qualifyRun(run,'civ7-s8n',root,{retired:true}):null;
+ const hosts=require('./host-session.cjs'),id=hosts.inferredId(run);
+ check(id!=='seedsow-malev0',
+   'Seedsow HEN inspection must run in the live Seedsow listener owner; see moader-hen-inspection.json in its current run');
+ const context=id==='civ7-s8n'?hosts.qualifyRun(run,'civ7-s8n',root,{retired:true}):null;
  const engine=context?.runtimeRoot||path.join(root,'research/sources/ns2jb/engine'),load=name=>context?hosts.load(context,name):require(path.join(engine,name));
  const transportGuard=context?require('./host-transport.cjs').install(context):guardTransports({rpc:load('shared/rpc.cjs'),endpoint:load('switch2/tools/endpoint.cjs')});
  const {Session}=load('switch2/app/session.cjs'),{packet}=load('shared/ipc.cjs'),{argumentsWithPid}=load('switch2/ro/nro.cjs');

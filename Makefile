@@ -39,14 +39,16 @@ build/native/app.o: native/app.cpp native/reload_client.hpp runtime/kaihen/libka
 build/native/service.o: native/service.cpp native/resident_lifecycle.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
 
+# Pin the matched candidate's ELF IDs so isolated source builds reproduce the
+# exact NRO/NSO bytes; GNU's default ID includes location-dependent debug data.
 build/native/Moader.elf: build/native/app.o build/native/ui.o build/native/libmoader.a build/native/switch.specs
-	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections build/native/app.o build/native/ui.o build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=0x7d60431e841e5ef83e61f4138880864012e276bd build/native/app.o build/native/ui.o build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
 
 runtime/kaihen/libkaihen/build/libkaihen_plugin.a: $(wildcard runtime/kaihen/libkaihen/source/*) $(wildcard runtime/kaihen/libkaihen/include/kaihen/*) runtime/kaihen/libkaihen/Makefile
 	$(MAKE) -C runtime/kaihen/libkaihen DEVKITPRO=$(DEVKITPRO) LIBOUNCE=$(DEVKITPRO)/libounce build/libkaihen_plugin.a
 
 build/native/moader-service.elf: build/native/service.o build/native/libmoader.a build/native/switch.specs runtime/kaihen/libkaihen/build/libkaihen_plugin.a
-	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections $< build/native/libmoader.a -Lruntime/kaihen/libkaihen/build -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=0x401b49217ae09105b0341d17ff9221ea3e7f7d70 $< build/native/libmoader.a -Lruntime/kaihen/libkaihen/build -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
 
 build/native/Moader.nacp: Makefile | build/native
 	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader' 'Moader' '0.1.2' $@

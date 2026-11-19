@@ -34,7 +34,7 @@ inline void* launchFromSdkThread(void* argument) {
     // The host owns the borrowed handle. Do not call pmshellExit here.
     request->pid = pid;
     request->result = rc;
-    request->completed = 1;
+    __atomic_store_n(&request->completed, 1u, __ATOMIC_RELEASE);
     return reinterpret_cast<void*>(static_cast<uintptr_t>(rc));
 }
 

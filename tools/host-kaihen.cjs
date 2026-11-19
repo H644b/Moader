@@ -16,6 +16,17 @@ async function buildPackage(imageFile,policyFile,output){
  const data=packageBytes(await fs.readFile(imageFile),await fs.readFile(policyFile));await fs.writeFile(output,data,{flag:'wx',mode:0o600});return{file:output,size:data.length};
 }
 async function launch(context,memory){
+ if(context.profile.id==='seedsow-malev0'){
+  check(context.guard?.error===null&&context.loader?.run===context.run,
+    'Seedsow launch lost its held source owner');host.bind(context);
+  const proof=await host.load(context,'switch2/ro/launch.cjs').main({memory});
+  check(proof?.file?.startsWith(context.run+path.sep)&&proof.session==='seedsow'&&
+    proof.report===memory.reportFile&&proof.imageAccepted&&
+    (proof.restored||proof.restoreSkipped)&&[0,0x10].includes(proof.flags)&&
+    /^\d+$/.test(String(proof.pid)),
+  'Seedsow accepted RO launch proof is incomplete');
+  return proof;
+ }
  check(context.profile.id==='civ7-s8n','Civ7 launch adapter requires its qualified profile');host.bind(context);
  const relative='switch2/ro/launch.cjs',filename=host.safeFile(context.run,relative),source=await fs.readFile(filename,'utf8');
  check(host.sha(Buffer.from(source))===context.profile.runFiles[relative],'Civ7 launch source changed');
@@ -31,6 +42,17 @@ async function launch(context,memory){
  return{...proof,file};
 }
 async function activate(context,launchFile,diagnosticPid,memory){
+ if(context.profile.id==='seedsow-malev0'){
+  check(context.guard?.error===null&&context.loader?.run===context.run,
+    'Seedsow activation lost its held source owner');
+  const execution=host.runJson(context.run,'switch2/ro/current-execution.json');
+  check(execution.verified&&execution.report===memory.reportFile&&
+    execution.pid===String(diagnosticPid)&&execution.session==='seedsow'&&
+    execution.programId==='0400000000000037'&&/^\d+$/.test(String(diagnosticPid))&&
+    BigInt(diagnosticPid)>1n,
+  'Seedsow diagnostic RO identity differs');
+  return host.load(context,'switch2/ro/runtime.cjs').activate(launchFile,memory,diagnosticPid);
+ }
  check(context.profile.id==='civ7-s8n','Civ7 activation adapter requires its qualified profile');
  const launch=host.linkedJson(context.run,launchFile),execution=host.runJson(context.run,'switch2/ro/current-execution.json');
  check(execution.verified&&execution.pid===String(diagnosticPid)&&execution.session===path.basename(context.run)&&execution.report===memory.reportFile,'The diagnostic RO identity differs from the selected run');
@@ -69,6 +91,27 @@ function validateBootstrapImage(image,text,address){
  check(image.subarray(0x80,0x80+text.length).equals(text)&&image.subarray(0x80+text.length,0x80+offset).every(byte=>byte===0)&&image.subarray(0x80+offset,0x80+offset+24).equals(adapter),'Civ7 bootstrap prefix, alignment or tagged try-wait adapter differs');return offset;
 }
 async function startHen(context,image,bootstrap,game,programs){
+ if(context.profile.id==='seedsow-malev0'){
+  check(context.guard?.error===null&&context.loader?.run===context.run&&
+    process.env.NS2_HEN_RETIRE==='0'&&process.env.NS2_HEN_KEEP_MAPPED==='1'&&
+    process.env.NS2_HEN_HOST_PACKAGE==='0',
+  'Seedsow HEN start requires the held source and nonretiring stock package mode');
+  const build=await require('./install-inputs.cjs').qualifyKaihenBuild(context.root);
+  const text=await fs.readFile(bootstrap),hen=await fs.readFile(image);
+  check(require('./install-inputs.cjs').digest(text)===build.components['bootstrap.bin'].sha256&&
+    require('./install-inputs.cjs').digest(hen)===build.components['hen/main'].sha256,
+  'Seedsow HEN/bootstrap pair differs from the matched native build proof');
+  const {live}=host.load(context,'switch2/app/session.cjs');
+  const thread=host.load(context,'switch2/app/worker.cjs').code;
+  const frontend=host.load(context,'switch2/ro/nro.cjs'),original=frontend.main;
+  frontend.main=async options=>{
+    check(options.label==='hen-startup','Unexpected Seedsow frontend bootstrap operation');
+    validateBootstrapImage(options.image,text,live.sdk+thread.tryWait.offset);
+    return original(options);
+  };
+  try{return await host.load(context,'switch2/ro/start-hen.cjs').main(image,bootstrap,game,programs);}
+  finally{frontend.main=original;}
+ }
  const table=host.runJson(context.run,'switch2/app/thread-code.json');
  check(table.pthreadHandle?.form==='tagged'&&table.pthreadHandle.tagMask===7&&table.pthreadHandle.join==='tagged'&&table.pthreadHandle.tryWait==='untagged','Civ7 pthread lifecycle profile differs');
  const {live}=host.load(context,'switch2/app/session.cjs'),frontend=host.load(context,'switch2/ro/nro.cjs'),original=frontend.main,text=await fs.readFile(bootstrap);

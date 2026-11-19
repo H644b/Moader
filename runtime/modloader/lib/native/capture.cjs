@@ -6,7 +6,7 @@ const {check}=require('../common.cjs'),{runtime}=require('./artifacts.cjs');
 async function objectForMount(a,b,mount){
  const clone=a.domain.oneHandle(await a.domain.send(a.s,'Clone owned capture mount',mount.handle,a.domain.wire.control(2)));
  try{
-  const layout=JSON.parse(await fs.readFile(path.join(a.run,'switch2/ro',path.basename(a.run)+'-layout.json'))),reply=await a.domain.send(a.s,'Locate owned capture mount',clone,a.domain.wire.control(0));
+  const layout=JSON.parse(await fs.readFile(path.join(a.run,'switch2/ro',a.live.session+'-layout.json'))),reply=await a.domain.send(a.s,'Locate owned capture mount',clone,a.domain.wire.control(0));
   check(!reply.result,'Cannot locate native capture object');const id=reply.data.readUInt32LE();check(id>0&&id<=layout.count,'Invalid native capture domain');
   const row=await b.m.read(layout.table+(id-1)*0x30,0x30),object=row.readBigUInt64LE(32);check(object>=0x100000000n&&object<0x8000000000n,'Invalid native capture object');
   const vptr=(await b.m.read(Number(object),8)).readBigUInt64LE(),release=(await b.m.read(Number(vptr)+8,8)).readBigUInt64LE();

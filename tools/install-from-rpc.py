@@ -6,7 +6,7 @@ import argparse, os, pathlib, re, shlex, shutil, subprocess, sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PREFIX = 'Prepared read-only local Moader snapshot: '
 SUFFIX = '. No console connection opened.'
-HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n')
+HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n', 'seedsow-malev0')
 
 
 def require(ok, message):
@@ -98,7 +98,8 @@ def prepare(root, node, run, host_profile='smilebasic-kurumuz'):
     require(re.fullmatch(r'v24\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?', version), 'Node.js 24 is required; select it with --node for ns2jb, or use the exact Node 24 path from the mac2jb status command')
     # No pasted script is executed. Both tools below are the local Moader copies.
     profile_args = ['--host-profile', host_profile] if host_profile != HOST_PROFILES[0] else []
-    subprocess.run([sys.executable, str(root / 'tools/setup-backend.py'), '--root', str(root), '--node', node, *profile_args], cwd=root, check=True)
+    offline_args = ['--offline'] if host_profile == 'seedsow-malev0' else []
+    subprocess.run([sys.executable, str(root / 'tools/setup-backend.py'), '--root', str(root), '--node', node, *profile_args, *offline_args], cwd=root, check=True)
     try:
         output = subprocess.run([node, str(root / 'tools/install-moader.cjs'), *profile_args, '--check'], cwd=root, check=True, capture_output=True, text=True).stdout
     except subprocess.CalledProcessError as error:
@@ -113,16 +114,16 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     route = parser.add_mutually_exclusive_group(required=True)
     route.add_argument('--status-command', help='the full quoted mac2jb status command (not just its run path)')
-    route.add_argument('--run-dir', help='an existing held ns2jb run folder; absolute or relative POSIX path')
-    parser.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned host family; civ7-s8n requires --run-dir and remains hardware untested')
+    route.add_argument('--run-dir', help='an existing switch2-* held-run folder; absolute or relative POSIX path; Seedsow requires a new Moader-owned run')
+    parser.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned host family; nondefault profiles require --run-dir; Seedsow is local development only')
     parser.add_argument('--node', help='Node.js 24 command or executable path (default: node); --run-dir route only')
-    parser.add_argument('--prepare', action='store_true', help='fetch pinned missing source, validate local kit, create a local snapshot and print installation command')
+    parser.add_argument('--prepare', action='store_true', help='prepare pinned local inputs and print installation command; Seedsow requires inputs provisioned offline')
     parser.add_argument('--root', type=pathlib.Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     require(sys.platform != 'win32', 'Native Windows is unsupported; run this helper in Linux/WSL or macOS with Node.js 24')
     if args.status_command is not None:
         if args.host_profile != HOST_PROFILES[0]:
-            parser.error('Civ7 requires --run-dir from the pinned s8n FS-only runner; mac2jb CivSwitch sessions are a different unqualified profile')
+            parser.error(args.host_profile + ' requires an explicit --run-dir for that profile; mac2jb status commands identify only the default profile and do not qualify other held sessions')
         if args.node is not None:
             parser.error('--node may only be used with --run-dir; the mac2jb status command supplies its exact Node executable')
         node, run = parse_status(args.status_command)

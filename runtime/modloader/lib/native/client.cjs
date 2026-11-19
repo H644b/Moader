@@ -7,9 +7,11 @@ const {guardSession,isUncertain}=require('../game-files/uncertain.cjs');
 // helper. Keep one owned IPC buffer instead of creating a thread per command.
 async function openClient(run){
  const hosts=require('../../../../tools/host-session.cjs');let context;
- if(hosts.inferredId(run)==='civ7-s8n'){
-  context=hosts.qualifyRun(run,'civ7-s8n');hosts.bind(context);
-  require('../../../../tools/host-transport.cjs').install(context);
+ const profileId=hosts.inferredId(run);
+ if(profileId!==hosts.DEFAULT){
+  context=hosts.qualifyRun(run,profileId);
+  hosts.bind(context);
+  if(context.target!=='seedsow')require('../../../../tools/host-transport.cjs').install(context);
  }
  const load=relative=>context?hosts.load(context,relative):require(path.join(run,relative));
  const {Client}=load('switch2/process/client.cjs');

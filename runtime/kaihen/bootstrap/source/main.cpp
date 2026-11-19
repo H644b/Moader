@@ -3,6 +3,7 @@
 #include "../../common/domain_mount.hpp"
 #include "../../common/loader_gate.hpp"
 #include "pm_launch.hpp"
+#include "launch_mount.hpp"
 #include "../../common/package.hpp"
 #include "policies.hpp"
 #include "../../common/control.h"
@@ -84,65 +85,6 @@ static Result _launchOpenProcessReader(LaunchState* args) {
     );
 }
 
-static void _launchExchangeMount(LaunchState* args, BootstrapGate& gate,
-                                 BootstrapMount& mount, ounce::CompilerTlsScope& tls) {
-    for (u32 step = 0; step < 30000 && !args->exchanged; step++) {
-        bool ready = false;
-        args->result = gate.pending(ready);
-        if (R_FAILED(args->result)) {
-            break;
-        }
-        if (!ready) {
-            tls.suspend();
-            u64 finished = args->input.pthread_trywait(args->thread, 0, 0);
-            tls.resume();
-            // PM can return the new PID before Loader opens its CodeFS.
-            // Keep watching the parked gate after a successful PM reply.
-            if (finished == 1 && R_FAILED(args->pm.result)) {
-                break;
-            }
-            svcSleepThread(1000000);
-            continue;
-        }
-        ounce::DomainEntry before[ounce::MaxDomainEntries], after[ounce::MaxDomainEntries], added;
-        u32 before_count = 0, after_count = 0;
-        args->mark(BootstrapOperation_Mount);
-        args->result = mount.snapshot(before, before_count);
-        if (R_FAILED(args->result)) {
-            break;
-        }
-        alignas(16) u8 request[ounce::LoaderRequestSize];
-        args->result = gate.step(request);
-        if (R_FAILED(args->result)) {
-            break;
-        }
-        args->result = mount.snapshot(after, after_count);
-        if (R_FAILED(args->result)) {
-            break;
-        }
-        bool target = false;
-        args->result = mount.inspectRequest(request, target);
-        if (R_FAILED(args->result)) {
-            break;
-        }
-        if (target) {
-            args->mounts++;
-            args->result = mount.added(
-                before, before_count, after, after_count, added);
-            if (R_FAILED(args->result)) {
-                break;
-            }
-            if (args->mounts == 2) {
-                args->mark(BootstrapOperation_Exchange);
-                args->result = mount.exchange(added);
-                if (R_SUCCEEDED(args->result)) {
-                    args->exchanged = true;
-                }
-                break;
-            }
-        }
-    }
-}
 
 static void _launchRequest(LaunchState* args, BootstrapGate& gate,
                            BootstrapMount& mount, ounce::CompilerTlsScope& tls) {
@@ -162,7 +104,7 @@ static void _launchRequest(LaunchState* args, BootstrapGate& gate,
         return;
     }
 
-    _launchExchangeMount(args, gate, mount, tls);
+    ounce::exchangeLaunchMount(args, gate, mount);
 }
 
 static void _launchRestoreAndJoin(LaunchState* args, BootstrapGate& gate,
@@ -433,7 +375,7 @@ static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
     if (args->report) {
         args->report->process_id = 0;
     }
-    args->pm.completed = 0;
+    __atomic_store_n(&args->pm.completed, 0u, __ATOMIC_RELAXED);
     args->thread = 0;
     args->mounts = 0;
     args->exchanged = false;
@@ -482,7 +424,8 @@ static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
         args->result = args->pm.result;
         return;
     }
-    if (!args->exchanged || !args->pm.completed) {
+    if (!args->exchanged ||
+        !__atomic_load_n(&args->pm.completed, __ATOMIC_ACQUIRE)) {
         package.close();
         args->mark(failed_stage);
         args->result = MAKERESULT(Module_Libnx, LibnxError_BadInput);

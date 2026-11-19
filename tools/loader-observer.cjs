@@ -28,11 +28,14 @@ async function openObserver({run, memory, execution, state, record, save}, deps 
   const uncertain = () => !!state.error || !!client?.pending;
   const block = error => {
     error.nativeRequestUncertain = true;
-    state.error ||= error;
+    // Seedsow's shared transport exposes a getter-only error and a
+    // non-resettable fail() latch. Keep the first cause if another lane has
+    // already stopped; Civ7's plain writable state remains supported.
+    const cause = typeof state.fail === 'function' ? state.fail(error) : (state.error ||= error);
     record.resourcesRetained = true;
     record.unresolved = true;
-    record.error = String(error.stack || error);
-    return state.error;
+    record.error = String(cause.stack || cause);
+    return cause;
   };
   try {
     const open = deps.openClient || require('../runtime/modloader/lib/native/client.cjs').openClient;
