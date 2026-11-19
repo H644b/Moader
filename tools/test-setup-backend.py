@@ -24,6 +24,41 @@ def zip_bytes(files):
 
 
 class DevkitHostTests(unittest.TestCase):
+    def test_toolchain_vars_403_uses_only_exact_digest_mirror(self):
+        payload = b'pinned helper fixture'
+        expected = hashlib.sha256(payload).hexdigest()
+        calls = []
+        def open_fixture(request, timeout):
+            self.assertEqual(timeout, 90)
+            calls.append(request.full_url)
+            if len(calls) == 1:
+                raise devkit.urllib.error.HTTPError(request.full_url, 403, 'blocked', None, io.BytesIO())
+            return io.BytesIO(payload)
+        with tempfile.TemporaryDirectory() as directory:
+            target = pathlib.Path(directory) / 'helper.pkg.tar.zst'
+            with patch.object(devkit, 'TOOLCHAIN_VARS_SHA256', expected), \
+                 patch.object(devkit.urllib.request, 'urlopen', side_effect=open_fixture):
+                self.assertEqual(devkit.verified_download(target, devkit.TOOLCHAIN_VARS_OFFICIAL,
+                                                          expected, 'test-agent'), target)
+            self.assertEqual(target.read_bytes(), payload)
+        self.assertEqual(calls, [devkit.TOOLCHAIN_VARS_OFFICIAL, devkit.TOOLCHAIN_VARS_MIRROR])
+
+    def test_toolchain_vars_mirror_keeps_checksum_gate(self):
+        calls = []
+        def open_fixture(request, timeout):
+            calls.append(request.full_url)
+            if len(calls) == 1:
+                raise devkit.urllib.error.HTTPError(request.full_url, 403, 'blocked', None, io.BytesIO())
+            return io.BytesIO(b'changed mirror bytes')
+        with tempfile.TemporaryDirectory() as directory:
+            target = pathlib.Path(directory) / 'helper.pkg.tar.zst'
+            with patch.object(devkit.urllib.request, 'urlopen', side_effect=open_fixture):
+                with self.assertRaisesRegex(ValueError, 'checksum differs'):
+                    devkit.verified_download(target, devkit.TOOLCHAIN_VARS_OFFICIAL,
+                                            devkit.TOOLCHAIN_VARS_SHA256, 'test-agent')
+            self.assertFalse(target.exists())
+        self.assertEqual(calls, [devkit.TOOLCHAIN_VARS_OFFICIAL, devkit.TOOLCHAIN_VARS_MIRROR])
+
     def test_package_extracts_sdk_subtree_once(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)

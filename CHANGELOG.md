@@ -4,6 +4,7 @@
 
 - Request one BSD operation session for the resident instead of the pinned SDK default of three. Keep its monitor session, web listener, NIFM and UDP instance lock. This lowers the resident's planned BSD session count from four to two without changing the app or filesystem protocol.
 - Rebuild the complete app, resident and backend ZIPs with the same matched RO/HEN/bootstrap and full kaiHEN program set. The exact resident was reloaded on a Seedsow Demo boot where Minecraft for Switch 2 had previously crashed with v0.2.0; Minecraft then entered a world and stayed running while the resident served HTTP. Splatoon 3 and a fresh v0.2.5 kit installation remain to be tested. [Release notes](docs/releases/v0.2.5.md).
+- Keep the Linux/WSL source build available when devkitPro's official `dkp-toolchain-vars` package endpoint returns HTTP 403 by allowing one alternate host for the exact checksum-pinned helper package.
 
 ## v0.2.0 — game carousel and community Store foundation
 

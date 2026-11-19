@@ -8,6 +8,7 @@ import pathlib
 import platform
 import subprocess
 import tempfile
+import urllib.error
 import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -17,6 +18,9 @@ NAMES = ['devkitA64', 'devkita64-binutils', 'devkita64-gcc', 'devkita64-newlib',
          'devkita64-rules', 'switch-tools', 'general-tools', 'dkp-toolchain-vars', 'switch-zlib', 'switch-curl']
 OUNCE_URL = 'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261114/ounce-devkit-20261114.tar.xz'
 OUNCE_SHA256 = 'f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59'
+TOOLCHAIN_VARS_OFFICIAL = 'https://pkg.devkitpro.org/packages/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst'
+TOOLCHAIN_VARS_SHA256 = 'e6e26af3147061090572b61c576114ee9a45d5ed8c77c7d93cc5f5559198c288'
+TOOLCHAIN_VARS_MIRROR = 'https://wii.leseratte10.de/devkitPro/other-stuff/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst'
 
 def host():
     system, machine = platform.system(), platform.machine().lower()
@@ -42,7 +46,19 @@ def verified_download(file, url, expected, user_agent):
             req = urllib.request.Request(url, headers={'User-Agent': user_agent})
             with tempfile.NamedTemporaryFile(dir=file.parent, prefix=file.name + '.', delete=False) as out:
                 temporary = pathlib.Path(out.name)
-                with urllib.request.urlopen(req, timeout=90) as response:
+                try:
+                    response = urllib.request.urlopen(req, timeout=90)
+                except urllib.error.HTTPError as error:
+                    # The official endpoint currently returns 403 for this
+                    # one architecture-independent helper. Only its exact
+                    # reviewed URL and digest can use the alternate host.
+                    if error.code != 403 or (url, expected) != (TOOLCHAIN_VARS_OFFICIAL, TOOLCHAIN_VARS_SHA256):
+                        raise
+                    error.close()
+                    alternate = urllib.request.Request(TOOLCHAIN_VARS_MIRROR,
+                                                       headers={'User-Agent': user_agent})
+                    response = urllib.request.urlopen(alternate, timeout=90)
+                with response:
                     while chunk := response.read(1024 * 1024):
                         out.write(chunk)
             if hashlib.sha256(temporary.read_bytes()).hexdigest() != expected:
