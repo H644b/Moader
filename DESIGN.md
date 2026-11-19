@@ -1,6 +1,6 @@
 # Interface design
 
-Moader is a workbench for managing mods while keeping their requested settings separate from what the runtime has actually accepted.
+Moader shows both the requested mod setting and the filesystem runtime’s apply state.
 
 ## Layout
 
@@ -25,7 +25,7 @@ Use concrete descriptions of the observed state:
 | Error | A specific operation failed; preserve its result and diagnostic context. |
 | Disconnected | Current service state is unavailable. Label retained values as historical rather than displaying a green current-state claim. |
 
-Do not replace evidence with an optimistic success toast. A library write, a runtime receipt and a visible game change are separate observations.
+Label each result for what it confirms. Saving a request, accepting file routing and seeing a change in a game are three separate events.
 
 ## Visual language
 

@@ -5,6 +5,7 @@ const project=path.resolve(__dirname,'..'),sha=bytes=>crypto.createHash('sha256'
 const check=(value,text)=>{if(!value)throw Error(text);};
 const inputs=require('./install-inputs.cjs');
 const hosts=require('./host-session.cjs');
+const usage='Usage: node tools/install-moader.cjs [--host-profile PROFILE] (--check | RUN_DIRECTORY | --prepared MANIFEST RUN_DIRECTORY)';
 async function qualifyPrepared(prepared){
  hosts.qualifySources(hosts.preparedProfile(prepared.hostProfile));
  const native=require('../runtime/modloader/lib/native/artifacts.cjs').artifacts();
@@ -35,13 +36,20 @@ async function prepare(profileId=hosts.DEFAULT){
  await fs.rename(latest,path.join(output,'manifest.json'));return manifest;
 }
 async function main(args=process.argv.slice(2)){
+ if(args.length===1&&args[0]==='--help'){
+  console.log(usage);
+  console.log('--check prepares installer files on this computer.');
+  console.log('For setup instructions, open docs/INSTALLATION.md.');
+  return;
+ }
  args=[...args];let selected;
  const at=args.indexOf('--host-profile');
  if(at>=0){check(at+1<args.length&&args.indexOf('--host-profile',at+1)<0,'Provide one host profile');selected=args[at+1];hosts.resolveProfile(selected);args.splice(at,2);}
  const fromSnapshot=args[0]==='--prepared';
- check(fromSnapshot?args.length===3:args.length===1,'Usage: node tools/install-moader.cjs --check | FRESH_RUN_DIRECTORY | --prepared MANIFEST FRESH_RUN_DIRECTORY');
+ check(fromSnapshot?args.length===3:args.length===1,usage);
  const prepared=fromSnapshot?await qualifyPrepared(JSON.parse(await fs.readFile(path.resolve(args[1]),'utf8'))):await prepare(selected);
  const profile=hosts.preparedProfile(prepared.hostProfile);check(!selected||selected===profile.id,'Prepared snapshot host profile differs from --host-profile');
+ // install-from-rpc.py reads this line to locate the prepared manifest.
  if(args[0]==='--check'){console.log('Prepared read-only local Moader snapshot: '+prepared.manifestFile+'. No console connection opened.');return;}
  const run=path.resolve(fromSnapshot?args[2]:args[0]),session=path.basename(run);
  check((profile.id==='seedsow-malev0'?/^switch-[A-Za-z0-9]+$/:/^switch2-[A-Za-z0-9]+$/).test(session),'Invalid run directory');
@@ -56,6 +64,8 @@ async function main(args=process.argv.slice(2)){
  try{
   await fs.writeFile(shared,JSON.stringify({session,owner:'Moader',journal:file,status:'preparing'})+'\n',{flag:'wx',mode:0o600});
   await inputs.validatePrepared(prepared);
+  const entryApp={civ7:'Civilization VII',seedsow:'Seedsow Lullaby Demo',smilebasic:'SmileBASIC'}[profile.target];
+  console.log('Keep '+entryApp+' and its session host open while Moader sets up the backend.');
   record.status='installing-filesystem';await save();
   record.runtime=await require('./install-runtime.cjs').install(run,path.join(project,'state',session),prepared,host);
   record.status='starting-kaihen';await save();
@@ -68,8 +78,19 @@ async function main(args=process.argv.slice(2)){
    child.once('error',reject);child.once('exit',(code,signal)=>code===0?resolve():reject(Error('kaiHEN installation stopped: '+(signal||code))));
   });
   record.status='awaiting-device-tests';record.complete=true;record.finished=new Date().toISOString();await save();
-  console.log('Moader runtime and HEN installed. Keep the '+({civ7:'Civilization VII',seedsow:'Seedsow Lullaby Demo',smilebasic:'SmileBASIC'}[profile.target])+' session open for the status check. Hardware acceptance tests remain.');
+  if(profile.target==='seedsow'){
+   console.log('Backend installed. Keep Seedsow Lullaby Demo open while the installer checks the running service.');
+  }else if(profile.target==='civ7'){
+   console.log('Moader setup complete. The CivSwitch handoff to hbmenu still needs a console test.');
+  }else{
+   console.log('Moader setup complete. When the terminal prompt returns, press HOME and close SmileBASIC.');
+   console.log('Open Moader from hbmenu and check the runtime connection in Settings > Advanced.');
+  }
  }catch(error){record.status='stopped';record.error=String(error.stack||error);record.inspectBeforeRetry=true;await save();throw error;}
 }
 module.exports={prepare,qualifyPrepared,main};
-if(require.main===module)main().catch(error=>{console.error(error.stack);console.error('Stopped without acquisition or automatic retry. Inspect the installation journal before further native work.');process.exitCode=1;});
+if(require.main===module)main().catch(error=>{
+ console.error(error.stack);
+ console.error('Setup stopped. Keep the error and any moader-install.json report. Follow the recovery guide before trying again.');
+ process.exitCode=1;
+});

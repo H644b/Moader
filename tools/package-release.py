@@ -163,21 +163,29 @@ def main():
         host[prefix + 'vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
     host[prefix + 'dist/Moader.nro'] = (app, 0o100644)
     host[prefix + 'dist/moader.nso'] = (service, 0o100644)
-    host[prefix + 'START_HERE.txt'] = ((
-        'Moader backend setup kit ' + tag + '\n\n'
-        'Start with README.md and docs/INSTALLATION.md in this folder.\n'
-        'Keep this folder on your computer; do not copy the whole kit to the SD.\n'
-        'For ordinary SD installation, use the separate Moader app ZIP.\n\n'
-        'The kit includes the matched Moader app/service and pinned patched HEN.\n'
-        + ('The patched bootstrap is included as the required matched HEN pair.\n' if bootstrap is not None else '') +
-        'See docs/VALIDATION.md for host checks and console-test coverage.\n'
-        'Preparation fetches pinned official HEN components and upstream host source.\n'
-        'It needs Node 24, Python 3.10+ and internet access, not a compiler/SDK.\n'
-        'For SmileBASIC, use kurumuz ns2jb on Linux/WSL, or ns2jb/mac2jb on macOS.\n'
-        'The experimental CivSwitch profile is documented separately in docs/CIV7.md.\n'
-        'It never acquires FS. Follow the guide with a fresh verified held FS session.\n\n'
-        'Corresponding source: https://github.com/' + spec['repository'] + '/tree/' + tag + '\n'
-    ).encode(), 0o100644)
+    start_here = f'''Moader backend kit {tag}
+
+Use this kit to set up the backend for the current Switch boot. Start by
+opening docs/INSTALLATION.md and choosing a method:
+
+- SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
+- SmileBASIC with direct ns2jb: macOS, Linux or WSL2 and native Node 24.
+- CivSwitch: experimental. See docs/CIV7.md for the required profile.
+
+The kit includes the Moader app, resident service and matching backend
+binaries. Install Python 3.10 or newer. The first preparation downloads
+pinned dependencies, so have internet access. Setup uses prebuilt files.
+
+Run preparation from this outer folder (the one containing tools/).
+Preparation checks files on your computer and prints the command that
+installs on the Switch. Follow the completion steps for your method in
+docs/INSTALLATION.md or docs/CIV7.md.
+
+Mod layout and controls: docs/USAGE.md
+Test results: docs/VALIDATION.md
+Corresponding source: https://github.com/{spec['repository']}/tree/{tag}
+'''
+    host[prefix + 'START_HERE.txt'] = (start_here.encode(), 0o100644)
     write_zip(output / names[1], host, timestamp)
     (output / 'Moader.nro').write_bytes(app)
     (output / 'moader.nso').write_bytes(service)

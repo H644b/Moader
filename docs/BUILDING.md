@@ -1,37 +1,10 @@
 # Building and preparing the backend
 
-The published **v0.1.2 release** retains protocol-7 service reload, corrected cartridge checks and the checked host installer, with the qualified official `20261114c` base at `e897f991524590833b82fbe8d63a3c6775fb8101`. The repository also has a separately matched Seedsow RO/HEN/bootstrap build. Its clean source build and bounded console installation are recorded in [Validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow); the v0.1.2 release's original binaries and validation scope remain in its [release notes](releases/v0.1.2.md).
-
-The precompiled kit supplies the matching binaries, corresponding source and portable native runtime assets. Preparation downloads required pinned upstream inputs; no compiler or SDK is needed for this host workflow. Source SDK rebuilds support [Apple Silicon macOS and Linux x86_64](#build-from-a-clean-source-checkout).
-
-Unzip the kit, read `START_HERE.txt`, and enter the outer folder containing `tools/`. Install Python 3.10+. Either acquisition route needs its exact Node **24** for preparation and installation; host-only setup checks accept Node 22+.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or following the [Seedsow Demo guide](SEEDSOW.md). The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
-The two SmileBASIC routes below require a fresh, verified held FS session for this boot. Leave SmileBASIC and its acquisition host open. Preparation does not acquire a new session. For the experimental Civilization VII entrypoint, use the separate [CivSwitch workflow](CIV7.md), including its explicit `--host-profile civ7-s8n` selection and exact source requirements.
-
-**Direct ns2jb on Linux/WSL or macOS:** follow [Route A](INSTALLATION.md#route-a-linuxwsl-or-macos-with-ns2jb), including its pinned upstream checkout and `node run.cjs --rpc YOUR_PC_LAN_IPV4`. In a second terminal inside the extracted Moader kit, use the newly printed actual run folder and the same native POSIX Node 24:
-
-```sh
-python3 tools/install-from-rpc.py --prepare \
-  --run-dir "/path/to/ns2jb/runs/<actual-run>" \
-  --node "$(command -v node)"
-```
-
-Git is only needed to obtain the acquisition checkout. On WSL, both terminals must use Linux Node in the same distro; complete [LAN networking preparation](INSTALLATION.md#wsl2-networking-before-acquisition) first. No new Linux/WSL device validation is claimed by this documentation.
-
-**mac2jb on macOS:** follow [Route B](INSTALLATION.md#route-b-macos-with-mac2jb). Copy its complete four-token status command, including its bundled Node 24, `rpc.cjs`, run folder and `status`. In macOS's default zsh:
-
-```sh
-read -r "MOADER_STATUS_COMMAND?Paste the full mac2jb status command: "
-python3 tools/install-from-rpc.py --prepare --status-command "$MOADER_STATUS_COMMAND"
-```
-
-In bash, use `read -r -p 'Paste the full mac2jb status command: ' MOADER_STATUS_COMMAND` for the first line. Do not combine `--status-command` with `--run-dir` or `--node`; the status command supplies mac2jb's exact executable.
-
-Preparation downloads the checksum-pinned official kaiHEN archive and pinned ns2jb source directly from upstream if missing. It verifies the engine tree, fills the required kaiHEN components while retaining the exact patched HEN/bootstrap pair, checks the kit, and creates a unique local installer snapshot. It creates an empty `vendor/kaihen-mo/programs` directory and does not extract OunceShell or other optional programs. Neither route executes an acquisition/status script. Preparation opens no console connection and prints an installation command that uses the selected Node executable and unique `--prepared` manifest. Review it, then run that exact command once for privileged installation while the original held session stays open. Do not run `hen.cjs` first; the combined installer owns HEN bootstrap. Follow [INSTALLATION.md](INSTALLATION.md) for the device workflow and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if anything stops.
-
-The ns2jb engine is fetched into `research/sources/ns2jb/engine` on the user's machine. It is omitted from the public repository and kit because an explicit upstream redistribution license has not been identified. Moader does not copy ns2jb/mac2jb runs, credentials or captured device state into the kit.
+The [setup guide](INSTALLATION.md#start-the-backend-for-this-boot) has the commands for each method. Preparation downloads and checks the required upstream inputs on your computer, then creates a unique installer snapshot. The printed install command is the step that contacts the Switch.
 
 To validate already prepared inputs without downloading, compiling or creating an installer snapshot:
 
@@ -49,7 +22,7 @@ The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, includin
 
 The [Seedsow source workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
 
-From a clean checkout of the release source:
+For v0.1.2, use an Apple Silicon Mac and a clean checkout of the [v0.1.2 tag](https://github.com/H644b/Moader/tree/v0.1.2). The current branch uses the Seedsow source proof instead. Follow the [Seedsow build steps](SEEDSOW.md#build-and-check-the-matched-inputs) on current source.
 
 ```sh
 python3 tools/setup-devkit.py
@@ -74,7 +47,7 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Selected Civ7 source tree SHA-256 | `d83cadc568b65a724f32b848f1681540487a798b354ac3286f71e41e94a9ac75` |
 | Official kaiHEN release | `20261114c` |
 | Official kaiHEN ZIP SHA-256 | `63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967` |
-| Patched HEN SHA-256 | `edaef968962a884514d81df8316d8fe225327c2b30e00211806afeb0ef989d86` |
+| Patched HEN SHA-256 | `621b8e4a373b8cef7c84cb07af8889d961f5bceb7b4566e3305c2dd38c021a24` |
 | Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
@@ -84,7 +57,7 @@ Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/ar
 
 The experimental Civ7 profile fetches the [pinned s8n archive](https://github.com/s8n/civ7-fs-kaihen/archive/51a804cbce09216e1a42e65929644fd436b4c8bf.tar.gz) instead of the kurumuz engine. Its 120 selected files total 720,866 bytes and include `engine/`, `targets/civ7/` and `bridge/civ_bridge.js`. [config/civ7-provider.json](../config/civ7-provider.json) records each source file and its materialized run counterpart. Its tree digest uses the same format. Source identity and host checks do not establish a Civ7 console installation.
 
-For offline preparation, transfer these exact upstream inputs yourself and pass `--offline --engine-archive PATH --kaihen-archive PATH`. A source checkout additionally needs `--build` with its installed SDK, or `--hen-binary PATH` plus `--programs-archive PATH --programs-sha256 SHA256`. The programs ZIP must contain `switch/Moader.nro` and `kaihen/plugins/moader.nso`. The minimal host kit already supplies the patched HEN and Moader binaries; provide both upstream archives for its first offline preparation.
+For offline preparation, transfer these exact upstream inputs yourself and pass `--offline --engine-archive PATH --kaihen-archive PATH`. A matching release checkout also needs a source build or the exact pinned HEN, bootstrap and app/resident inputs. The programs ZIP must contain `switch/Moader.nro` and `kaihen/plugins/moader.nso`. The minimal host kit already supplies the patched HEN and Moader binaries; provide both upstream archives for its first offline preparation.
 
 ## Host tests and runtime assets
 
@@ -111,6 +84,6 @@ python3 tools/test-setup-backend.py
 node tools/test-installers.cjs
 ```
 
-The main Makefile includes the SDK CPU fragment at parse time; `make check` therefore requires an installed SDK. SDK-free CI should invoke individual compatible test scripts directly. `tools/test-core.py`, `tools/test-library-refresh.py`, `tools/test-native-ui.py` and `tools/test-web.py` require `clang++`, zlib headers/libraries and AddressSanitizer/UBSan; the web-worker test also needs the SDK headers. Do not label the entire native suite SDK-free.
+The main Makefile includes the SDK CPU fragment at parse time; `make check` therefore requires an installed SDK. Run the individual host scripts when the SDK is unavailable. `tools/test-core.py`, `tools/test-library-refresh.py`, `tools/test-native-ui.py` and `tools/test-web.py` require `clang++`, zlib headers/libraries and AddressSanitizer/UBSan; the web-worker test also needs the SDK headers. Do not label the entire native suite SDK-free.
 
 The portable runtime templates and `zbic.wasm` are shipped in `runtime/modloader/native/prebuilt`. Their manifest verifies both source hashes and generated files. End users need Node, not Zig. Maintainers rebuilding these assets use Zig **0.15.2** and `node runtime/modloader/tools/build.cjs`; see [MAINTAINING.md](MAINTAINING.md) before changing them.

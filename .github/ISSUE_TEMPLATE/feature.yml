@@ -1,5 +1,5 @@
 name: Feature request
-description: Explain a workflow that Moader could improve.
+description: Suggest a change to Moader.
 title: "[Feature]: "
 labels: [enhancement, needs-triage]
 body:
@@ -7,21 +7,21 @@ body:
     id: problem
     attributes:
       label: What are you trying to do?
-      description: Explain the concrete workflow or problem.
+      description: Describe what you do now and where you get stuck.
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposed behavior
-      description: Describe the user-visible result and how you would know it works.
+      description: Describe what you would like Moader to do.
     validations:
       required: true
   - type: textarea
     id: alternatives
     attributes:
       label: Alternatives and constraints
-      description: Optional workarounds, relevant native/browser behavior or known compatibility limits.
+      description: Include any workarounds you have tried.
   - type: checkboxes
     id: sharing
     attributes:

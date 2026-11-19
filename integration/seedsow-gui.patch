@@ -1,5 +1,5 @@
 diff --git a/gui/ns2-gui.cjs b/gui/ns2-gui.cjs
-index ac4aa44..07b96b5 100644
+index ac4aa44..c7e9567 100644
 --- a/gui/ns2-gui.cjs
 +++ b/gui/ns2-gui.cjs
 @@ -15,6 +15,7 @@ const fs = require('node:fs');
@@ -170,9 +170,9 @@ index ac4aa44..07b96b5 100644
 +          }
 +          if (row.startsWith('Moader installation reached the held device-verification gate: ')) {
 +            completed = true;
-+            setState({phase: 'moader-held', message: 'Moader installed in the held session. Verify the app, resident service and FS behavior before closing Seedsow.',
-+              stage: '[4/4] Moader device verification pending',
-+              progress: {stage: 4, percent: 100, label: 'Moader installed; device checks pending', detail: ''}});
++            setState({phase: 'moader-held', message: 'Moader service check passed. Keep this host open. On the Switch, press HOME and close Seedsow, then open Moader from hbmenu.',
++              stage: '[4/4] Moader service check passed',
++              progress: {stage: 4, percent: 100, label: 'Service ready. Open Moader on the Switch.', detail: ''}});
 +          }
 +          if (row.startsWith('Seedsow definite pre-FS miss:')) {
 +            definiteMiss = true;

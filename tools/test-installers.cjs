@@ -388,7 +388,16 @@ async function combinedFixture(directory){
 }
 test('combined install consumes the selected snapshot and never re-prepares mutable dist inputs',()=>fixture(async directory=>{
  const f=await combinedFixture(directory);
- await f.loaded.main(['--prepared',f.prepared.manifestFile,f.run]);
+ const lines=[],log=console.log;
+ try {
+  console.log=message=>lines.push(message);
+  await f.loaded.main(['--prepared',f.prepared.manifestFile,f.run]);
+ } finally {
+  console.log=log;
+ }
+ assert.match(lines[0],/Keep SmileBASIC and its session host open/);
+ assert.match(lines.at(-2),/Moader setup complete.*close SmileBASIC/);
+ assert.match(lines.at(-1),/Open Moader from hbmenu/);
  assert(f.events.includes('runtime-install'));
  const child=f.events.find(item=>item.child).child;assert.deepEqual(child.slice(1),[f.run,f.prepared.kaihen,f.prepared.extraFile]);
  const journal=JSON.parse(await fs.readFile(path.join(f.run,'moader-install.json')));

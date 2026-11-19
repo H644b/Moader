@@ -1,19 +1,14 @@
-## Problem and resulting behavior
+## What changed
 
-Describe the concrete problem, what changes and why. Link an issue if useful.
+Describe the problem and the new behavior. Link the related issue if there is one.
 
-## Validation
+## How you checked it
 
-- Host checks run and results:
-- Device checks, if any (say untested when applicable):
-- Content reopen, game relaunch or console reboot required, if relevant:
+List the tests you ran and the results. For a device check, give the version, the action you took and the result you saw. Include any scene reload, game relaunch or reboot.
 
-## Review notes
+## Review
 
-- [ ] The change is focused and documentation reflects the final behavior.
-- [ ] Tests use synthetic fixtures; no private device/account/session data or game assets are included.
-- [ ] Third-party provenance and license notices are preserved.
-- [ ] Requested state, native acknowledgement and observed game behavior are described separately.
-- [ ] If native formats/SDK assumptions/prebuilt sources changed, the relevant rebuild and qualification checks are recorded, or the remaining work is explicit.
-
-Mention compatibility limits, migration requirements or remaining risks. Do not paste credentials, pairing codes, raw private logs or exploit details; use the private vulnerability route in SECURITY.md.
+- [ ] The guides match the behavior.
+- [ ] Tests and examples contain only synthetic or sanitized data.
+- [ ] Third-party notices and build provenance are complete.
+- [ ] Any remaining compatibility, rebuild or hardware checks are recorded.

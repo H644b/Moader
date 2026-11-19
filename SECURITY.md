@@ -1,15 +1,13 @@
-# Reporting a vulnerability
+# Report a vulnerability
 
-Please report vulnerabilities privately through [GitHub's private vulnerability reporting form](https://github.com/H644b/Moader/security/advisories/new). Do not open a public issue with a working exploit, live credentials or unredacted device/session data. If the form is unavailable, open a minimal issue asking the maintainer to enable a private reporting route; leave technical exploit details out until a private route is available.
+Use [GitHub's private vulnerability form](https://github.com/H644b/Moader/security/advisories/new). If the form is unavailable, open an issue asking for a private reporting channel and share technical details there once the maintainer replies.
 
-Useful information includes the affected Moader version, the component involved, expected versus observed behavior, a minimal reproduction using synthetic data, and the impact you demonstrated. Separate observations from hypotheses. Redact account names, local paths, private network addresses, pairing codes, cookies, tokens, serial numbers and session identifiers. Never attach game content, firmware, keys, full memory dumps or account exports.
+Include the Moader version, component, expected and observed behavior, and impact you verified. If possible, use synthetic files to reproduce the problem. Remove account names, addresses, server session details, tokens, pairing codes, local paths and device identifiers. Keep firmware, keys, game files and memory dumps out of the report.
 
 ## Supported scope
 
-The current release is the **v0.1.0-dev.1 prerelease**; its application binaries display `0.1.0-dev`. Reports against that release or current `main` are welcome on a best-effort basis. Older development snapshots may require updating before investigation. There is no guaranteed response time, fix deadline, long-term support policy or bounty program.
+Reports about [the latest release](https://github.com/H644b/Moader/releases/latest) and current `main` are welcome on a best-effort basis. Older development builds may need an update before the maintainer can investigate.
 
-Security-sensitive areas include ZIP/path validation, browser pairing and authorization, HTTP request bounds, filesystem catalogue validation, native object lifetime, diagnostic snapshots, installation input qualification and transport uncertainty handling. A successful control request is not evidence that a game modification was applied.
+Use the web interface on a trusted local network and keep its pairing code private. If the report concerns browser access, include whether the console app or resident service was hosting the page.
 
-The browser server is intended for a trusted local network, with pairing and explicit listener control. Do not expose it to the public internet or publish a real pairing code. Privileged runtime installation is qualified for the current boot; a console reboot requires following the documented setup again. Forced game crashes and crash recovery are not hardware-qualified by this prerelease.
-
-Disclose the minimum information needed to reproduce the problem safely. Coordinate public details with the maintainer through the private advisory; do not assume that an acknowledgement means a fix has shipped.
+Coordinate disclosure with the maintainer in the private advisory.

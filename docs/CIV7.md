@@ -1,6 +1,6 @@
 # CivSwitch as a Moader entrypoint
 
-Research snapshot: **15 November 2026**. Civilization VII already has upstream filesystem (FS) access on Switch 2. Moader includes a host-tested experimental integration for the single `civ7-s8n` source profile. **Moader has not been hardware-tested through CivSwitch**. This page concerns Civilization VII as the entrypoint for the backend, not whether a mod for Civilization VII itself works.
+CivSwitch can provide the starting session for Moader's backend through the experimental `civ7-s8n` profile. The profile passed host tests. Installation and the handoff to hbmenu still need a Moader console test. This guide is for setting up the backend through Civilization VII.
 
 ## What is available?
 
@@ -72,7 +72,15 @@ These commands fetch/check the pinned source and inputs locally; they do not lau
 
 ## Experimental setup
 
-This experimental workflow has passed host checks using pinned upstream sources and synthetic sessions. Its privileged installation and console handoff remain unverified on hardware. Use the v0.1.2 backend kit or a matching checkout.
+Download and extract the [v0.1.2 backend kit](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip) or use its matching source checkout. Check the [game and firmware requirements](#requirements-and-version-boundaries) first.
+
+### macOS and Linux
+
+Use native Node 24 and Python 3.10+ on the computer. Follow the two-terminal steps below.
+
+### Windows with WSL2
+
+Use the [network notes below](#network-directions-linux-and-wsl) to check whether the two devices can reach each other. A WSL2 route still needs host and console testing.
 
 ### 1. Keep an existing session, or acquire FS separately
 
@@ -111,7 +119,7 @@ The printed command uses `--prepared` with the unique manifest and actual run di
 
 Keep the original host and Civilization VII open throughout. Run the exact printed command **once**; if qualification rejects the run or a native operation fails/times out, stop and preserve the report. Do not edit proof flags, replay handles, repeat an uncertain command or bootstrap stock HEN separately. [Recovery guidance](TROUBLESHOOTING.md#backend-setup-failed-or-timed-out).
 
-A host test or successful upstream HEN run is not proof that this Moader sequence works on a console. Resident status, native routing/logging, Civ7 close/hbmenu handoff and browser lifetime through this entrypoint still require separate hardware validation. Existing SmileBASIC routes remain in [Installation](INSTALLATION.md).
+Wait for the installer to report completion and return to the prompt. In the published v0.1.2 kit the last line starts with **Moader runtime and HEN installed**. The installer checks HEN startup before that line. Closing Civ7 and entering hbmenu after this install still need a console test, as do resident health, browser access and mod routing. See the [CivSwitch test results](VALIDATION.md#experimental-civswitch-integration).
 
 ## Network directions, Linux and WSL
 
