@@ -32,6 +32,10 @@ with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
         status, body = request('/api/state')
         assert status == 200 and not json.loads(body)['runtime']['connected']
         assert request('/api/settings', auth=False)[0] == 401
+        art = '/api/game-art?titleId=0400F43008C44001'
+        assert request(art, auth=False)[0] == 401
+        assert request('/api/game-art?titleId=bad')[0] == 400
+        assert request(art)[0] == 404
         assert request('/api/game-name?titleId=0400f43008c44001', auth=False)[0] == 401
         assert request('/api/game-name?titleId=not-an-id')[0] == 400
         assert json.loads(request('/api/game-name?titleId=0400F43008C44001')[1]) == {'titleId': '0400f43008c44001', 'name': None}
@@ -101,11 +105,15 @@ with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
         status, body = request(route + '?offset=0', 'PUT', payload)
         assert status == 200 and json.loads(body)['received'] == len(payload)
         assert request(route, 'POST', b'')[0] == 201
+        with urllib.request.urlopen(urllib.request.Request(base + art, headers={'Authorization': 'Bearer ' + TOKEN}), timeout=5) as response:
+            assert response.status == 200 and response.headers['Content-Type'] == 'image/jpeg'
+            assert response.read() == bytes.fromhex('ff d8 ff d9')
         toggle = urllib.parse.urlencode({'titleId': '0400f43008c44001', 'id': 'web-upload', 'enabled': '1'})
         status, body = request('/api/mod/enable?' + toggle, 'POST', b'')
         assert status == 202 and json.loads(body)['mods'][0]['applied'] == 'pending'
         remove = urllib.parse.urlencode({'titleId': '0400f43008c44001', 'id': 'web-upload'})
         assert request('/api/mod/remove?' + remove, 'POST', b'')[0] == 200
+        assert request(art)[0] == 404
         assert json.loads(request('/api/state')[1])['mods'] == []
         # State polling is cached. Only an authenticated rescan inspects an
         # external SD copy, and a failed scan retains that complete inventory.

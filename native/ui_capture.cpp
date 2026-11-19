@@ -1,148 +1,272 @@
-// Synthetic host captures of the SAME software renderer shipped in Moader.nro.
-// No capture here represents Switch execution or verified game routing.
+// Host input checks and captures of the production framebuffer renderer.
 #include "ui.hpp"
 #include "ui_bitmap.hpp"
 #include <cassert>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
-#include <chrono>
+#include <iterator>
 using namespace moader_ui;
 namespace {
-State fixture(){
-    State s;s.connected=true;s.preferences_available=true;s.address="http://192.0.2.10:7712";s.pairing="000042";
-    s.summary.flags=moader::ipc::WebRunning|moader::ipc::Foreground;s.summary.generation=12;s.summary.applied_generation=0;
-    const char* names[]={"Lumiose texture pack","Evening lighting","Battle camera adjustments","High-resolution signage","Pokémon music restoration","A very long mod name with Unicode — café résumé texture restoration"};
-    for(unsigned i=0;i<6;++i){Mod m;m.data.title_id=i==5?0x0100123400001000ULL:0x0400F43008C44001ULL;m.data.bytes=(i+1)*2457600;m.data.file_count=24+i*8;m.data.flags=moader::ipc::Romfs|(i<2?moader::ipc::Requested:0);m.data.applied=i<2?1:0;m.name=names[i];m.id="synthetic-fixture-"+std::to_string(i);
-        m.detail=i<2?"Enable request saved. Waiting for the live filesystem backend to acknowledge this generation.":"Disabled by request. Original game files remain in use.";s.mods.push_back(m);}
-    s.regroup();s.game_source_available=true;s.game_source_title=s.games[s.game].id;s.events={"SYNTHETIC HOST FIXTURE", "Library generation 12 saved.","Lumiose texture pack: enable requested.","Backend not attached. Requests remain pending.","Web listener started on port 7712."};
-    s.runtime_detail="The live filesystem backend has not been attached.";return s;
+namespace fs = std::filesystem;
+const char* const names[] = {"Animal Crossing: New Horizons", "The Legend of Zelda: Tears of the Kingdom",
+                             "Pokémon Legends: Z-A", "Mario Kart World", "Metroid Dread"};
+const char* const icons[] = {"island", "hyrule", "lumiose", "circuit", "dread"};
+constexpr uint64_t ids[] = {0x01006F8002326000, 0x0100F2C0115B6000, 0x0400F43008C44001, 0x0400C3F00006E000,
+                            0x010093801237C000};
+State fixture(const fs::path& assets) {
+    State s;
+    s.connected = true;
+    s.preferences_available = true;
+    s.address = "http://192.0.2.42:7712";
+    s.pairing = "041826";
+    s.summary.flags = moader::ipc::BackendConnected;
+    s.summary.generation = 12;
+    s.summary.applied_generation = 11;
+    const char* const mods[] = {"Lumiose texture pack",    "Evening lighting",  "Battle camera",
+                                "High-resolution signage", "Night reflections", "Window lights"};
+    for (unsigned i = 0; i < 5; ++i)
+        for (unsigned j = 0; j < (i == 2 ? 4u : 2u); ++j) {
+            Mod m;
+            m.data.title_id = ids[i];
+            m.data.bytes = (j + 1) * 2457600;
+            m.data.file_count = 24 + j * 8;
+            m.data.flags = moader::ipc::Romfs | (j < 2 ? moader::ipc::Requested : 0);
+            m.data.applied = j < 2 ? j + 1 : 0;
+            m.game_name = names[i];
+            m.name = mods[j];
+            m.id = j ? "sample-" + std::to_string(j) : "lumiose-texture-pack";
+            m.detail = "The request is saved. Moader is waiting for the runtime to acknowledge it.";
+            s.mods.push_back(m);
+        }
+    s.regroup();
+    s.game = 2;
+    s.game_source_available = true;
+    s.game_source_title = ids[2];
+    if (!assets.empty())
+        for (unsigned i = 0; i < 5; ++i) {
+            std::ifstream f(assets / (std::string(icons[i]) + ".jpg"), std::ios::binary);
+            std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(f), {}};
+            s.games[i].art = decode_art(bytes.data(), bytes.size());
+            assert(s.games[i].art);
+        }
+    s.runtime_detail = "Filesystem runtime connected.";
+    s.events = {"Runtime accepted routing for generation 11.", "Enable requested for Lumiose texture pack.",
+                "Library generation 12 saved."};
+    return s;
 }
-void capture(const std::filesystem::path& file,const State& s,int w=1280,int h=720){
-    std::vector<uint32_t> pixels(w*h);Renderer renderer;for(int i=0;i<45;++i)renderer.draw(pixels.data(),w,h,w*4,s,1.f/60);
-    std::ofstream out(file,std::ios::binary);out<<"P6\n"<<w<<" "<<h<<"\n255\n";
-    for(auto p:pixels){out.put(p&255);out.put((p>>8)&255);out.put((p>>16)&255);}out.close();if(!out)throw std::runtime_error("capture write failed");
+void capture(const fs::path& p, const State& s, int w = 1280, int h = 720) {
+    Renderer r;
+    std::vector<uint32_t> pixels(w * h);
+    r.draw(pixels.data(), w, h, w * 4, s, 1.f / 60);
+    std::ofstream out(p, std::ios::binary);
+    out << "P6\n" << w << " " << h << "\n255\n";
+    for (auto px : pixels) {
+        out.put(px & 255);
+        out.put(px >> 8 & 255);
+        out.put(px >> 16 & 255);
+    }
+    assert(out.good());
 }
+void tests(State s) {
+    const auto original = s.selected();
+    s.local_input(RightInput, 0);
+    assert(s.game == 3);
+    s.local_input(PreviousInput, 0);
+    assert(s.selected() == original);
+    s.local_input(ActivateInput, 0);
+    assert(s.view == View::Mods);
+    s.local_input(DownInput, 0);
+    auto row = s.row;
+    auto index = s.selected();
+    assert(s.local_input(ActivateInput, 0) == 0 && s.view == View::Details);
+    assert(s.local_input(ActivateInput, 0) == ToggleMod);
+    s.local_input(RemoveInput, 0);
+    assert(s.confirm_remove);
+    s.local_input(BackInput, 0);
+    assert(!s.confirm_remove && s.view == View::Details);
+    s.local_input(RemoveInput, 0);
+    assert(s.local_input(RemoveInput, 0) == RemoveMod);
+    s.local_input(BackInput, 0);
+    assert(s.row == row && s.selected() == index && s.view == View::Mods);
+    s.local_input(BackInput, 0);
+    assert(s.view == View::Library && s.game == 2);
+    s.local_input(SettingsInput, 0);
+    assert(s.view == View::Settings);
+    for (unsigned i = 0; i < 4; ++i) {
+        s.settings_row = i;
+        assert(s.local_input(ActivateInput, 0) == SavePreferences);
+    }
+    s.game_source_available = true;
+    s.game_source_title = s.games[s.game].id;
+    s.settings_row = 4;
+    assert(s.local_input(ActivateInput, 0) == GetGameSource);
+    s.settings_row = 2;
+    assert(s.local_input(ActivateInput, 0) == SaveGameSource && s.game_source == 2);
+    s.summary.flags |= moader::ipc::InventoryUnavailable;
+    assert(s.local_input(ActivateInput, 0) == 0);
+    s.summary.flags &= ~moader::ipc::InventoryUnavailable;
+    s.open_tab(2);
+    s.local_input(ActivateInput, 0);
+    assert(s.view == View::Port);
+    s.port_draft = 7713;
+    assert(!s.local_input(ActivateInput, 0) && s.view == View::Port && s.message_error);
+    s.port_draft = 8123;
+    assert(s.local_input(ActivateInput, 0) == SavePreferences && s.preferences.port == 8123);
+    s.settings_row = 2;
+    assert(s.local_input(ActivateInput, 0) == SaveReport);
+    s.settings_row = 3;
+    assert(s.local_input(ActivateInput, 0) == SaveScreenshot);
+    s.settings_row = 4;
+    s.local_input(ActivateInput, 0);
+    assert(s.view == View::Reload && !s.local_input(ActivateInput, 0));
+    s.reload_available = true;
+    assert(s.local_input(ActivateInput, 0) == ReloadService);
+    s.reload_busy = true;
+    assert(!s.local_input(ActivateInput, 0));
+    s.connected = false;
+    s.local_input(DebugInput, 10);
+    assert(s.view == View::Debug && s.local_input(ActivateInput, 10) == SaveReport);
+    s.open_tab(1);
+    assert(s.local_input(ActivateInput, 0) == Reconnect);
+    s.connected = true;
+    assert(s.local_input(ActivateInput, 0) == ToggleWeb);
+    s.summary.flags |= moader::ipc::WebRunning;
+    assert(s.open_tab(1) == GetPairing);
+    s.open_tab(0);
+    s.local_input(LeftInput, 0);
+    s.local_input(DownInput, 0);
+    assert(s.view == View::Connection && s.tab_focus);
+    s = fixture({});
+    s.view = View::Details;
+    s.mods[s.selected()].detail = std::string(800, 'W');
+    Renderer r;
+    assert(r.scroll_limit(s, s.view) > 2);
+    s.retain_inventory(s.summary);
+    assert(!s.local_input(ActivateInput, 0) && !s.local_input(RemoveInput, 0) && !s.confirm_remove);
+    s = fixture({});
+    s.view = View::Library;
+    std::vector<uint32_t> padded(1320 * 720, 0x12345678);
+    r.draw(padded.data(), 1280, 720, 1320 * 4, s, .016f);
+    for (int y = 0; y < 720; ++y)
+        for (int x = 1280; x < 1320; ++x)
+            assert(padded[y * 1320 + x] == 0x12345678);
+    assert(!StoreAvailable);
+    assert(r.tap(s, 1145.f / 1440, 48.f / 810) == 0 && s.view == View::Library && s.store.games.empty());
+    r.tap(s, .5, .45);
+    assert(s.view == View::Mods);
+    r.draw(padded.data(), 1280, 720, 1320 * 4, s, 1);
+    assert(r.tap(s, 1145.f / 1440, 48.f / 810) == 0 && s.view == View::Mods);
+    s.local_input(BackInput, 0);
+    s.local_input(UpInput, 0);
+    s.local_input(RightInput, 0);
+    s.local_input(ActivateInput, 0);
+    assert(s.view == View::Settings && s.store.games.empty());
+    s.view = View::Debug;
+    s.events.assign(128, std::string(400, 'W'));
+    r.draw(padded.data(), 1280, 720, 1320 * 4, s, .016f);
+    auto limit = r.scroll_limit(s, View::Debug);
+    auto builds = r.event_layout_builds();
+    assert(limit > 128);
+    r.draw(padded.data(), 1280, 720, 1320 * 4, s, .016f);
+    assert(r.event_layout_builds() == builds);
+    s.local_input(UpInput, limit);
+    assert(s.log_paused && s.debug_first == limit - 3);
+    s.events.back() += " update";
+    r.scroll_limit(s, View::Debug);
+    assert(r.event_layout_builds() == builds + 1);
+    auto bmp = bitmap(padded.data(), 1280, 720, 1320 * 4);
+    assert(bmp.size() > 1280 * 720 * 3 && bmp[0] == 'B' && bmp[1] == 'M');
+    s = fixture({});
+    s.view = View::Details;
+    s.mods.clear();
+    s.regroup();
+    assert(s.view == View::Library);
+    Store st;
+    assert(!st.load_catalog("{}"));
+    st.start(ids[2]);
+    assert(st.games.size() == 5 && st.game == 2);
+    st.input(ActivateInput);
+    assert(st.page == Shelf::Release && !st.host_url().empty());
+    st.input(RightInput);
+    assert(st.frame == 1);
+    st.back();
+    st.select_tab(st.tabs().size() - 1);
+    assert(st.page == Shelf::Hosts);
+    st.input(ActivateInput);
+    assert(st.page == Shelf::Host && !st.matches().empty());
+    st.input(ActivateInput);
+    assert(st.page == Shelf::Release && st.host_url().starts_with("https://"));
+    st.back();
+    assert(st.page == Shelf::Host);
+    st.input(DetailInput);
+    st.input(LeftInput);
+    st.input(ActivateInput);
+    assert(st.game == 1 && st.page == Shelf::Discover);
 }
-int main(int argc,char** argv){
-    std::filesystem::path dir=argc>1?argv[1]:"native/review";std::filesystem::create_directories(dir);
-    auto s=fixture();assert(s.games.size()==2&&s.selected()==0);s.move_game(1);assert(s.selected()==5);s.move_game(-1);s.move_row(-1);assert(s.selected()==4);s.move_row(1);assert(s.selected()==0);
-    capture(dir/"library-720.ppm",s);capture(dir/"library-docked-1080.ppm",s,1920,1080);
-    s.confirm_remove=true;capture(dir/"remove-720.ppm",s);s.confirm_remove=false;
-    s.view=View::Connection;capture(dir/"connection-720.ppm",s);s.summary.flags&=~moader::ipc::WebRunning;capture(dir/"web-off-720.ppm",s);s.summary.flags|=moader::ipc::WebRunning;
-    s.view=View::Debug;capture(dir/"debug-720.ppm",s);
-    s.view=View::Library;s.summary.flags|=moader::ipc::BackendConnected;s.summary.last_result=0x1234;s.runtime_detail="Runtime rejected this generation. Check the event history and report before trying again.";capture(dir/"runtime-error-720.ppm",s);
-    s=fixture();s.summary.flags|=moader::ipc::BackendConnected|moader::ipc::InventoryUnavailable;
-    s.runtime_detail="Library inventory unavailable. Synthetic SD scan failed. Retaining the last complete list.\n\nRuntime: FS accepted routing.";
-    assert(s.inventory_unavailable()&&s.summary.last_result==0);capture(dir/"inventory-retained-720.ppm",s);
-    s.view=View::Debug;capture(dir/"inventory-debug-720.ppm",s);
-    s.view=View::Library;s.mods.clear();s.regroup();capture(dir/"inventory-unavailable-empty-720.ppm",s);
-    s=fixture();s.summary.flags|=moader::ipc::BackendConnected;s.inventory_refresh_pending=true;
-    capture(dir/"inventory-refresh-pending-720.ppm",s);
-    s=fixture();s.summary.flags|=moader::ipc::BackendConnected;s.mods[0].data.applied=6;
-    s.mods[0].detail="Game unavailable. Insert the physical game card and wait for verification before enabling its mods.";
-    assert(!s.inventory_unavailable()&&s.summary.last_result==0);capture(dir/"game-unavailable-720.ppm",s);
-    s.view=View::Details;capture(dir/"game-unavailable-details-720.ppm",s);
-    // Actual renderer: an operation message and stale inventory warning must
-    // not alter the healthy backend badge; a real runtime result must alter it.
-    auto healthy=fixture();healthy.summary.flags|=moader::ipc::BackendConnected;
-    auto operation=healthy;operation.message="A selection changed. Refreshing the retained list.";operation.message_error=true;
-    auto inventory=healthy;inventory.summary.flags|=moader::ipc::InventoryUnavailable;
-    auto failed=healthy;failed.summary.last_result=0x1234;
-    auto pixels=[](const State& state){std::vector<uint32_t> out(1280*720);Renderer r;r.draw(out.data(),1280,720,1280*4,state,1.f/60);return out;};
-    auto h=pixels(healthy),o=pixels(operation),v=pixels(inventory),f=pixels(failed);
-    bool runtime_changed=false;
-    for(unsigned y=130;y<166;++y)for(unsigned x=940;x<1256;++x){const auto i=y*1280+x;assert(h[i]==o[i]&&h[i]==v[i]);runtime_changed|=h[i]!=f[i];}
-    assert(runtime_changed);
-    s=fixture();s.mods.clear();s.regroup();capture(dir/"empty-720.ppm",s);
-    s.connected=false;s.message="Service disconnected. Press Y to reconnect.";s.message_error=true;capture(dir/"disconnected-720.ppm",s);
-    s=fixture();s.connected=false;s.summary.flags|=moader::ipc::BackendConnected;
-    s.message="Service disconnected. Displayed values are last-known evidence.";s.message_error=true;
-    s.preferences.flags&=~moader::ipc::FollowLog;
-    for(unsigned i=0;i<20;++i)s.events.push_back("Historical library event "+std::to_string(i));
-    Renderer recovery;const unsigned recovery_limit=recovery.scroll_limit(s,View::Debug);assert(recovery_limit>3);
-    capture(dir/"disconnected-after-live-720.ppm",s);
-    assert(s.local_input(DebugInput,recovery_limit)==0&&s.view==View::Debug); // Never asks IPC to refresh after loss.
-    assert(s.local_input(DownInput,recovery_limit)==0&&s.debug_first==3);
-    assert(s.local_input(ActivateInput,recovery_limit)==SaveReport); // Local report remains available.
-    capture(dir/"disconnected-debug-720.ppm",s);
-    assert(s.local_input(BackInput,recovery_limit)==0&&s.view==View::Library);
-    s=fixture();s.game=1;s.view=View::Details;s.mods[5].detail=std::string(180,'x')+"\nLong descriptions, identifiers and paths wrap within the detail pane.\n"+std::string(900,'W');capture(dir/"long-details-720.ppm",s);s.detail_first=18;capture(dir/"details-scrolled-720.ppm",s);
-    s=fixture();s.mods[0].data.applied=3;s.mods[1].data.applied=4;s.mods[2].data.applied=2;s.mods[3].data.applied=5;s.summary.flags|=moader::ipc::BackendConnected;capture(dir/"apply-states-720.ppm",s);
-    s=fixture();s.rail_focus=true;capture(dir/"game-focus-720.ppm",s);
-    s=fixture();s.mods[0].game_name="Pokémon Legends: Z-A";s.regroup();capture(dir/"game-names-720.ppm",s);
-    s.preferences.flags&=~moader::ipc::GameNames;capture(dir/"title-ids-720.ppm",s);
-    s=fixture();assert(s.local_input(SettingsInput,0)==0&&s.view==View::Settings);capture(dir/"settings-720.ppm",s);capture(dir/"settings-docked-1080.ppm",s,1920,1080);
-    assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::NamesField&&!(s.preferences.flags&moader::ipc::GameNames));
-    s.settings_row=1;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::MotionField&&(s.preferences.flags&moader::ipc::ReducedMotion));
-    s.settings_row=2;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::FollowField&&!(s.preferences.flags&moader::ipc::FollowLog));
-    s.settings_row=3;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::StartupField&&(s.preferences.flags&moader::ipc::WebOnStart));
-    s.settings_row=4;assert(s.game_source==moader::ipc::CopyUnspecified&&s.can_save_game_source());
-    assert(s.local_input(ActivateInput,0)==SaveGameSource&&s.game_source==moader::ipc::CopyCartridge);capture(dir/"settings-game-copy-cartridge-720.ppm",s);
-    assert(s.local_input(ActivateInput,0)==SaveGameSource&&s.game_source==moader::ipc::CopyDigital);capture(dir/"settings-game-copy-digital-720.ppm",s);
-    assert(s.local_input(ActivateInput,0)==SaveGameSource&&s.game_source==moader::ipc::CopyUnspecified);capture(dir/"settings-game-copy-default-720.ppm",s);
-    s.summary.flags|=moader::ipc::InventoryUnavailable;assert(s.local_input(ActivateInput,0)==0&&s.game_source==moader::ipc::CopyUnspecified);
-    s.summary.flags&=~moader::ipc::InventoryUnavailable;s.game_source_title=0;assert(s.local_input(ActivateInput,0)==0);s.game_source_title=s.games[s.game].id;
-    s.connected=false;assert(s.local_input(ActivateInput,0)==0);s.connected=true;
-    s.game_source_available=false;assert(s.local_input(ActivateInput,0)==0);s.game_source_available=true;s.message.clear();s.message_error=false;
-    s.settings_row=5;assert(s.local_input(ActivateInput,0)==0&&s.view==View::Advanced);capture(dir/"advanced-720.ppm",s);
-    assert(s.local_input(ActivateInput,0)==0&&s.port_edit);s.port_draft=7713;s.port_digit=4;capture(dir/"port-editor-720.ppm",s);
-    assert(s.local_input(ActivateInput,0)==0&&s.port_edit&&s.message_error);capture(dir/"port-invalid-720.ppm",s);
-    s.port_draft=8123;assert(s.local_input(ActivateInput,0)==SavePreferences&&s.preference_mask==moader::ipc::PortField&&!s.port_edit&&s.preferences.port==8123);
-    s.message="Settings saved. The port applies on the next listener start.";s.message_error=false;
-    s.advanced_row=2;assert(s.local_input(ActivateInput,0)==SaveReport);s.advanced_row=3;assert(s.local_input(ActivateInput,0)==SaveScreenshot);
-    assert(s.local_input(BackInput,0)==0&&s.view==View::Settings);s.settings_row=6;assert(s.local_input(ActivateInput,0)==0&&s.view==View::Credits);capture(dir/"credits-720.ppm",s);
-    s.local_input(BackInput,0);s.connected=false;capture(dir/"settings-offline-720.ppm",s);s.settings_row=0;const auto old_preferences=s.preferences;assert(s.local_input(ActivateInput,0)==0&&s.preferences.flags==old_preferences.flags);
-    s=fixture();s.view=View::Advanced;s.connected=false;capture(dir/"advanced-offline-720.ppm",s);
-    assert(s.local_input(ActivateInput,0)==0&&!s.port_edit);
-    s=fixture();s.view=View::Advanced;s.preferences_available=false;capture(dir/"advanced-unsupported-720.ppm",s);
-    assert(s.local_input(ActivateInput,0)==0&&!s.port_edit);
-    s=fixture();s.view=View::Advanced;s.advanced_row=1;assert(s.local_input(ActivateInput,0)==RefreshEvents&&s.view==View::Debug&&s.debug_return==View::Advanced);capture(dir/"advanced-runtime-720.ppm",s);
-    assert(s.local_input(BackInput,0)==0&&s.view==View::Advanced);
-    // Same production controller input path: reload is gated independently of
-    // preferences and cannot emit a second submission while in flight.
-    s=fixture();s.view=View::Advanced;s.advanced_row=4;s.reload_available=true;
-    s.summary.flags=moader::ipc::WebRunning|moader::ipc::BackendConnected;s.summary.applied_generation=s.summary.generation;
-    s.events={"SYNTHETIC HOST FIXTURE", "FS accepted the current routing."};
-    s.reload_detail="Reload restarts the resident plugin and checks the new process before reconnecting.";
-    assert(s.local_input(ActivateInput,0)==ReloadService);capture(dir/"advanced-reload-ready-720.ppm",s);
-    s.reload_busy=true;s.connected=false;s.inventory_refresh_pending=true;s.reload_detail="Draining service";
-    assert(s.local_input(ActivateInput,0)==0);capture(dir/"advanced-reload-progress-720.ppm",s);
-    s.advanced_row=2;assert(s.local_input(ActivateInput,0)==SaveReport);
-    s.advanced_row=3;assert(s.local_input(ActivateInput,0)==SaveScreenshot);
-    s.local_input(DebugInput,12);assert(s.view==View::Debug);assert(s.local_input(ActivateInput,12)==SaveReport);
-    s=fixture();s.view=View::Advanced;s.advanced_row=4;s.reload_detail="Install the new kaiHEN build to reload the resident service.";
-    assert(s.local_input(ActivateInput,0)==0&&s.message_error);s.message.clear();capture(dir/"advanced-reload-legacy-720.ppm",s);
-    s.connected=false;s.reload_error=true;s.inventory_refresh_pending=true;s.reload_detail="Reload failed. Result 0x00001234; restoration 0x00005678.";
-    capture(dir/"advanced-reload-failed-720.ppm",s);
-    s.reload_shutdown_required=true;s.reload_detail="Loader recovery is unverified. Save Debug and a screen, then hold POWER for 20 seconds to shut down.";
-    capture(dir/"advanced-reload-shutdown-720.ppm",s);
-    s.view=View::Debug;assert(s.local_input(ActivateInput,0)==SaveReport);capture(dir/"debug-reload-shutdown-720.ppm",s);
-    s=fixture();s.preferences.flags|=moader::ipc::ReducedMotion;Renderer motion;std::vector<uint32_t> initial(1280*720),settled(initial.size());s.view=View::Settings;
-    motion.draw(initial.data(),1280,720,1280*4,s,1.f/60);s.settings_row=4;motion.draw(initial.data(),1280,720,1280*4,s,1.f/60);for(int i=0;i<30;++i)motion.draw(settled.data(),1280,720,1280*4,s,1.f/60);assert(initial==settled);
-    s=fixture();s.events.assign(30,"Synthetic follow-log event");Renderer follow;const unsigned latest=follow.scroll_limit(s,View::Debug);s.local_input(DebugInput,latest);assert(s.debug_first==latest&&!s.log_paused);s.local_input(UpInput,latest);assert(s.debug_first==latest-3&&s.log_paused);s.local_input(DownInput,latest);assert(!s.log_paused);
-    s=fixture();s.rail_focus=true;
-    std::vector<uint32_t> padded(1320*720,0xaabbccdd);Renderer renderer;renderer.draw(padded.data(),1280,720,1320*4,s,.016f);
-    for(int y=0;y<720;++y)for(int x=1280;x<1320;++x)assert(padded[y*1320+x]==0xaabbccdd);
-    auto bmp=bitmap(padded.data(),1280,720,1320*4);assert(bmp.size()==2764854&&bmp.substr(0,2)=="BM");
-    std::ofstream screenshot(dir/"synthetic-screenshot.bmp",std::ios::binary);screenshot.write(bmp.data(),bmp.size());screenshot.close();
-    const uint32_t colors[]={0xff0000ff,0xff00ff00,0xff123456,0xffff0000,0xffffffff,0xffabcdef};
-    const auto small=bitmap(colors,2,2,12);assert(small.size()==70);assert((unsigned char)small[54]==255&&(unsigned char)small[55]==0&&(unsigned char)small[56]==0);
-    assert((unsigned char)small[62]==0&&(unsigned char)small[63]==0&&(unsigned char)small[64]==255);
-    auto begin=std::chrono::steady_clock::now();for(int i=0;i<60;++i)renderer.draw(padded.data(),1280,720,1320*4,s,1.f/60);
-    const double sparse_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()/60;
-    s=fixture();s.view=View::Debug;s.preferences.flags&=~moader::ipc::FollowLog;s.events.clear();
-    for(unsigned i=0;i<128;++i)s.events.push_back("SYNTHETIC MAX-HISTORY EVENT "+std::to_string(i)+" "+std::string(512,'W')+" "+std::string(440,'x'));
-    const size_t initial_min_event=s.events.front().size(),initial_max_event=s.events.back().size();
-    capture(dir/"dense-history-720.ppm",s);
-    Renderer dense;auto frame=[&](){auto start=std::chrono::steady_clock::now();dense.draw(padded.data(),1280,720,1320*4,s,1.f/60);return std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-start).count();};
-    const double cold_ms=frame();const uint64_t builds=dense.event_layout_builds();assert(builds==1);
-    begin=std::chrono::steady_clock::now();for(int i=0;i<60;++i){frame();dense.scroll_limit(s,View::Debug);}const double warm_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count()/60;
-    assert(dense.event_layout_builds()==builds); // Warm frames and scroll bounds share the cached layout.
-    s.events[4]+=" changed";const double changed_ms=frame();assert(dense.event_layout_builds()==builds+1);
-    std::vector<uint32_t> docked(1920*1080);begin=std::chrono::steady_clock::now();dense.draw(docked.data(),1920,1080,1920*4,s,1.f/60);
-    const double scale_ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();assert(dense.event_layout_builds()==builds+2);
-    std::ofstream performance(dir/"performance.json");performance<<"{\n  \"kind\": \"synthetic host; not Switch performance\",\n  \"events\": 128,\n  \"initial_event_bytes_min\": "<<initial_min_event<<",\n  \"initial_event_bytes_max\": "<<initial_max_event<<",\n  \"sparse_warm_frame_ms\": "<<sparse_ms<<",\n  \"dense_cold_frame_ms\": "<<cold_ms<<",\n  \"dense_warm_frame_ms\": "<<warm_ms<<",\n  \"changed_event_frame_ms\": "<<changed_ms<<",\n  \"changed_scale_frame_ms\": "<<scale_ms<<",\n  \"warm_frames\": 60,\n  \"warm_layout_builds\": 0,\n  \"event_change_layout_builds\": 1,\n  \"scale_change_layout_builds\": 1\n}\n";
-    std::cout<<"Dense 128-event history: cold "<<cold_ms<<" ms; warm "<<warm_ms<<" ms; event invalidation "<<changed_ms<<" ms; scale invalidation "<<scale_ms<<" ms (host only).\n";
-    std::cout<<"Navigation/grouping and padded-stride checks passed; synthetic capture matrix written.\nHost render average: "<<sparse_ms<<" ms (not device performance).\n";
+} // namespace
+int main(int argc, char** argv) {
+    fs::path dir = argc > 1 ? argv[1] : "native/review";
+    fs::create_directories(dir);
+    State s = fixture(argc > 2 ? argv[2] : "");
+    tests(s);
+    if (argc > 3) {
+        std::ifstream f(argv[3]);
+        std::string json{std::istreambuf_iterator<char>(f), {}};
+        Store template_store;
+        assert(template_store.load_catalog(json) && !template_store.games.empty());
+        template_store.input(ActivateInput);
+        assert(template_store.host_url().starts_with("https://"));
+    }
+    capture(dir / "library-720.ppm", s);
+    capture(dir / "library-reference.ppm", s, 1440, 810);
+    capture(dir / "library-docked-1080.ppm", s, 1920, 1080);
+    s.nav_focus = true;
+    capture(dir / "header-focus-720.ppm", s);
+    s.nav_focus = false;
+    s.view = View::Mods;
+    capture(dir / "mods-720.ppm", s);
+    s.view = View::Details;
+    capture(dir / "details-720.ppm", s);
+    s.confirm_remove = true;
+    capture(dir / "remove-720.ppm", s);
+    s.confirm_remove = false;
+    for (const auto& [v, file] :
+         std::vector<std::pair<View, const char*>>{{View::Settings, "settings"},
+                                                   {View::Advanced, "advanced"},
+                                                   {View::GameCopy, "game-copy"},
+                                                   {View::Port, "port"},
+                                                   {View::Debug, "runtime"},
+                                                   {View::Reload, "reload"},
+                                                   {View::Controls, "controls"},
+                                                   {View::BrowserControls, "browser-controls"},
+                                                   {View::Credits, "credits"},
+                                                   {View::Connection, "connection"}}) {
+        s.view = v;
+        capture(dir / (std::string(file) + "-720.ppm"), s);
+    }
+    s.summary.flags |= moader::ipc::WebRunning;
+    capture(dir / "connection-on-720.ppm", s);
+    s.view = View::Debug;
+    s.summary.last_result = 0x1234;
+    capture(dir / "runtime-error-720.ppm", s);
+    s.summary.last_result = 0;
+    s.view = View::Store;
+    s.store.start(ids[2]);
+    capture(dir / "store-720.ppm", s);
+    s.store.input(ActivateInput);
+    capture(dir / "store-detail-720.ppm", s);
+    s.store.back();
+    s.store.select_tab(s.store.tabs().size() - 1);
+    capture(dir / "store-hosts-720.ppm", s);
+    s.store.input(DetailInput);
+    capture(dir / "store-games-720.ppm", s);
+    s.mods.clear();
+    s.regroup();
+    s.view = View::Library;
+    capture(dir / "empty-720.ppm", s);
+    s.connected = false;
+    capture(dir / "disconnected-720.ppm", s);
+    std::cout
+        << "Carousel, touch, settings, runtime, package actions, gated Store and framebuffer checks passed.\n";
 }

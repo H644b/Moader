@@ -1,5 +1,7 @@
-# Interface illustrations
+# Interface screenshots
 
-The screenshots show Moader with synthetic mod names and sample settings. The console images come from Moader's native software renderer. The browser image uses Chromium on loopback. The native example uses a documentation-only network address.
+The console screenshots come from Moader’s native framebuffer at 1280 × 720. The browser screenshot comes from Chromium paired with a loopback instance of Moader’s web server. Both use sample mod names and settings. Moader reads the covers for a player’s library from the console’s installed game metadata.
 
-Moader's mark is original project artwork. Noto Sans is distributed under the [SIL Open Font License](../../native/assets/NotoSans-OFL.txt).
+Nintendo’s product artwork supplies the five example covers. The manifest identifies their sources and records the hash of each screenshot. [Image manifest](manifest.json)
+
+The interface uses DM Sans, a cartridge mark designed for Moader, and an outlined Bricolage Grotesque wordmark. [Brand assets and font notices](../../branding/README.md)

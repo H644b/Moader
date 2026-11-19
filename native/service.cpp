@@ -8,6 +8,7 @@
 #include "control.hpp"
 #include "instance.hpp"
 #include "game_names.hpp"
+#include "game_art.hpp"
 #include "game_availability.hpp"
 #include "resident_lifecycle.hpp"
 #include <algorithm>
@@ -100,7 +101,7 @@ int main() {
             });
             moader::Library library("sdmc:/moader", backend, installed_game_name, installed_game_availability);
             const auto token = pairing_token();
-            moader::WebServer web(library, "sdmc:/moader", token, moader_web_assets());
+            moader::WebServer web(library, "sdmc:/moader", token, moader_web_assets(), moader_native::installed_game_art);
             Context context{library, web, token};
             nifm_ready = R_SUCCEEDED(nifmInitialize(NifmServiceType_User));
             context.network_ready = nifm_ready;

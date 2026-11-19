@@ -164,7 +164,7 @@ void send_reply(int fd, const Reply& reply) {
     const std::string head = "HTTP/1.1 " + std::to_string(reply.code) + ' ' + reason + "\r\nContent-Type: " + reply.type +
         "\r\nContent-Length: " + std::to_string(reply.body.size()) +
         "\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"
-        "Content-Security-Policy: default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\r\n\r\n";
+        "Content-Security-Policy: default-src 'self'; img-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\r\n\r\n";
     const auto bytes = head + reply.body;
     size_t at = 0;
     while (at < bytes.size()) {
@@ -183,6 +183,7 @@ public:
     Library& library;
     std::string root, token, error;
     std::vector<WebAsset> assets;
+    std::function<std::string(const std::string&)> artwork;
     struct Upload { std::string file, title, id, name; uint64_t size = 0, received = 0; };
     std::map<std::string, Upload> uploads;
     PairingLimiter pairing_attempts;
@@ -191,7 +192,7 @@ public:
     int client = -1;
     int listener = -1; uint16_t actual_port = 0; unsigned next_upload = 0;
     WebWorker worker;
-    Impl(Library& lib, std::string r, std::string t, std::vector<WebAsset> a) : library(lib), root(std::move(r)), token(std::move(t)), assets(std::move(a)) {
+    Impl(Library& lib, std::string r, std::string t, std::vector<WebAsset> a, std::function<std::string(const std::string&)> art) : library(lib), root(std::move(r)), token(std::move(t)), assets(std::move(a)), artwork(std::move(art)) {
         require(token.size() == 6 && token.find_first_not_of("0123456789") == std::string::npos,
                 "Pairing code must contain six digits.");
         make_directories(root + "/.uploads");
@@ -230,6 +231,18 @@ public:
             library.set_game_source(req.query.at("titleId"), source == "cartridge" ? GameSource::Cartridge :
                 source == "digital" ? GameSource::Digital : GameSource::Unspecified, expected);
             return {200, "application/json", library.snapshot_json()};
+        }
+        if (req.method == "GET" && req.path == "/api/game-art") {
+            require(req.query.size()==1 && req.query.count("titleId") && valid_title_id(req.query.at("titleId")), "Choose one valid game Title ID.");
+            auto title=lower(req.query.at("titleId"));
+            const auto snapshot=library.snapshot();
+            if(artwork && std::any_of(snapshot.mods.begin(),snapshot.mods.end(),[&](const Mod& m){return lower(m.title_id)==title;})){
+                try{
+                    auto jpeg=artwork(title);
+                    if(!jpeg.empty() && jpeg.size()<=0x20000)return {200,"image/jpeg",std::move(jpeg)};
+                }catch(const std::exception&){}
+            }
+            return {404,"application/json",R"({"error":"Game artwork unavailable."})"};
         }
         if (req.method == "GET" && req.path == "/api/game-name") {
             require(req.query.size() == 1 && req.query.count("titleId") && valid_title_id(req.query.at("titleId")),
@@ -344,8 +357,8 @@ public:
         }
     }
 };
-WebServer::WebServer(Library& library, std::string root, std::string token, std::vector<WebAsset> assets)
-    : impl_(new Impl(library, std::move(root), std::move(token), std::move(assets))) {}
+WebServer::WebServer(Library& library, std::string root, std::string token, std::vector<WebAsset> assets, std::function<std::string(const std::string&)> artwork)
+    : impl_(new Impl(library, std::move(root), std::move(token), std::move(assets), std::move(artwork))) {}
 WebServer::~WebServer() { stop(); }
 bool WebServer::start(const std::string& address, uint16_t port) {
     if (impl_->enabled) return true;

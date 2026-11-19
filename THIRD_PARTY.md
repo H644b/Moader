@@ -18,11 +18,18 @@ Moader's original source is licensed under **GPL-2.0-only**. Upstream files keep
 | [devkitPro](https://devkitpro.org/) | Pinned packages | Compiler, tools and zlib used by the native build. Exact URLs and checksums are in [`tools/toolchain-packages.json`](tools/toolchain-packages.json). SDK packages are downloaded locally, not committed. |
 | [stb_truetype](https://github.com/nothings/stb/blob/9f755b604db3492df2cbeb39bf84b81e3e3932e3/stb_truetype.h) | `9f755b604db3492df2cbeb39bf84b81e3e3932e3` | [`native/third_party/stb_truetype.h`](native/third_party/stb_truetype.h), MIT/public-domain dual license retained in the file. Used with the bundled trusted font. |
 | [Noto Sans](https://github.com/notofonts/latin-greek-cyrillic) | Bundled Noto Sans Regular | [`native/assets/NotoSans-Regular.ttf`](native/assets/NotoSans-Regular.ttf), copyright 2022 The Noto Project Authors. The [SIL Open Font License](native/assets/NotoSans-OFL.txt) accompanies it. |
+| [DM Sans](https://github.com/googlefonts/dm-fonts) | Text, Strong and Display instances | Interface text in the console and browser. The [SIL Open Font License](native/assets/DMSans-OFL.txt) accompanies the fonts. |
+| [Bricolage Grotesque](https://github.com/ateliertriay/bricolage) | Outlined wordmark | The [header lockup](branding/lockup.svg) uses lettering derived from Bricolage Grotesque. [SIL Open Font License](branding/Bricolage-OFL.txt) |
+| [stb_image](https://github.com/nothings/stb/blob/f0569113c93ad095470c54bf34a17b36646bbbb5/stb_image.h) | `f0569113c93ad095470c54bf34a17b36646bbbb5` | Decodes game covers and Store previews. [MIT notice](native/third_party/licenses/stb-image-MIT.txt) |
+| [picojson](https://github.com/kazuho/picojson/tree/v1.3.0) | 1.3.0 | Reads JSON publisher feeds. [BSD notice](native/third_party/licenses/picojson-BSD.txt) |
+| [curl](https://curl.se/) | devkitPro switch-curl 7.69.1-5 | HTTPS transport for publisher catalogs and previews. [curl notice](native/third_party/licenses/curl.txt) |
 | [Atmosphère Zstandard fork](https://github.com/Atmosphere-NX/Atmosphere/blob/6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8/libraries/libstratosphere/source/util/zstd.inc) | `6b0c077b4c608a3a2ee712b8dc35fee87ceb62e8` | Source bundled by the modloader in `runtime/modloader/native/vendor/zstd/`, with its retained license. |
 | [IZ2S / OunceCake](https://github.com/byizmysh/IZ2S-Platform) | Upstream modloader adaptation | Game-mount helpers in `runtime/modloader/lib/game-files/`; their [COPYING](runtime/modloader/lib/game-files/COPYING) notice is retained. |
 
 The CivSwitch entrypoint research also credits [Gezine/CivSwitch](https://github.com/Gezine/CivSwitch/tree/f6b0f2bd285e7b32c0a1968181046f18edd79708), [HerXayah/civ7-fs](https://github.com/HerXayah/civ7-fs/tree/5e5665b92661f205d853ea4351a9edace7c9c6b5) and [cpypwn/mac2jb](https://github.com/cpypwn/mac2jb/tree/717022b8a91a713be41a02b5e131d3229dd8b00a). They are distinct projects/source profiles; credit does not imply that every session is admitted or Moader hardware-tested. See [the Civ7 guide](docs/CIV7.md) for the reviewed dates, requirements and support boundaries. Civ7 thread/bootstrap adaptations are separate from the disclosed four-file Moader HEN patch.
 
 ZIP decoding uses devkitPro zlib on the Switch and system zlib in host tests. The Moader mark is original project artwork, shared by the app icon, favicon and both interface headers.
+
+The bundled Store catalog credits the individual creators and links each preview to its original community host. [Listing credits and sources](native/store/catalog.json)
 
 See [validation](docs/VALIDATION.md) for what was tested and [building](docs/BUILDING.md) for the source and tools needed to reproduce a build.

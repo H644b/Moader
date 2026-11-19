@@ -7,6 +7,10 @@ CPPFLAGS := -D__SWITCH__ -D__SWITCH2__ -Iinclude -Iruntime/kaihen/libkaihen/incl
 CXXFLAGS := $(ARCH) -std=gnu++20 -O2 -g -Wall -Wextra -Werror -Wno-missing-field-initializers -ffunction-sections -fdata-sections -MMD -MP $(SOURCE_PREFIX_FLAGS)
 CORE := build/native/model.o build/native/library.o build/native/zip.o build/native/web.o build/native/runtime_backend.o
 
+UI_NAMES := ui canvas navigation artwork settings_screen store store_screen
+UI_SRC := $(addprefix native/,$(addsuffix .cpp,$(UI_NAMES)))
+UI_OBJ := $(addprefix build/native/,$(addsuffix .o,$(UI_NAMES)))
+
 all: build/native/libmoader.a build/native/core-linkcheck.elf dist/Moader.nro dist/moader.nso dist/moader-diagnostics.nro
 
 build/native dist:
@@ -24,14 +28,23 @@ build/native/switch.specs: $(DEVKITPRO)/libounce/switch.specs | build/native
 build/native/diagnostics.o: native/diagnostics.cpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-build/generated/web_assets.hpp: web/index.html web/style.css web/app.js web/icon.svg tools/embed-web.py
+build/generated/web_assets.hpp: web/index.html web/style.css web/app.js web/icon.svg branding/lockup.svg native/assets/Text.ttf native/assets/Strong.ttf tools/embed-web.py
 	python3 tools/embed-web.py
 
-build/generated/native_font.hpp: native/assets/NotoSans-Regular.ttf native/embed-font.py
+build/generated/native_font.hpp: $(wildcard native/assets/*.ttf) native/embed-font.py
 	python3 native/embed-font.py
 
-build/native/ui.o: native/ui.cpp native/ui.hpp native/third_party/stb_truetype.h branding/mark-alpha.hpp build/generated/native_font.hpp | build/native
+build/generated/store_assets.hpp: native/store/catalog.json native/store/cache.json $(wildcard native/store/previews/*) native/embed-store.py
+	python3 native/embed-store.py
+
+$(UI_OBJ): build/native/%.o: native/%.cpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -Wno-unused-function -c $< -o $@
+
+build/native/canvas.o: build/generated/native_font.hpp
+build/native/store.o: build/generated/store_assets.hpp
+
+build/native/catalog_fetch.o: native/catalog_fetch.cpp native/catalog_fetch.hpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 build/native/app.o: native/app.cpp native/reload_client.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
@@ -39,16 +52,16 @@ build/native/app.o: native/app.cpp native/reload_client.hpp runtime/kaihen/libka
 build/native/service.o: native/service.cpp native/resident_lifecycle.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
 
-# Pin the matched candidate's ELF IDs so isolated source builds reproduce the
-# exact NRO/NSO bytes; GNU's default ID includes location-dependent debug data.
-build/native/Moader.elf: build/native/app.o build/native/ui.o build/native/libmoader.a build/native/switch.specs
-	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=0x7d60431e841e5ef83e61f4138880864012e276bd build/native/app.o build/native/ui.o build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lounce_core -lz -o $@
+# The redesigned foreground app gets its own ELF identity. The resident service
+# keeps its existing reload protocol and independent build target.
+build/native/Moader.elf: build/native/app.o build/native/catalog_fetch.o $(UI_OBJ) build/native/libmoader.a build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=sha1 build/native/app.o build/native/catalog_fetch.o $(UI_OBJ) build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lcurl -lounce_core -lz -o $@
 
 runtime/kaihen/libkaihen/build/libkaihen_plugin.a: $(wildcard runtime/kaihen/libkaihen/source/*) $(wildcard runtime/kaihen/libkaihen/include/kaihen/*) runtime/kaihen/libkaihen/Makefile
 	$(MAKE) -C runtime/kaihen/libkaihen DEVKITPRO=$(DEVKITPRO) LIBOUNCE=$(DEVKITPRO)/libounce build/libkaihen_plugin.a
 
 build/native/moader-service.elf: build/native/service.o build/native/libmoader.a build/native/switch.specs runtime/kaihen/libkaihen/build/libkaihen_plugin.a
-	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=0x401b49217ae09105b0341d17ff9221ea3e7f7d70 $< build/native/libmoader.a -Lruntime/kaihen/libkaihen/build -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=sha1 $< build/native/libmoader.a -Lruntime/kaihen/libkaihen/build -L$(DEVKITPRO)/portlibs/switch2/lib -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lkaihen_plugin -lounce_core -lz -o $@
 
 build/native/Moader.nacp: Makefile | build/native
 	$(DEVKITPRO)/tools/bin/nacptool --create 'Moader' 'Moader' '0.1.3' $@
@@ -91,13 +104,13 @@ check: build/generated/web_assets.hpp
 	LIBOUNCE=$(DEVKITPRO)/libounce CXX=clang++ sh runtime/kaihen/ro/test.sh
 	python3 tools/test-native-ui.py
 
--include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/ui.d build/native/service.d
+-include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/catalog_fetch.d $(UI_OBJ:.o=.d) build/native/service.d
 .PHONY: all check
 
 # Uses the identical renderer and embedded font; fixtures are explicitly synthetic.
-build/host/native-capture: native/ui_capture.cpp native/ui.cpp native/ui.hpp native/ui_bitmap.hpp branding/mark-alpha.hpp build/generated/native_font.hpp
+build/host/native-capture: native/ui_capture.cpp $(UI_SRC) $(wildcard native/*.hpp) branding/mark-alpha.hpp build/generated/native_font.hpp build/generated/store_assets.hpp
 	mkdir -p build/host
-	c++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unused-function -Iinclude -Ibuild/generated native/ui_capture.cpp native/ui.cpp -o $@
+	c++ -std=c++20 -O2 -Wall -Wextra -Werror -Wno-unused-function -Iinclude -Ibuild/generated native/ui_capture.cpp $(UI_SRC) -o $@
 
 native-captures: build/host/native-capture
 	build/host/native-capture native/review

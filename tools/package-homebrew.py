@@ -14,6 +14,9 @@ files = {
     'Moader-docs/LICENSE': root / 'LICENSE',
     'Moader-docs/THIRD_PARTY.md': root / 'THIRD_PARTY.md',
     'Moader-docs/NotoSans-OFL.txt': root / 'native/assets/NotoSans-OFL.txt',
+    'Moader-docs/DMSans-OFL.txt': root / 'native/assets/DMSans-OFL.txt',
+    'Moader-docs/Bricolage-OFL.txt': root / 'branding/Bricolage-OFL.txt',
+    'Moader-docs/store-catalog.json': root / 'native/store/catalog.json',
     'Moader-docs/stb_truetype.h': root / 'native/third_party/stb_truetype.h',
 }
 for notice in sorted((root / 'native/third_party/licenses').glob('*.txt')):

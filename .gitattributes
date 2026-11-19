@@ -1,6 +1,8 @@
 * text=auto eol=lf
 # Preserve byte-qualified upstream/native inputs on every checkout platform.
 runtime/** -text
+# Keep the upstream picojson header byte-identical.
+native/third_party/picojson.h -text whitespace=-blank-at-eol
 include/moader/runtime*.h -text
 # Unified patches carry empty context lines, including at the patch's EOF.
 software-builds/*.patch whitespace=-blank-at-eol,-blank-at-eof

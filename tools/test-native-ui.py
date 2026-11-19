@@ -16,8 +16,9 @@ with tempfile.TemporaryDirectory(prefix='moader-native-ui-') as temporary:
                     '-pthread', '-lz', '-o', str(binary)], check=True)
     subprocess.run([str(binary)], check=True, timeout=30)
     subprocess.run(['python3', str(root / 'native/embed-font.py')], check=True)
+    subprocess.run(['python3', str(root / 'native/embed-store.py')], check=True)
     renderer = work / 'renderer-test'
     subprocess.run(['clang++', '-std=c++20', '-O2', '-Wall', '-Wextra', '-Werror', '-Wno-unused-function',
                     '-I' + str(root / 'include'), '-I' + str(root / 'build/generated'),
-                    str(root / 'native/ui_capture.cpp'), str(root / 'native/ui.cpp'), '-o', str(renderer)], check=True)
+                    *[str(root / ('native/' + name + '.cpp')) for name in ['ui_capture','ui','canvas','navigation','artwork','settings_screen','store_screen','store']], '-o', str(renderer)], check=True)
     subprocess.run([str(renderer), str(work / 'captures')], check=True, timeout=60)

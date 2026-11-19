@@ -5,7 +5,11 @@ int main(int argc, char** argv) {
     if (argc != 3) return 1;
     moader::UnavailableBackend backend;
     moader::Library library(argv[1], backend);
-    moader::WebServer server(library, argv[1], argv[2], {{"/", "text/plain", "Moader HTTP integration test"}});
+    auto cover = [](const std::string& title) {
+        if (title == "0400f43008c44001") return std::string("\xff\xd8\xff\xd9", 4);
+        return std::string{};
+    };
+    moader::WebServer server(library, argv[1], argv[2], {{"/", "text/plain", "Moader HTTP integration test"}}, cover);
     if (server.running() || server.port() || server.start("not-an-ip", 0) || server.last_error().empty()) return 2;
     if (!server.start("127.0.0.1", 0) || !server.last_error().empty()) return 2;
     moader::WebServer collision(library, argv[1], argv[2], {});
