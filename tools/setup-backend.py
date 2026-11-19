@@ -473,7 +473,7 @@ def setup(args):
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root', type=pathlib.Path, default=ROOT, help='isolated public checkout/host-kit root')
-    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned source profile; Civ7 is hardware untested; Seedsow is local development only and does not qualify a held session')
+    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned source profile; Civ7 is hardware untested; Seedsow uses the dedicated GUI and this check does not qualify a held session')
     p.add_argument('--check', action='store_true', help='read-only local validation; no downloads/builds/preparation')
     p.add_argument('--sources-only', action='store_true', help='fetch/validate only selected host sources; no acquisition/HEN/app/SDK/Node work')
     p.add_argument('--offline', action='store_true', help='refuse downloads; use supplied/host-kit inputs')

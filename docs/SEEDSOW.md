@@ -2,7 +2,7 @@
 
 This is the **repository source workflow** for the Seedsow Lullaby Demo entrypoint on Apple Silicon macOS, Linux x86_64 or WSL2 x86_64. It builds Moader and its matched kaiHEN components, then uses Moader's patch of the [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen). The published v0.1.2 backend ZIP uses other entrypoints and does not contain this workflow.
 
-One Demo installation on firmware 23.0.1 from macOS passed current-boot FS memory and RO checks, started the matched HEN and Moader resident, opened the console app, and kept the paired browser available after the app closed. See the [exact validation scope](VALIDATION.md#seedsow-lullaby-demo-source-workflow). Linux and WSL2 have host build and transport checks, but no separate live-console installation record. Other firmware and Seedsow Full Game remain untested with this Moader path.
+One Demo installation on firmware 23.0.1 from macOS passed current-boot FS memory and RO checks, started the matched HEN and Moader resident, opened the console app, and kept the paired browser available after the app closed. See the [exact validation scope](VALIDATION.md#seedsow-lullaby-demo-source-workflow). Linux x86_64 passed host build and transport checks. WSL2 follows that Linux path but has no separate host or live-console installation record. Other firmware and Seedsow Full Game remain untested with this Moader path.
 
 ## Before you begin
 

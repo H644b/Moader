@@ -12,11 +12,11 @@ const ROOT = path.resolve(__dirname, '..');
 const PATCH = path.join(ROOT, 'integration/seedsow-gui.patch');
 const REVISION = '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17';
 const OFFICIAL = 'https://github.com/Malev0/seedsow-fs-kaihen.git';
-const PATCH_SHA256 = 'bb3d0723428a7dd62be31906d7fa0b76c2706369653e5d9c11a4ba07f233a12e';
+const PATCH_SHA256 = '3d90016b1bdedc084ca8c74835b7255904a968703665fb0e6005f722b5853014';
 const FILES = Object.freeze({
   'gui/ns2-gui.cjs': {
     before: '8818822df303f940e44414faafcd199cf064a6e7a24fb80ac56fbdbd40d7c35c',
-    after: '26aaf87bcb0d036c2104574e82690b15b000467917cefe341279a2f04cc21a9d',
+    after: '40231bc0e8050c93f65df610ebd58da463719d2de22ac349d46baac14259ae0c',
   },
   'gui/ns2-gui.html': {
     before: '50ea6dceeee52c8309d96d3b3f4fcea5acfed33e1bff3cae1ddc62dcb765880d',

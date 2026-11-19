@@ -19,6 +19,11 @@ if [[ ! "$version" =~ ^v24\. ]]; then
   echo "POSIX Node.js 24 is required; found $version." >&2
   exit 1
 fi
+node_platform="$("$node24" -p 'process.platform')"
+if [[ "$node_platform" != darwin && "$node_platform" != linux ]]; then
+  echo "Native macOS or Linux Node.js 24 is required; found $node_platform. In WSL, use Linux node rather than node.exe." >&2
+  exit 1
+fi
 
 "$node24" "$moader_root/tools/prepare-seedsow-gui.cjs" --check "$gui_root" >/dev/null
 port="${NS2_GUI_PORT:-31338}"

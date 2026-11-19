@@ -46,7 +46,7 @@ class DevkitHostTests(unittest.TestCase):
         linux = devkit.register('linux-x86_64')
         mac = devkit.register('macos-arm64')
         for name in ('devkita64-gcc', 'devkita64-binutils', 'switch-tools', 'general-tools'):
-            self.assertIn('/linux/x86_64/', linux[name]['url'].replace('downloads.devkitpro.org/packages', 'pkg.devkitpro.org/packages'))
+            self.assertIn('/linux/x86_64/', linux[name]['url'])
             self.assertNotEqual(linux[name]['SHA256SUM'][0], mac[name]['SHA256SUM'][0])
         for name in ('devkitA64', 'devkita64-newlib', 'devkita64-rules', 'dkp-toolchain-vars', 'switch-zlib'):
             self.assertEqual(linux[name], mac[name])
@@ -59,6 +59,20 @@ class DevkitHostTests(unittest.TestCase):
             file.write_bytes(b'changed')
             with patch.object(devkit.urllib.request, 'urlopen', side_effect=AssertionError('Cached file must not download')), self.assertRaisesRegex(ValueError, 'checksum differs'):
                 devkit.verified_download(file, 'https://example.invalid/package', hashlib.sha256(b'expected').hexdigest(), 'test')
+
+
+class SeedsowLauncherTests(unittest.TestCase):
+    def test_wsl_windows_node_is_rejected_before_gui_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            node = root / 'node.exe'
+            node.write_text('#!/bin/sh\nif [ "$1" = "--version" ]; then echo v24.0.0; elif [ "$1" = "-p" ]; then echo win32; else exit 66; fi\n')
+            node.chmod(0o755)
+            gui = root / 'gui'; gui.mkdir()
+            result = subprocess.run(['bash', str(pathlib.Path(__file__).with_name('start-seedsow-gui.sh')), str(gui.resolve())],
+                                    env={**os.environ, 'MOADER_NODE24': str(node)}, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('use Linux node rather than node.exe', result.stderr)
 
 
 class SetupTests(unittest.TestCase):

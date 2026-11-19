@@ -353,7 +353,7 @@ index ac4aa44..07b96b5 100644
 -      setTimeout(() => { try { server.close(); } catch {} process.exit(0); }, 700);
 -      return;
 +      return send(409, JSON.stringify({ok: false,
-+        error: 'Upstream self-update would overwrite the local Moader integration.'}));
++        error: 'Upstream self-update would overwrite the pinned Moader integration.'}));
      }
      if (req.method === 'GET' && url.pathname === '/api/state') {
        return send(200, JSON.stringify({...publicState(), logSeq: state.seq}));
