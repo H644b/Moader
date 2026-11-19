@@ -4,27 +4,27 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v0.1.2** is the latest release with prebuilt downloads. Use the [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and its component proof to reproduce that layout. Current `main` has a different matched Seedsow build. Its proof and binaries cannot be used with v0.1.2's recorded digests.
+**v0.1.3** has refreshed prebuilt downloads. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.1.3/release-manifest.json) to identify their exact source. The original v0.1.3 tag predates the refreshed assets; its automatic GitHub source archives are historical tag snapshots.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.1.2.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.1.2.zip` | Public host source plus exactly four binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.1.2` folder includes `START_HERE.txt` |
+| `Moader-v0.1.3.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v0.1.3.zip` | Public host source plus five exact binaries: `dist/Moader.nro`, `dist/moader.nso`, `vendor/kaihen-mo/ro/main`, `vendor/kaihen-mo/hen/main` and `vendor/kaihen-mo/bootstrap.bin`; outer `Moader-backend-v0.1.3` folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
-**Omit the ns2jb and Civ7 source dependencies from public source and host kits unless explicit redistribution terms are located and reviewed.** The setup helper fetches the exact upstream revision directly for each user. The default profile selects the kurumuz engine; `civ7-s8n` selects its engine, Civ7 target tables and acquisition bridge, as pinned by [config/civ7-provider.json](../config/civ7-provider.json). Do not invent a license or infer redistribution permission from a public repository. Preserve upstream attribution separately from license claims.
+**Omit the ns2jb, Civ7 and Seedsow upstream source dependencies from public source and host kits unless explicit redistribution terms are located and reviewed.** The setup helper fetches the exact upstream revision directly for each user. The default profile selects the kurumuz engine; `civ7-s8n` selects its engine, Civ7 target tables and acquisition bridge, as pinned by [config/civ7-provider.json](../config/civ7-provider.json). `seedsow-malev0` fetches its reviewed source closure; the GUI helper obtains the pinned upstream GUI checkout. Do not invent a license or infer redistribution permission from a public repository. Preserve upstream attribution separately from license claims.
 
-The minimal host kit has no `research/` content and does not bundle the full official kaiHEN ZIP, other upstream binaries or OunceShell. First-run setup fetches the pinned archive and extracts only `ro/main`, `game/main` and `hbmenu.nro`, while retaining the kit's patched `hen/main` and `bootstrap.bin`. It creates `vendor/kaihen-mo/programs` empty. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private captures, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
+The minimal host kit has no `research/` content and does not bundle the full official kaiHEN ZIP, other upstream binaries or OunceShell. First-run setup fetches the pinned archive and extracts `game/main` and `hbmenu.nro`, while retaining the kit's patched `ro/main`, `hen/main` and `bootstrap.bin`. It creates `vendor/kaihen-mo/programs` empty. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private captures, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
 
-`tools/setup-backend.py` hard-pins the official archive and engine tree, and verifies the reviewed HEN/bootstrap proof. An optional `release/backend-inputs.json` may provide checksum-qualified app ZIP and raw patched HEN/bootstrap download URLs for provisioning a source checkout without compiling:
+`tools/setup-backend.py` hard-pins the official archive and engine tree, and verifies the reviewed RO/HEN/bootstrap proof. An optional `release/backend-inputs.json` may provide checksum-qualified app ZIP and raw patched component download URLs for provisioning a source checkout without compiling:
 
 ```json
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-v0.1.3.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {
@@ -32,6 +32,9 @@ The minimal host kit has no `research/` content and does not bundle the full off
   },
   "patched_bootstrap": {
     "url": "REPLACE_WITH_EXPLICIT_HTTPS_RAW_BOOTSTRAP_ASSET_URL"
+  },
+  "patched_ro": {
+    "url": "REPLACE_WITH_EXPLICIT_HTTPS_RAW_RO_ASSET_URL"
   }
 }
 ```
@@ -48,7 +51,7 @@ For a matching release checkout, audit and commit the source before packaging:
 python3 tools/package-release.py
 ```
 
-The packager reads the source from `HEAD`, verifies the component proof and checks the exported public tree. It writes both ZIPs, the standalone programs, `release-manifest.json` and `SHA256SUMS.txt` under `dist/releases/`. Use an empty output directory. Review the final bytes before release and record the source commit with the downloads.
+The packager reads the source from `HEAD`, verifies the component proof and checks the exported public tree. It writes both ZIPs, the standalone programs, `release-manifest.json` and `SHA256SUMS.txt` under `dist/releases/`. Use an empty output directory. Review the final bytes before release and record the source commit with the downloads. When refreshing assets on an existing tag, retain the tag and disclose that the ZIP source commit differs from GitHub's automatic source archives.
 
 ## Native changes
 
@@ -69,11 +72,12 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 
 1. Run `python3 tools/test-setup-backend.py` and the relevant host tests. Native tests that use SDK headers need the pinned SDK; `make check` itself is not SDK-free.
 2. Inspect the public export and both ZIP inventories for forbidden private paths and missing license/source files. Scan text for personal paths, accounts, credentials and captured session identifiers. Keep release checksums for the final bytes.
-3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries except the patched HEN, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the patched HEN/bootstrap pair matches the reviewed proof, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
+3. Unpack the host kit into an isolated directory containing spaces. With no copied research directory or upstream binaries beyond the patched RO/HEN/bootstrap set, run `python3 tools/setup-backend.py --node /absolute/path/to/node24`. Confirm it fetches the pinned official kaiHEN and ns2jb archives, the reported tree/hash matches [BUILDING.md](BUILDING.md), the native set matches the reviewed proof, and `vendor/kaihen-mo/programs` is empty. It must not extract OunceShell.
 4. Run `python3 tools/setup-backend.py --check --node /absolute/path/to/node24` twice. It must not download, compile or change files. Run the local installer `--check` with that same Node executable and confirm it prints a unique `build/install/prepared-*/manifest.json`, validates both programs and performs no console connection.
 5. Exercise the direct ns2jb wrapper with `--run-dir PATH --node node` and separately the existing mac2jb status-command route. Both must preserve the selected Node 24, execute local Moader scripts only, create a unique local snapshot and print a matching `--prepared` install command. The wrapper never performs installation itself. `python3 tools/test-ns2jb-host.py --online --node node` checks real precompiled-kit preparation with public inputs and transport calls blocked; it does not acquire FS or install on a console.
 6. Exercise `--host-profile civ7-s8n` separately: `python3 tools/test-civ7-host.py --online --node node` checks the upstream source/materialization and native ABI; `node tools/test-civ7-host.cjs` checks synthetic held sessions against the actual provider; `python3 tools/test-ns2jb-host.py --online --node node --host-profile civ7-s8n` checks real precompiled-kit preparation with endpoint/process calls blocked. These establish host behavior only.
-7. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
+7. Exercise the Seedsow kit separately: run `setup-backend.py --host-profile seedsow-malev0` using the pinned upstream archives, then its read-only `--check`, and provision/check the GUI from the reviewed upstream revision. These are host checks; do not acquire FS or start HEN in a packaging test.
+8. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
 
 Use [INSTALLATION.md](INSTALLATION.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
 

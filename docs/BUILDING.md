@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or following the [Seedsow Demo guide](SEEDSOW.md). The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Demo backend](SEEDSOW.md). The v0.1.3 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
@@ -20,18 +20,17 @@ Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnos
 
 The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114 into the checkout. Linux needs `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
 
-The [Seedsow source workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
+The [Seedsow prebuilt workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
 
-For v0.1.2, use an Apple Silicon Mac and a clean checkout of the [v0.1.2 tag](https://github.com/H644b/Moader/tree/v0.1.2). The current branch uses the Seedsow source proof instead. Follow the [Seedsow build steps](SEEDSOW.md#build-and-check-the-matched-inputs) on current source.
+For a v0.1.3 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v0.1.3/release-manifest.json). The commands below select the Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
 
 ```sh
 python3 tools/setup-devkit.py
-python3 tools/setup-backend.py --build --node node
-python3 tools/setup-backend.py --check --node node
-node tools/install-moader.cjs --check
+python3 tools/setup-backend.py --build --host-profile seedsow-malev0 --node node
+python3 tools/setup-backend.py --check --host-profile seedsow-malev0 --node node
 ```
 
-The SDK bootstrap downloads the shared and macOS packages pinned in `tools/toolchain-packages.json`, the Linux x86_64 overrides in `tools/toolchain-packages-linux-x86_64.json` when applicable, and the checksum-pinned ounce SDK. Backend setup downloads the pinned official kaiHEN archive and ns2jb source. It copies a source allowlist to a temporary directory, rebuilds HEN, bootstrap, plugin library and the application there, verifies HEN/bootstrap against the source-qualified component digests, then fills missing local inputs. Existing files must already match; there is no force-overwrite option. Use a separate clean checkout for a rebuild when release binaries already occupy `dist/` or `vendor/kaihen-mo`.
+The SDK bootstrap downloads the shared and macOS packages pinned in `tools/toolchain-packages.json`, the Linux x86_64 overrides in `tools/toolchain-packages-linux-x86_64.json` when applicable, and the checksum-pinned ounce SDK. Backend setup downloads the pinned official kaiHEN archive and Seedsow source closure. It copies a source allowlist to a temporary directory, rebuilds RO, HEN, bootstrap, plugin library, app and resident there, verifies the native set against its source-qualified component digests, then fills missing local inputs. Existing files must already match; there is no force-overwrite option. Use a separate clean checkout for a rebuild when release binaries already occupy `dist/` or `vendor/kaihen-mo`.
 
 `setup-backend.py --check` is read-only. In contrast, `install-moader.cjs --check` writes a local immutable snapshot under `build/install/prepared-*` and updates its convenience pointer. Both avoid console connections. Use the unique manifest printed by the installer for any later `--prepared` command; `build/install/manifest.json` is a mutable convenience pointer.
 
@@ -51,7 +50,7 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
-The Seedsow workflow's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json). Its source, GUI and build instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix this pair with the v0.1.2 release kit.
+The Seedsow workflow's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json). Its prebuilt kit and GUI instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix this pair with the v0.1.2 release kit.
 
 Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.
 

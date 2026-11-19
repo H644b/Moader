@@ -48,7 +48,7 @@ An already-current **FS-only held session** from the exact s8n revision is a can
 
 ## Prepare the local dependencies
 
-Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.2** backend kit or a matching source checkout. Keep the app, resident and backend from the same release; [Validation](VALIDATION.md) records the scope of their checks.
+Use Python **3.10+** and native POSIX **Node 24**. Run these commands from the **v0.1.3** backend kit or a matching source checkout. Keep the app, resident and backend from the same release; [Validation](VALIDATION.md) records the scope of their checks.
 
 To fetch or verify only the pinned host source, without Node/SDK setup, acquisition or console contact:
 
@@ -72,7 +72,7 @@ These commands fetch/check the pinned source and inputs locally; they do not lau
 
 ## Experimental setup
 
-Download and extract the [v0.1.2 backend kit](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip) or use its matching source checkout. Check the [game and firmware requirements](#requirements-and-version-boundaries) first.
+Download and extract the [v0.1.3 backend kit](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) or use its matching source checkout. Check the [game and firmware requirements](#requirements-and-version-boundaries) first.
 
 ### macOS and Linux
 
@@ -119,7 +119,7 @@ The printed command uses `--prepared` with the unique manifest and actual run di
 
 Keep the original host and Civilization VII open throughout. Run the exact printed command **once**; if qualification rejects the run or a native operation fails/times out, stop and preserve the report. Do not edit proof flags, replay handles, repeat an uncertain command or bootstrap stock HEN separately. [Recovery guidance](TROUBLESHOOTING.md#backend-setup-failed-or-timed-out).
 
-Wait for the installer to report completion and return to the prompt. In the published v0.1.2 kit the last line starts with **Moader runtime and HEN installed**. The installer checks HEN startup before that line. Closing Civ7 and entering hbmenu after this install still need a console test, as do resident health, browser access and mod routing. See the [CivSwitch test results](VALIDATION.md#experimental-civswitch-integration).
+Wait for the installer to report completion and return to the prompt. The installer must print its final **Moader setup complete** result. The installer checks HEN startup before that line. Closing Civ7 and entering hbmenu after this install still need a console test, as do resident health, browser access and mod routing. See the [CivSwitch test results](VALIDATION.md#experimental-civswitch-integration).
 
 ## Network directions, Linux and WSL
 

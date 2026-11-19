@@ -1,6 +1,6 @@
 # Install Moader through Seedsow Lullaby Demo
 
-Seedsow Lullaby Demo support is available in the [v0.1.3 source release](https://github.com/H644b/Moader/releases/tag/v0.1.3). This method builds its own matched app, resident and kaiHEN components for use with the [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen).
+Download the [v0.1.3 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.1.3/Moader-backend-v0.1.3.zip) for Seedsow Lullaby Demo. It contains the prebuilt Moader app, resident and matched RO/HEN/bootstrap set. Its helper provisions Moader's patched [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen) from the exact upstream revision. The upstream GUI and source are fetched during preparation; they are not redistributed in the ZIP.
 
 One Demo installation on firmware 23.0.1 was verified from macOS. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
 
@@ -8,15 +8,10 @@ One Demo installation on firmware 23.0.1 was verified from macOS. Linux x86_64 p
 
 - A Switch 2 with Seedsow Lullaby Demo and its working launcher save. Follow the [upstream Seedsow setup](https://github.com/Malev0/seedsow-fs-kaihen#setup-once) if you do not already have that entrypoint. This guide does not change or replace your save.
 - An Apple Silicon Mac or Linux x86_64 host, including WSL2, able to reach the Switch on the local network. The Demo's HTTP launcher must be reachable from that host after you press **Y**.
-- Python 3.10 or newer, native POSIX Node.js **24**, Git, `make`, AArch64 capable `clang`, and room for the local SDK and build. Linux also needs `zstd` for the pinned packages. `tools/setup-devkit.py` installs the native SDK inside this checkout without changing system packages.
+- Python 3.10 or newer, native POSIX Node.js **24**, Git, AArch64 capable `clang`, and room for the local SDK. Linux also needs `zstd` for the pinned packages. `tools/setup-devkit.py` installs the native SDK inside the kit without changing system packages. A source rebuild additionally needs `make`.
 - A native Switch 2 game you can use for the documented hold-R hbmenu entry after installation.
 
-Clone the repository's default branch. If you already have a checkout, update it to the merged `main` revision containing this guide, then run the remaining commands from its root:
-
-```sh
-git clone https://github.com/H644b/Moader.git
-cd Moader
-```
+Extract the backend ZIP and run the remaining commands from its outer folder, the one containing `START_HERE.txt` and `tools/`. Developers rebuilding from source can use the [repository](https://github.com/H644b/Moader) and [build guide](BUILDING.md).
 
 ### Apple Silicon macOS
 
@@ -32,11 +27,11 @@ python3 --version
 
 ### Linux x86_64 or Windows with WSL2
 
-On Ubuntu or Debian, keep the checkout in the Linux filesystem (for example under `~/Moader`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
+On Ubuntu or Debian, keep the extracted kit in the Linux filesystem (for example under `~/Moader-backend-v0.1.3`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
 
 ```sh
 sudo apt-get update
-sudo apt-get install --no-install-recommends -y python3 git make clang zstd curl ca-certificates
+sudo apt-get install --no-install-recommends -y python3 git clang zstd curl ca-certificates
 export MOADER_NODE24="$(command -v node)"
 "$MOADER_NODE24" --version
 "$MOADER_NODE24" -p 'process.platform'
@@ -49,22 +44,22 @@ Node must report `v24`, and Python must be at least `3.10`. On WSL, Node must re
 
 The Seedsow Demo hosts both the HTTP launcher on TCP **8080** and the owned binary listener on TCP **39380**. The Linux process connects **outbound** to the Switch on both ports. Once the Demo is open and **Y** has started its launcher, confirm that WSL can reach `http://SWITCH_LAN_IP:8080/` before beginning a run. The listener on 39380 starts only during the single owned attempt; do not start or probe it separately. The GUI binds only to `127.0.0.1:31338` inside WSL, and [Windows browsers normally reach WSL services through localhost](https://learn.microsoft.com/en-us/windows/wsl/networking#accessing-linux-networking-apps-from-windows-localhost). Open the printed GUI URL in your Windows browser if the Linux launcher does not open one. Keep the build, GUI and installation in the same WSL distro with Linux Node and paths. This route does not use the inbound host listener or port-forwarding instructions for the separate direct ns2jb route.
 
-## Build and check the matched inputs
+## Prepare and check the matched inputs
 
 Run these before contacting the Switch:
 
 ```sh
 python3 tools/setup-devkit.py
-python3 tools/setup-backend.py --build --host-profile seedsow-malev0 --node "$MOADER_NODE24"
+python3 tools/setup-backend.py --host-profile seedsow-malev0 --node "$MOADER_NODE24"
 python3 tools/setup-backend.py --check --host-profile seedsow-malev0 --node "$MOADER_NODE24"
 export MOADER_AARCH64_OBJCOPY="$PWD/vendor/devkitpro/devkitA64/bin/aarch64-none-elf-objcopy"
 ```
 
 Set the assembler before starting the GUI. On macOS use `export MOADER_AARCH64_CLANG="$(xcrun --find clang)"`; on Linux or WSL2 use `export MOADER_AARCH64_CLANG="$(command -v clang)"`.
 
-The first command installs the local SDK. The second builds the matched components from pinned source. The third checks the build and should report `hostProfile: "seedsow-malev0"` and `readyForInstallerCheck: true`. Keep the two tool paths set in the terminal that starts the GUI.
+The first command installs the local SDK used by the live helper. The second validates the ZIP's prebuilt matched components and fetches the pinned Seedsow source closure and official kaiHEN base. It does not compile Moader. The third checks the prepared inputs and should report `hostProfile: "seedsow-malev0"` and `readyForInstallerCheck: true`. Keep the two tool paths set in the terminal that starts the GUI.
 
-For an offline build with the exact pinned archives, add `--offline --engine-archive PATH --kaihen-archive PATH` to the build command.
+For offline preparation with the exact pinned archives, add `--offline --engine-archive PATH --kaihen-archive PATH` to the second command. To build from source instead, follow [Building](BUILDING.md#build-from-a-clean-source-checkout).
 
 ## Prepare and open the GUI
 
@@ -77,7 +72,7 @@ export MOADER_SEEDSOW_GUI="$PWD/../seedsow-fs-kaihen-moader-main"
 tools/start-seedsow-gui.sh "$MOADER_SEEDSOW_GUI"
 ```
 
-Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Demo launcher starts. Select **Auto-Download Moader kaiHEN**. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
+Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Demo launcher starts. Select **Auto-Download Moader kaiHEN**. It stages the ZIP's exact RO/HEN/bootstrap and Moader binaries with the checksum-pinned official base. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
 
 The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse an already checked folder with `--check` and `start-seedsow-gui.sh`. If you kept an earlier locally patched GUI folder, provision this new folder so its source and patch hashes match the repository.
 

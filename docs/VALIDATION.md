@@ -2,13 +2,17 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
+## Refreshed v0.1.3 assets
+
+The v0.1.3 backend ZIP includes the exact RO/HEN/bootstrap component hashes from the Seedsow Demo installation below. Its 0.1.3-labelled app (`c271a67c2e48aab2ebfb079acdcc2cc7785ee1a0180534f9fa2612ca038af97b`) and resident (`3830ca2129bae1e10c19084afb274e98772b34a6fff499b0eeca1690f4c76217`) are rebuilt bytes. They passed host compilation and packaging checks, but have not been installed on the console as this exact pair. The prior Demo installation used app `e251020bcd550afc72982ac80bf54a1060ff6aca8b3ffdb401a36c01c44ae9eb` and resident `4e17afa1c1f04f172fd91c9411e239e95eaf9c6067492921b769cda794ed13a0`. The v0.1.3 kit's SmileBASIC and CivSwitch routes have no new console acceptance record. [v0.1.3 release notes](releases/v0.1.3.md)
+
 ## Community mod report
 
 Ben216k reported using extensive RomFS and ExeFS patches and additional subSDKs with Splatoon 3 and Splatoon Raiders. The same report describes a system crash on the stock v0.1.2 setup with Splatoon 3 and a local workaround. The report is a community observation. The controlled Mario Kart test below measured a specific in-game content reload. [Issue #14](https://github.com/H644b/Moader/issues/14)
 
 ## Seedsow Lullaby Demo source workflow
 
-One combined installation was observed on a Seedsow Lullaby **Demo** on firmware 23.0.1 using the reviewed `Malev0/seedsow-fs-kaihen` source revision `7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17` and Moader's matched local RO/HEN/bootstrap build. This is the repository source workflow, separate from the published v0.1.2 backend kit and the earlier SmileBASIC and CivSwitch records.
+One combined installation was observed on a Seedsow Lullaby **Demo** on firmware 23.0.1 using the reviewed `Malev0/seedsow-fs-kaihen` source revision `7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17` and Moader's matched local RO/HEN/bootstrap build. Those exact native component bytes are now included in the v0.1.3 backend kit. The earlier v0.1.2 kit and the SmileBASIC and CivSwitch records remain separate.
 
 The same boot's private run receipts establish fresh FS memory read/write/restoration, two diagnostic RO/FS instruction challenges, Loader restoration, Moader resident runtime installation with fresh FS code qualification and metadata readback, matched kaiHEN startup (operation 10/result 0), and a borrowed, same-owner HEN inspection. That inspection reported HEN protocol 7/result 0, one published `moader` plugin, a reachable resident service, `backendConnected: true` and current routing generation. The original RO inspection lease remained owned; newly opened inspector handles closed.
 
