@@ -22,6 +22,8 @@ The v0.2.5 installer success receipt shows HEN waiting for a game. It does not s
 
 The current HEN samples fresh R state from SystemExt and the enabled standard controller styles, including FullKey, Handheld, JoyDual and JoyRight. During first-launch capture it waits past a still-closing nonnative Seedsow application instead of faulting before the native game appears. Host tests cover a fresh FullKey R sample, reject a stale one and cover this PM transition; the native HEN builds with the pinned toolchain. One Demo installation and existing-policy hold-R entry passed with the exact candidate. Neither mechanism is established as the tester's exact failure cause, and this candidate has not yet passed a clean-policy console test.
 
+An affected tester's later archive confirms installation and readback of that exact candidate, but they reported the same no-hbmenu result. The archive ends before either game launch and cannot identify the game-arm step that failed. The candidate remains diagnostic work rather than a validated fix.
+
 ## v0.1.2 source selection
 
 Official kaiHEN [`20261117.1`](https://github.com/ouncebrew/kaihen/releases/tag/20261117.1) was inspected. Its [released `waitForProcess` implementation](https://github.com/ouncebrew/kaihen/blob/3695f364f9270686aa72cc39627bb1281752b2d3/hen/source/game_arm.cpp) still returns `UnexpectedState` when an observed title is outside the native application range and the bridge-process exception is inactive. It does not contain a replacement for Moader's removed local workaround. This is a source/history finding, not a Switch 1 gameplay test.
