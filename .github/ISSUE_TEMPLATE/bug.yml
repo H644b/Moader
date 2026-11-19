@@ -1,13 +1,13 @@
 name: Bug report
-description: Report a reproducible problem with Moader.
+description: Report a problem with Moader.
 title: "[Bug]: "
 labels: [bug, needs-triage]
 body:
   - type: markdown
     attributes:
       value: >-
-        For security problems, use the private reporting link in the issue chooser.
-        Do not attach pairing codes, private addresses, account/session data, memory dumps or game assets.
+        Use the private reporting link in the issue chooser for vulnerabilities.
+        Keep pairing codes, private addresses, session data and game files out of reports.
   - type: checkboxes
     id: preparation
     attributes:
@@ -29,19 +29,20 @@ body:
     id: environment
     attributes:
       label: Environment
-      description: Console/firmware, kaiHEN version, host OS/Node version for setup problems, native app or browser, and browser version if relevant. Leave unknown values unknown; omit addresses and account details.
+      description: Include firmware and kaiHEN version if known. For setup problems, include your computer OS and Node version. For browser problems, include the browser version.
     validations:
       required: true
   - type: dropdown
     id: entrypoint
     attributes:
-      label: Backend entrypoint
+      label: Backend setup method
       options:
         - Unknown or manager only
         - SmileBASIC through kurumuz ns2jb
         - SmileBASIC through mac2jb
-        - CivSwitch through pinned s8n profile (experimental)
-        - Another source or entrypoint (describe below)
+        - Seedsow Lullaby Demo from source
+        - CivSwitch (experimental)
+        - Other (describe below)
   - type: dropdown
     id: runtime
     attributes:
@@ -49,7 +50,7 @@ body:
       options:
         - Unknown
         - Manager/browser only
-        - Privileged runtime installed in the current boot
+        - Backend set up for this boot
         - Console rebooted since runtime installation
     validations:
       required: true
@@ -57,14 +58,14 @@ body:
     id: steps
     attributes:
       label: Steps to reproduce
-      description: Number the actions. State content/menu reloads, game close/reopen and console reboots.
+      description: List the steps, including any content reload, game relaunch or console reboot.
     validations:
       required: true
   - type: textarea
     id: behavior
     attributes:
       label: Expected and actual behavior
-      description: Separate the button/request result, native routing result and actual visible game behavior.
+      description: What did you expect? What did Moader display and what happened in the game?
     validations:
       required: true
   - type: dropdown
@@ -80,5 +81,5 @@ body:
     id: diagnostics
     attributes:
       label: Sanitized diagnostics
-      description: Optional short native result/generation excerpt or cropped screenshot. Remove pairing, network, account, path and session details. Do not upload a raw debug bundle.
+      description: Paste the relevant error or debug lines. Remove pairing codes, addresses, account details, paths and session data.
       render: text

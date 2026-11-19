@@ -272,7 +272,7 @@ function renderInspector() {
   $("remove-confirm").hidden = !showConfirm;
   if (showConfirm && wasHidden) reveal($("remove-confirm"));
   if (!showConfirm && !wasHidden && $("remove-confirm").contains(document.activeElement)) $("remove-selected").focus({preventScroll:true});
-  $("remove-description").textContent = "Remove “" + mod.name + "” from this library? Its files will be kept in recovery storage.";
+  $("remove-description").textContent = "Remove “" + mod.name + "” from this library? Its files stay on the SD card.";
 }
 function renderEvents() {
   const list = $("events"), atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 30;
@@ -297,8 +297,8 @@ function render() {
   const rejected = Number(runtime.result || 0) !== 0;
   $("runtime-notice").classList.toggle("ready",!!runtime.connected && !rejected);
   $("runtime-notice").classList.toggle("error",rejected);
-  $("runtime-detail").textContent = rejected ? runtime.detail || "The runtime rejected this catalogue (result " + runtime.result + "). Check the debug log before trying again." : runtime.connected ? runtime.detail || "Runtime communication is connected. Check each mod's apply state before returning to your game."
-    : runtime.detail || "Live mod loading is unavailable. Your library changes are queued.";
+  $("runtime-detail").textContent = rejected ? runtime.detail || "The runtime rejected this catalogue (result " + runtime.result + "). Check the debug log before trying again." : runtime.connected ? runtime.detail || "Filesystem runtime connected. Check each mod’s apply state."
+    : runtime.detail || "Filesystem runtime disconnected. You can still manage the library.";
   $("generation").textContent = "Generation " + state.generation;
 }
 async function refresh() {
@@ -334,7 +334,7 @@ async function toggleMod(mod) {
   const generation = state.generation;
   await mutate(async () => {
     await api("/mod/enable?" + new URLSearchParams({titleId:mod.titleId,id:mod.id,enabled:mod.requested ? "0" : "1",generation}),{method:"POST",body:""});
-    message(mod.requested ? "Disable setting saved. Check the runtime apply state." : "Enable setting saved. Check the runtime apply state.");
+    message(mod.requested ? "Disable request saved. Check the mod’s apply state." : "Enable request saved. Check the mod’s apply state.");
   });
 }
 async function copyText(text) {

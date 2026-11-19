@@ -1,52 +1,69 @@
 # Install Moader
 
-This guide describes the matched v0.1.2 downloads. Read the [release notes](releases/v0.1.2.md) for download choices and the [validation scope](VALIDATION.md) for the boundaries of the recorded checks.
-
-For the separate Apple Silicon macOS, Linux x86_64 or WSL2 x86_64 source workflow through **Seedsow Lullaby Demo**, use the [Seedsow installation guide](SEEDSOW.md). It is not part of the v0.1.2 backend ZIP.
-
-| Situation | What to do |
-| --- | --- |
-| Matching Moader resident backend is already running this boot | Copy/update the console app |
-| You need the resident service and game-file routing | Choose either backend route below |
-| The console rebooted | Obtain a new verified held FS session and set up this boot's backend |
-
-The precompiled host kit works through Python/Node; end users do not need an SDK or to compile HEN. Source SDK rebuilds are a separate [macOS/Linux workflow](BUILDING.md#build-from-a-clean-source-checkout). See the [short glossary](../README.md#supported-setup) for kaiHEN, hbmenu and FS.
-
 ## Copy or update the console app
 
-1. Download [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip).
-2. Close the Moader app before replacing it.
-3. Copy `switch/Moader.nro` to the SD card's `switch/` folder by your usual SD/FTP method.
+1. Download and extract [Moader-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-v0.1.2.zip).
+2. Close Moader if it's open.
+3. Copy `switch/Moader.nro` to the SD card's `switch/` folder.
 4. Open **Moader** from hbmenu.
 
-If the matching resident service is running, the app connects to it. Otherwise it can host a foreground library/web interface, which stops when the app closes. An NRO copy does not install FS hooks or start a resident process. Copying the included `kaihen/plugins/moader.nso` only stages a plugin; it does not hot-reload a running service.
+If the matching resident service is already running, the app connects to it. Otherwise you can manage the library and use the browser while the app stays open. [Use Moader](USAGE.md)
+
+The ZIP also contains `kaihen/plugins/moader.nso`. Copying it puts the plugin on SD. To replace a running plugin, follow [Updating](#updating).
 
 ## Start the backend for this boot
 
-Download and extract [Moader-backend-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip). Use the outer folder containing `tools/` and `START_HERE.txt`. The kit includes the matched precompiled patched HEN, Moader binaries and source. First-use preparation downloads the pinned official kaiHEN archive and ns2jb source; internet access is needed then.
+The backend has two parts. The resident service keeps managing the library after you close the app. The filesystem runtime (FS) applies mod files in games. Setup starts both for the current boot. Your mod files and preferences stay on SD after a reboot.
 
-Choose **one** route. Both end by printing Moader's privileged installation command. Preparation never acquires FS or contacts the Switch. The final installer qualifies the actual held run and FS code/ABI before native work; a failure is not permission to bypass its guards.
-
-| Route | Host requirements | Session source |
+| Method | Computer | Download |
 | --- | --- | --- |
-| A: direct ns2jb | Native Linux/macOS Node **24**, Python **3.10+**; Git to clone/checkout upstream | kurumuz ns2jb `run.cjs --rpc` |
-| B: mac2jb | macOS, Python **3.10+**, exact mac2jb-bundled Node **24** | Fresh mac2jb verified FS session |
+| [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | v0.1.2 backend ZIP |
+| [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | v0.1.2 backend ZIP |
+| [Seedsow Lullaby Demo](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | Current repository source |
+| [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | v0.1.2 backend ZIP |
 
-WSL2 users must complete [networking preparation](#wsl2-networking-before-acquisition) **before** Route A. Use Linux Node and two terminals in the **same WSL distro**; do not use `node.exe`, Windows run paths or a Windows terminal outside that distro for preparation/install.
+### Before either SmileBASIC method
 
-The direct route is documented from pinned source/helper contracts. No new Linux/WSL device verification is claimed here; the published real-console validation used macOS/mac2jb. Use upstream requirements for console/application compatibility; a stock-console installer is not included. CivSwitch uses the separate experimental profile below.
+Download and extract [Moader-backend-v0.1.2.zip](https://github.com/H644b/Moader/releases/download/v0.1.2/Moader-backend-v0.1.2.zip). Open the outer folder with `START_HERE.txt` and `tools/`. Install **Python 3.10+**. First-time preparation needs internet access and uses the prebuilt files in the kit, so you can skip installing an SDK. Close the Moader app if it's open.
 
-## Experimental CivSwitch route
+Use the requirements in the upstream guide for your chosen method. Moader needs a fresh, verified filesystem session from the current boot. Keep the session's host and SmileBASIC open until the Moader installer finishes.
 
-Civilization VII FS access exists upstream. Moader's initial experimental profile is **`civ7-s8n`**, restricted to `s8n/civ7-fs-kaihen` commit `51a804cbce09216e1a42e65929644fd436b4c8bf`. Host tests pass; **no Moader Civ7 console installation is claimed**. This is separate from the two SmileBASIC routes below and from modding Civilization VII itself.
+<a name="route-b-macos-with-mac2jb"></a>
 
-Follow the [CivSwitch guide](CIV7.md#experimental-setup) for prerequisites, source fetch, FS-only acquisition and profile-aware local preparation. If you already hold a current admitted s8n FS-only session, keep it open for qualification rather than acquiring again. HerXayah and mac2jb CivSwitch sessions require their own admitted profile; do not pass them under the s8n pin. The ordinary TCP9026 loader state or already-running upstream HEN is not the required FS-only starting state.
+## SmileBASIC with mac2jb
 
-## Route A: Linux/WSL or macOS with ns2jb
+### macOS
 
-### Terminal 1: obtain a held, verified FS session
+Use the [official mac2jb requirements and entry instructions](https://github.com/cpypwn/mac2jb#readme) to obtain a **fresh verified current-boot FS session**. Keep **SmileBASIC and mac2jb open**. The helper uses the Node 24 executable from the status command.
 
-Install native Node **24**, Python **3.10+**, and Git using your host's normal package tools. Check `node --version` and `python3 --version`; Node must report v24. Git is needed only to obtain this pinned upstream checkout:
+Open Terminal in the extracted host-kit folder: type `cd `, drag that folder into Terminal and press Return. Alternatively use `cd "YOUR_EXTRACTED_KIT_FOLDER"`, replacing the placeholder.
+
+Copy the **entire newly generated four-argument mac2jb status command**, preserving quoted paths. In macOS's default zsh, run:
+
+```sh
+read -r "MOADER_STATUS_COMMAND?Paste the full mac2jb status command: "
+python3 tools/install-from-rpc.py --prepare --status-command "$MOADER_STATUS_COMMAND"
+```
+
+Paste at the prompt and press Return. The helper reads the command as text. If using bash, replace the first line with `read -r -p 'Paste the full mac2jb status command: ' MOADER_STATUS_COMMAND`.
+
+Continue to [Finish SmileBASIC setup](#review-and-install-once).
+
+<a name="route-a-linuxwsl-or-macos-with-ns2jb"></a>
+
+## SmileBASIC with direct ns2jb
+
+### macOS and Linux
+
+Install Git and native **Node 24** on the computer. Then follow [the two-terminal steps](#get-the-held-session-in-terminal-1).
+
+### Windows with WSL2
+
+Install Git, Python and Linux **Node 24** inside your WSL distro. Run `node -p 'process.platform'` there. It must print `linux`. Use Linux paths, and open both terminals in the same distro. Set up [WSL2 networking](#wsl2-networking-before-acquisition) before starting [the two-terminal steps](#get-the-held-session-in-terminal-1).
+
+### Get the held session in Terminal 1
+
+In Terminal 1, check `node --version` and `python3 --version`. Node must report v24. Use Git to get the required ns2jb revision:
 
 ```sh
 git clone https://gitlab.com/kurumuz/ns2jb ns2jb
@@ -62,13 +79,13 @@ Replace `YOUR_PC_LAN_IPV4` with the computer IPv4 that the Switch can reach **an
 node run.cjs --rpc YOUR_PC_LAN_IPV4
 ```
 
-Follow upstream's printed SmileBASIC steps and the fresh `V=START(...)` line. The bootstrap's expected **Out of memory** message is described upstream. Wait for **4/4 verified**, the held RPC/FS-ready message and the newly printed run folder. **Keep Terminal 1, SmileBASIC and the computer awake/open** through Moader installation.
+Follow the host tool’s printed steps. Wait for **4/4 verified**, the held RPC/FS-ready message and the new run folder. Keep Terminal 1, SmileBASIC and the computer awake through installation.
 
-Use `run.cjs --rpc`, **not `hen.cjs` first**: Moader's combined installer performs the HEN bootstrap later. A normal run without `--rpc` closes its endpoint after checks. Do not automate acquisition retries or repeat uncertain native operations.
+Leave HEN startup to Moader’s combined installer. If the run fails, keep the error and follow [setup recovery](TROUBLESHOOTING.md#backend-setup-failed-or-timed-out).
 
-### Terminal 2: prepare Moader locally
+### Prepare Moader in Terminal 2
 
-Open another terminal in the extracted **Moader host-kit folder**, not the ns2jb checkout. On WSL both terminals must be inside the same distro. Replace the run-folder placeholder with Terminal 1's actual newly printed folder; the example is not a reusable session:
+Open Terminal 2 in the extracted Moader kit. Replace both placeholders with the kit path and the current run folder printed in Terminal 1:
 
 ```sh
 cd "YOUR_EXTRACTED_KIT_FOLDER"
@@ -77,36 +94,27 @@ python3 tools/install-from-rpc.py --prepare \
   --node "$(command -v node)"
 ```
 
-The selected Node must be the same native Node 24 used for Terminal 1. This route does **not** require mac2jb. Continue with [review and install once](#review-and-install-once).
+Use the same Node 24 in both terminals. Continue to [Finish SmileBASIC setup](#review-and-install-once).
 
-## Route B: macOS with mac2jb
+<a name="review-and-install-once"></a>
 
-Use the [official mac2jb requirements and entry instructions](https://github.com/cpypwn/mac2jb#readme) to obtain a **fresh verified current-boot FS session**. Close foreground Moader first. Keep **SmileBASIC and the mac2jb host open** through installation. Python 3.10+ is required; the helper preserves the exact bundled Node 24 from the status command.
+## Finish SmileBASIC setup
 
-Open Terminal in the extracted host-kit folder: type `cd `, drag that folder into Terminal and press Return. Alternatively use `cd "YOUR_EXTRACTED_KIT_FOLDER"`, replacing the placeholder.
+1. Wait for preparation to print a command. Preparation checks the kit locally and may download dependencies. The Switch installation starts when you run the printed command.
+2. Review the Node, snapshot and run-folder paths. Run that exact command **once**. Keep SmileBASIC and its session host open until the installer returns to the terminal prompt.
+3. Look for the final **Moader setup complete** line. The published v0.1.2 kit uses the older **Moader runtime and HEN installed** line. If the installer prints that line and exits successfully, the startup check has already passed. You can close SmileBASIC. There is no later terminal check to wait for.
 
-Copy the **entire newly generated four-argument mac2jb status command**, preserving quoted paths. In macOS's default zsh, run:
+If the command fails, times out or reports an uncertain result, keep the report and follow [setup recovery](TROUBLESHOOTING.md#backend-setup-failed-or-timed-out). Leave the old command and session alone.
 
-```sh
-read -r "MOADER_STATUS_COMMAND?Paste the full mac2jb status command: "
-python3 tools/install-from-rpc.py --prepare --status-command "$MOADER_STATUS_COMMAND"
-```
+### Open Moader on the Switch
 
-Paste the full status command at the prompt. The pasted script is not executed and no shell `eval` is used. If using bash, replace the first line with `read -r -p 'Paste the full mac2jb status command: ' MOADER_STATUS_COMMAND`.
+1. Press **HOME**, highlight SmileBASIC and press **X** to close it. Keep the Switch on.
+2. Hold **R** while starting a native Switch 2 game. Let it load, close it, then hold **R** while starting it again to enter hbmenu.
+3. Open **Moader**. In **Settings → Advanced**, check that the filesystem runtime is connected. Then [connect your browser](USAGE.md#connect-a-browser) or start using the app.
 
-## Review and install once
+<a name="wsl2-networking-before-acquisition"></a>
 
-For **either** route, `--prepare` downloads missing pinned inputs, validates the kit and Node, creates a unique local installer snapshot and prints one exact installation command. **It does not contact the Switch or install anything on it.**
-
-Inspect the printed command: it must use the intended Node 24, kit, newly prepared snapshot and the fresh held session. Then **copy and run that exact printed command once**. This is the **privileged installation** step. Keep Terminal 1/mac2jb and SmileBASIC open; do not run a second acquisition, bootstrap HEN separately, substitute a different snapshot or edit proof flags.
-
-If installation fails, times out or reports uncertainty, stop and preserve its report. A native operation may already have completed; do not retry the same command. Follow [setup recovery](TROUBLESHOOTING.md#backend-setup-failed-or-timed-out). A completed bootstrap retires the old diagnostic installation context; its command/handles are not reusable.
-
-After success, use the supported kaiHEN hbmenu entry procedure and open **Moader**. Check the connected runtime and native startup/routing lines in Advanced/Debug. If the web listener is off press **Y**; **ZR** gives its URL/code. Pair the browser, then **+** can close the app while resident web stays available. [Full usage](USAGE.md).
-
-Backend setup is **once per boot**, not part of everyday upload/enable/disable/removal. Saved preferences/library persist on SD; running backend state does not survive a console reboot. NRO/NSO copies alone do not replace running FS hooks or a resident service.
-
-## WSL2 networking before acquisition
+## WSL2 networking for direct ns2jb
 
 Microsoft documents mirrored networking on **Windows 11 22H2+**; it enables LAN access to WSL. Before any held run, configure Windows `%UserProfile%\.wslconfig`:
 
@@ -115,7 +123,7 @@ Microsoft documents mirrored networking on **Windows 11 22H2+**; it enables LAN 
 networkingMode=mirrored
 ```
 
-Apply it with `wsl --shutdown` in Windows, then reopen the distro. This stops WSL processes, so do it **before acquisition**. Inside Linux, use `ip -4 addr show` to check for the chosen LAN IPv4; it must be present/bindable there. See [Microsoft WSL networking](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking).
+Run `wsl --shutdown` in Windows and reopen your distro. Do this before starting the session because it stops WSL processes. Inside Linux, use `ip -4 addr show` to check for the chosen LAN IPv4; it must be present/bindable there. See [Microsoft WSL networking](https://learn.microsoft.com/en-us/windows/wsl/networking#mirrored-mode-networking).
 
 In elevated Windows PowerShell, add a port-specific Hyper-V rule on your trusted LAN:
 
@@ -127,14 +135,12 @@ Allow TCP **39380** through any other applicable host/Linux firewall; do not dis
 
 The [pinned runner](https://gitlab.com/kurumuz/ns2jb/-/blob/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/run.cjs) binds its advertised IPv4 directly. For this runner, Microsoft's [NAT portproxy reference](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/netsh-interface) is **not sufficient by itself**: forwarding a Windows LAN address does not make that address bindable inside NAT-mode Linux. Establish a correct bindable LAN path first or use native Linux. No NAT-only recipe or WSL/device test is claimed here.
 
-In WSL, `node -p 'process.platform'` must print `linux`. Keep acquisition and installation in the same distro using Linux paths/Node. **Never forward the separate loopback RPC bridge**; only the initial Switch-to-host listener uses TCP **39380**.
+**Never forward the separate loopback RPC bridge.**
 
 ## Updating
 
-Keep the app, resident and patched HEN/bootstrap from **v0.1.2** matched. Install the updated backend kit through a fresh current-boot FS session once to add protocol-7 reload support. An older running HEN cannot gain the command by copying files. After that, finish imports, copy a compatible replacement `kaihen/plugins/moader.nso` and use **Settings → Advanced → Reload Moader service**. The command checks and restarts that resident; copying an NSO alone still does not reload it. A foreground app uses its own implementation and cannot restart a resident. [Reload guide](PLUGIN_RELOAD.md).
+Close Moader before replacing the app file. Keep the app and resident from the same release.
 
-Select each game, then open **Settings → Game copy**. Choose Cartridge/game-key for a physical copy or My digital copy for a copy that runs without the card. Unspecified defaults to checking the inserted card. Existing enable requests are preserved; a missing card or verification failure withholds that game's replacements from newly published routing. Insert the card or correct the copy setting, then inspect the apply details. [Full behavior and limits](CARTRIDGES.md).
-
-Compared with v0.1.0-dev.4, the matched HEN/bootstrap pair adds protocol-7 reload and ownership checks. The native FS executable hook is unchanged. Use the v0.1.2 app/resident with matching version labels; the release notes and build proof record their final validation scope. Keep all components from this release together.
-
-Preserve user mods and preferences. Recoverable removal retains payloads for older open game objects; do not manually purge them during the boot. See [Troubleshooting](TROUBLESHOOTING.md), [Building](BUILDING.md) and [Maintaining](MAINTAINING.md).
+- **App only.** Copy the new NRO to SD and reopen the app.
+- **Compatible resident service.** Copy the replacement NSO to `kaihen/plugins/moader.nso`. Use [Reload Moader service](PLUGIN_RELOAD.md) with the matching protocol-7 HEN and bootstrap already running.
+- **New HEN or bootstrap, or a full reboot.** Use the matching backend kit and follow the [setup method for this boot](#start-the-backend-for-this-boot).

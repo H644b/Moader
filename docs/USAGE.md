@@ -1,48 +1,25 @@
 # Use Moader
 
-Moader keeps the same saved library and preferences in its console app and browser interface. For installation and the distinction between foreground and resident mode, start with [Installation](INSTALLATION.md).
-
-## Controller controls
-
-These library actions apply to the selected mod. Settings and diagnostic screens use their own on-screen prompts.
-
-| Control | Action |
-| --- | --- |
-| D-pad | Navigate games, mods and menus |
-| L / R | Change game |
-| A | Enable/disable the selected mod; activate a menu item |
-| X, then X | Confirm recoverable removal of the selected mod |
-| B | Back or cancel |
-| Y | Toggle the web listener; reconnect when disconnected |
-| ZR | Show the web address and pairing code |
-| ZL | Open/close the debug view |
-| Left-stick press | Settings |
-| Right-stick press | Full mod details |
-| Minus | Save an app screenshot |
-| + | Return to hbmenu |
-
-In **resident mode**, + closes the app while the independent service keeps the web interface available. In **foreground mode**, closing the app also stops its listener.
+[Install Moader](INSTALLATION.md), then use the app or a browser to manage the same library on the Switch. To load mods in a game, make sure the backend is connected in **Settings → Advanced**.
 
 ## Connect a browser
 
-1. Put the Switch and browser device on the same local network.
-2. Open Moader and press **Y** if the web listener is off.
-3. Press **ZR** and open the exact address shown. With the default port, the form is `http://YOUR_SWITCH_IP:7712`.
-4. Enter all **six digits** from the Switch, including any leading zeros.
+1. Connect your Switch and your phone or computer to the same trusted local network.
+2. Open Moader. Press **Y** if the web listener is off.
+3. Press **ZR**. Open the address shown on the Switch. The default port is **7712**.
+4. Enter all six digits of the pairing code, including leading zeros. Keep the code private.
 
-The Switch serves the HTML, styles, scripts and API. Pairing needs no cloud account. Keep the pairing code private and use this plain-HTTP interface on a trusted local network. Several incorrect attempts temporarily lock pairing; wait before trying the code again.
+The browser stays available when you leave the app with **+** if the resident service is running. In foreground mode, closing Moader stops its web listener.
 
 ## Upload your first mod
 
-In the browser, choose **Upload mod**, select a ZIP, enter the correct **Game Title ID** and a name, then upload. Games appear in the left rail when they have imported mods. New mods are imported **disabled**, so review their contents and apply requirements before enabling.
+1. Open **Upload mod** in the browser and select a ZIP.
+2. Enter the game's 16-character hexadecimal **Title ID** and a name for the mod. Use a mod made for that game and version.
+3. Upload the ZIP. The mod starts disabled. Select the game, then [choose your game copy](#game-copy-and-cartridges) and enable the mod.
 
-Use the game's real 16-character hexadecimal Title ID. `YOUR_16_DIGIT_TITLE_ID` below is a placeholder to replace, not a value to paste into the form. A display name does not change which Title ID receives the mod.
+The ZIP should contain the mod files at its top level or inside one enclosing folder. Keep the game's original folder and file names inside `romfs/`.
 
 ```text
-Upload form
-  Game Title ID: YOUR_16_DIGIT_TITLE_ID
-  Mod name: My example mod
-
 my-mod.zip
 └── romfs/
     └── path/
@@ -50,88 +27,84 @@ my-mod.zip
             └── example.bin
 ```
 
-The path inside `romfs/` must match the path used by the game. One enclosing folder around the mod is accepted. Use mods for the correct game/version; importing a ZIP does not establish that its files are compatible.
+| Put this in the ZIP | For this type of mod |
+| --- | --- |
+| `romfs/` or `romfs.bin` | Game assets, as loose files or a RomFS image |
+| `exefs/` or `exefs.nsp` | Executable files and modules, including compatible additional subSDKs, as loose files or an ExeFS image |
+| `exefs_patches/` | Binary `.ips` patches |
 
-Supported payload roots include `romfs/`, `exefs/`, `exefs_patches/` with binary `.ips` patches, `romfs.bin` and `exefs.nsp`. Text IPSwitch scripts are not compiled by this release. ZIPs are limited to **128 MiB**, with at most **64 MiB per expanded file** and **256 MiB expanded total**. Links, unsafe paths and conflicting enabled replacements are rejected.
+Use binary IPS files for patches. Moader can't compile text IPSwitch scripts. The ZIP limit is **128 MiB**, with up to **64 MiB** per expanded file and **256 MiB** expanded in total. Use regular files with unique SD paths and leave out unrelated extras. [ZIP troubleshooting](TROUBLESHOOTING.md#my-zip-is-rejected)
 
 ## SD card layout
 
-Moader stores each mod separately under `/moader/library/`, grouped by the game's Title ID. Browser uploads create this structure automatically:
+A browser upload creates the folders for you. To install a mod by hand, put it under the game's lowercase Title ID on SD. Replace `YOUR_TITLE_ID` with the real ID.
 
 ```text
-/moader/library/YOUR_16_DIGIT_TITLE_ID/
-├── mod1/
-│   ├── mod.meta                 optional display name, plain text
-│   └── romfs/
-│       └── [original game folders and replacement files]
-└── mod2/
+/moader/library/YOUR_TITLE_ID/
+└── my-mod/
+    ├── mod.meta       optional display name, plain text
     └── romfs/
-        └── [original game folders and replacement files]
+        └── path/from-the-game/example.bin
 ```
 
-For manual copies, use a lowercase Title ID and mod folder names of at most 48 characters containing only lowercase letters, digits, `-` or `_`. Spell the payload folder **`romfs`** in lowercase. `exefs/`, `exefs_patches/`, `romfs.bin` and `exefs.nsp` go at the same level as `romfs/` inside the mod folder.
-
-Choose **Refresh** in the browser after a manual SD copy; the resident also rescans in its background loop. Enable copied mods through Moader. Let the app manage its state files; do not move, edit or delete an enabled payload while a game is using it. Recoverable removal retains payloads for older open filesystem objects, as described below.
+Name the mod folder with up to 48 lowercase letters, digits, hyphens or underscores. Put other supported payloads alongside `romfs/` inside that folder. After copying, choose **Refresh** in the browser, then enable the mod. Leave the payload files in place while a game is using them.
 
 ## Enable, disable and remove
 
-Select a mod and switch its requested state, or press **A** in the app. Read the apply state and detail text afterward:
+Select the mod and toggle it in the browser or press **A** in the app. For the first check, enable the mod with the game closed and then start the game. Use the apply state to see what Moader still needs.
 
 | State | What to do |
 | --- | --- |
-| Disabled | The mod is not requested; previously cached/loaded content may still need reopening |
-| Pending | The request is saved, but matching runtime acknowledgement is still outstanding |
-| Reopen content | Routing is accepted; make the game read/reopen the relevant content |
-| Relaunch game | Close and reopen the game for executable or other launch-time changes |
-| Error | Read the detail/debug message before trying another change |
-| Game unavailable | Insert the matching cartridge, select the actual digital copy, or resolve the stated verification problem |
+| Disabled | The mod is off. Reopen content or relaunch the game if it still shows a previously loaded change. |
+| Pending | Moader saved the request and is waiting for the filesystem runtime to confirm it. |
+| Reopen content | Make the game load the affected content again. The menu or scene you need depends on the game. |
+| Relaunch game | Close the game from HOME and start it again. |
+| Game unavailable | Check the selected game copy and insert its card if required. |
+| Error | Read the mod details and the debug log. |
 
-Same-sized replacements of existing loose RomFS files can affect later reads in a running game. That does not flush the game's asset cache. In the tested MK8 preview, returning only to character selection was insufficient; **start a race → pause/quit to the main menu → VS Race/course selection** refreshed the image without closing the game.
+### Changes while a game is open
 
-To remove a mod in the browser, select **Remove from library**, then confirm **Remove mod**. On the controller, use **X**, then **X** again. Removal updates the library and requested routing. Its payload is retained for recovery and older open filesystem objects; it is **not a physical disk purge**. Loaded executable changes require a game relaunch even after disable/removal.
+An existing loose RomFS file can pick up a same-size replacement on a later read. Cached content must be loaded again. Added or resized files and full images can need a fresh mount, so relaunch the game if reopening the content doesn't work. Always relaunch for ExeFS modules and executable patches, including after disabling or removing them.
+
+To remove a mod, choose **Remove from library → Remove mod** or press **X** twice. Moader hides the entry and keeps its files on SD so older open game files can finish reading. [How the runtime applies changes](RUNTIME.md)
 
 ## Game copy and cartridges
 
-Select the game, open **Settings → Game copy**, and choose the copy you actually use. The setting saves immediately and is shared by both interfaces.
+Select the game, then open **Settings → Game copy**. Leave it at **Check inserted card** or choose **Cartridge or game-key card** for a physical copy. Keep the correct card inserted, including when a game-key card has downloaded the game. Choose **My digital copy** for a copy you can play without a card.
 
-- **Unspecified / Check inserted card:** the conservative default. A matching inserted card and a consistent second card observation are required.
-- **Cartridge / Cartridge or game-key card:** require this game's physical card, including for downloaded game-key data.
-- **Digital / My digital copy:** check installed noncard base Program data using your explicit selection. Choose this only for a copy you can play without the card. Moader does not verify ownership or infer it from downloaded updates.
+If the game becomes unavailable, Moader keeps your enable settings and pauses new routing for that title. Read the details for the reason. [Game-copy checks](CARTRIDGES.md)
 
-A missing or different card leaves enabled requests saved and shows **Game unavailable** with a reason. Those replacements are omitted from newly published routing. The resident checks availability in its background loop; the foreground app checks while open. Inspect the per-mod detail to see whether FS has acknowledged the updated routing. Already open mounts and loaded changes may still need content or the game to reopen. [Game-card details and verification limits](CARTRIDGES.md).
+## Controller controls
 
-## Refresh and scan failures
-
-Normal polling uses the last complete library inventory, including while a ZIP is being extracted. Another mutation during an import reports that it is busy. It does not start another concurrent import or wait behind the decompression lock.
-
-**Refresh** in the browser explicitly scans SD. The resident also retries a scan after approximately 30 loop ticks (normally about 30 seconds, plus any work in progress). If reading a directory or file fails, the previous list stays visible with an inventory warning. Mod changes pause until a complete scan succeeds. An unreadable initial inventory is labeled unavailable, rather than inviting you to upload into an apparently empty library. Do not delete saved mods to resolve this warning; check SD access and retry Refresh.
+| Control | Action |
+| --- | --- |
+| D-pad | Navigate |
+| **L** / **R** | Change game |
+| **A** | Toggle a mod or choose an item |
+| **X**, then **X** | Confirm removal |
+| **B** | Go back or cancel |
+| **Y** | Toggle the web listener or reconnect |
+| **ZR** | Show the web address and pairing code |
+| **ZL** | Show the debug log |
+| Press left stick | Open Settings |
+| Press right stick | Show full mod details |
+| **−** | Save a screenshot |
+| **+** | Return to hbmenu |
 
 ## Settings
 
-Press the **left stick** in the app or open **Settings** in the browser.
-
-![Native Settings with synthetic example preferences](images/native-settings.png)
-
-*Actual native interface with synthetic example data; an illustration, not a device capture.*
+Press the left stick or open **Settings** in the browser. The app saves changes when you make them. In the browser, select **Save settings**.
 
 | Setting | Effect |
 | --- | --- |
-| Show game names | Use installed names when available; the real Title ID remains available and is the fallback |
-| Reduce motion | Reduce interface animation |
-| Follow latest events | Keep the debug view near new entries |
-| Start web automatically | Start the listener when the hosting service/app starts |
-| Web port, in Advanced | Choose 1024–65535, except reserved port 7713; it applies at the next listener start |
+| Show game names | Use installed names when available. Moader falls back to the Title ID. |
+| Reduce motion | Reduce animation. |
+| Follow latest events / Follow debug log | Keep the debug view near the latest entries. |
+| Start web automatically | Turn the listener on when its host app or service starts. |
+| Web port | Choose a port from 1024 to 65535, except 7713. Restart the listener with **Y** to apply it, then press **ZR** for the updated address. |
 
-Preferences are stored on the Switch and shared across both interfaces. Native toggles save their changes; the browser uses **Save settings**. Restart the listener with Y after changing its port, then reopen the newly displayed URL.
-
-**Advanced** includes runtime details and diagnostic/screenshot exports. **Credits** shows version, licensing and upstream projects. These screens remain useful when troubleshooting; a connected backend and each mod's apply state describe different things.
+Use **Advanced** for runtime status, diagnostic exports and [service reload](PLUGIN_RELOAD.md). **Credits** lists the version, license and upstream projects.
 
 ## Debugging and screenshots
 
-Press **ZL** for native diagnostics. The browser also has a debug panel and an Advanced log download. Native lines describe actual runtime operations, while library events describe requested management changes.
-
-Press **Minus** to save the app screen. You can also save a diagnostic report from the debug/Advanced controls. Before sharing an export, remove pairing information, network addresses, session commands, personal paths and other private details. See [Troubleshooting](TROUBLESHOOTING.md).
-
-## Reload the resident service
-
-With the matching protocol-7 HEN installed, open **Settings → Advanced → Reload Moader service**. Finish imports first. The app shows progress, then reconnects after the new process and its FS acknowledgement are verified. Your browser connection closes during restart; reconnect afterward with the saved pairing code. Reload leaves the installed FS hook running and does not clear game caches. [Full reload instructions, command and recovery](PLUGIN_RELOAD.md).
+Press **ZL** in the app or open the browser debug panel. Library events show what you asked Moader to do. Native events can show what the filesystem accepted or read. Press **−** to save an app screenshot. Before sharing a report, [remove private details](TROUBLESHOOTING.md#reporting-a-problem).

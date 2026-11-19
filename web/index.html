@@ -33,7 +33,7 @@
   <div class="pair-content">
     <svg class="pair-icon"><use href="#i-link"/></svg>
     <h1>Pair with your Switch</h1>
-    <p>Turn on the web GUI in Moader, then enter the pairing code from its connection screen.</p>
+    <p>Press ZR in Moader to show the pairing code.</p>
     <form id="pair-form">
       <label for="pair-code">Six-digit pairing code</label>
       <div class="pair-fields"><input id="pair-code" aria-describedby="pair-error" type="text" inputmode="numeric" autocomplete="one-time-code" spellcheck="false" pattern="[0-9]{6}" minlength="6" maxlength="6" required placeholder="000000"><button class="primary" type="submit">Connect</button></div>
@@ -66,10 +66,10 @@
     <section id="upload-pane" class="upload-pane" aria-labelledby="upload-title" hidden>
       <div class="section-heading"><h2 id="upload-title">Upload a mod</h2><button id="hide-upload" class="icon-button" aria-label="Close upload"><svg><use href="#i-close"/></svg></button></div>
       <form id="upload-form">
-        <div id="drop-zone" class="drop-zone"><svg><use href="#i-upload"/></svg><label for="mod-file"><strong id="file-label">Choose a ZIP or drop it here</strong><span>RomFS and ExeFS folders · up to 128 MiB</span></label><input id="mod-file" type="file" accept=".zip,application/zip" required></div>
+        <div id="drop-zone" class="drop-zone"><svg><use href="#i-upload"/></svg><label for="mod-file"><strong id="file-label">Choose a ZIP or drop it here</strong><span>RomFS, ExeFS and binary IPS · up to 128 MiB</span></label><input id="mod-file" type="file" accept=".zip,application/zip" required></div>
         <div class="upload-fields"><label for="upload-title-id">Game Title ID<input id="upload-title-id" class="mono" required pattern="0[14][a-fA-F0-9]{14}" minlength="16" maxlength="16" placeholder="16 hexadecimal characters" spellcheck="false"></label><label for="mod-name">Mod name<input id="mod-name" required maxlength="100" placeholder="Name for your library"></label></div>
         <div id="upload-progress" class="upload-progress" hidden><progress id="progress-bar" aria-label="Upload progress" max="100" value="0"></progress><span id="progress-text">Preparing upload…</span></div>
-        <div class="upload-actions"><p>New mods are imported disabled. Existing mods are preserved.</p><button id="upload-submit" class="primary" type="submit">Upload to Switch</button><button id="upload-cancel" type="button" hidden>Cancel</button></div>
+        <div class="upload-actions"><p>New mods start disabled.</p><button id="upload-submit" class="primary" type="submit">Upload to Switch</button><button id="upload-cancel" type="button" hidden>Cancel</button></div>
         <p id="upload-error" class="error-text" role="alert"></p>
       </form>
     </section>
@@ -77,7 +77,7 @@
     <div class="mod-toolbar"><label class="search-box"><svg><use href="#i-search"/></svg><input id="search" type="search" placeholder="Search mods" aria-label="Search this game's mods"></label><button id="refresh" class="quiet"><svg><use href="#i-refresh"/></svg>Refresh</button></div>
     <div class="list-heading"><span>Mod</span><span>Apply state</span><span>Requested</span></div>
     <ul id="mods" class="mod-list"></ul>
-    <div id="empty-state" class="empty-state"><svg><use href="#i-stack"/></svg><h2>No mods in this library yet</h2><p>Upload a mod ZIP to begin. You can enable it after reviewing its contents and apply requirements.</p><button id="empty-upload" class="secondary"><svg><use href="#i-upload"/></svg>Upload your first mod</button></div>
+    <div id="empty-state" class="empty-state"><svg><use href="#i-stack"/></svg><h2>No mods in this library yet</h2><p>Upload a mod ZIP to get started.</p><button id="empty-upload" class="secondary"><svg><use href="#i-upload"/></svg>Upload your first mod</button></div>
     <div id="no-results" class="empty-search" hidden><h2>No matching mods</h2><p>Try another name or clear the search.</p><button id="clear-search">Clear search</button></div>
 
     <section id="inspector" class="inspector" aria-labelledby="inspector-title" hidden>
@@ -108,7 +108,7 @@
           <label class="setting-row" for="pref-follow-log"><span><strong>Follow debug log</strong><span>Follow new events while you’re at the end of the log. Scroll up to read earlier events.</span></span><input id="pref-follow-log" type="checkbox" name="followLog" role="switch"></label>
         </section>
         <section id="settings-advanced" class="settings-section" role="tabpanel" aria-labelledby="tab-advanced" hidden>
-          <label class="setting-row" for="pref-web-on-start"><span><strong>Start web GUI with Moader</strong><span>Make the web GUI available when the console app starts.</span></span><input id="pref-web-on-start" type="checkbox" name="webOnStart" role="switch"></label>
+          <label class="setting-row" for="pref-web-on-start"><span><strong>Start web automatically</strong><span>Start the listener when the app or resident service that hosts it starts.</span></span><input id="pref-web-on-start" type="checkbox" name="webOnStart" role="switch"></label>
           <div class="setting-port"><label for="pref-web-port">Web port</label><input id="pref-web-port" name="webPort" type="number" min="1024" max="65535" step="1" required inputmode="numeric" aria-describedby="port-help"><p id="port-help">1024–65535, except 7713. Changes apply the next time you restart the web GUI with Y on the console.</p></div>
           <div class="settings-runtime"><h2>Current session</h2><dl class="diagnostic-facts"><div><dt>Listener</dt><dd><code id="settings-listener"></code></dd></div><div><dt>Runtime backend</dt><dd id="settings-backend"></dd></div><div><dt>Runtime connection</dt><dd id="settings-runtime-connection"></dd></div><div><dt>Runtime result</dt><dd><code id="settings-result"></code></dd></div><div><dt>Library generation</dt><dd id="settings-generation"></dd></div><div><dt>Applied generation</dt><dd id="settings-applied-generation"></dd></div></dl><p class="small-copy">A connected runtime reports communication. Each mod’s apply state describes its routing requirements.</p><button id="download-log" type="button">Download debug log</button></div>
         </section>

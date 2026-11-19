@@ -1,13 +1,12 @@
 name: Mod compatibility report
-description: Record what a specific mod actually does, including content reload requirements.
+description: Report how a game and mod behave with Moader.
 title: "[Compatibility]: "
 labels: [compatibility, needs-triage]
 body:
   - type: markdown
     attributes:
       value: >-
-        Report observations without attaching game/mod binaries or original content.
-        No original-file hash experiment is required. A routing receipt alone is not a visible game result.
+        Tell us what changed in the game and whether you had to reopen it. Keep game and mod files out of the report.
   - type: input
     id: version
     attributes:
@@ -26,12 +25,13 @@ body:
   - type: dropdown
     id: entrypoint
     attributes:
-      label: Backend entrypoint
+      label: Backend setup method
       options:
         - Unknown
         - SmileBASIC through ns2jb or mac2jb
-        - CivSwitch through pinned s8n profile (experimental)
-        - Another source or entrypoint (describe below)
+        - Seedsow Lullaby Demo from source
+        - CivSwitch (experimental)
+        - Other (describe below)
   - type: input
     id: mod
     attributes:
@@ -55,21 +55,21 @@ body:
     id: environment
     attributes:
       label: Setup and actions
-      description: Console/firmware and kaiHEN versions if known; current-boot runtime status; import/enable/disable/removal actions. Omit private identifiers and addresses.
+      description: List your firmware and kaiHEN version if known. Say whether you set up the backend this boot and which mod actions you tried.
     validations:
       required: true
   - type: textarea
     id: observed
     attributes:
       label: Observed game behavior
-      description: What changed when enabled, disabled or removed? Which scene/content reload, game relaunch or console reboot was used? Include a negative result honestly.
+      description: Describe what you saw after enabling, disabling or removing the mod. Include any content reload, game relaunch or console reboot.
     validations:
       required: true
   - type: textarea
     id: native
     attributes:
       label: Native status and sanitized messages
-      description: Requested/applied generation and result, if available. Describe a visible effect separately. Never paste a pairing code, raw private bundle, game bytes or session data.
+      description: Include the apply state and relevant debug lines if available. Remove pairing codes and private details.
       render: text
   - type: checkboxes
     id: privacy

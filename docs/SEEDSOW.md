@@ -1,8 +1,8 @@
 # Install Moader through Seedsow Lullaby Demo
 
-This is the **repository source workflow** for the Seedsow Lullaby Demo entrypoint on Apple Silicon macOS, Linux x86_64 or WSL2 x86_64. It builds Moader and its matched kaiHEN components, then uses Moader's patch of the [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen). The published v0.1.2 backend ZIP uses other entrypoints and does not contain this workflow.
+Use the Seedsow Lullaby Demo method with Moader's current source and the [Seedsow FS GUI](https://github.com/Malev0/seedsow-fs-kaihen). Choose the computer you're using below. This method builds its own matched app, resident and kaiHEN components outside the v0.1.2 download.
 
-One Demo installation on firmware 23.0.1 from macOS passed current-boot FS memory and RO checks, started the matched HEN and Moader resident, opened the console app, and kept the paired browser available after the app closed. See the [exact validation scope](VALIDATION.md#seedsow-lullaby-demo-source-workflow). Linux x86_64 passed host build and transport checks. WSL2 follows that Linux path but has no separate host or live-console installation record. Other firmware and Seedsow Full Game remain untested with this Moader path.
+One Demo installation on firmware 23.0.1 was verified from macOS. Linux x86_64 passed host build and transport checks. WSL2 follows the Linux build path. [Seedsow test results](VALIDATION.md#seedsow-lullaby-demo-source-workflow)
 
 ## Before you begin
 
@@ -18,7 +18,9 @@ git clone https://github.com/H644b/Moader.git
 cd Moader
 ```
 
-On **Apple Silicon macOS**, install [Homebrew](https://brew.sh/) if needed, finish any Apple command line tools prompt, then run:
+### Apple Silicon macOS
+
+Install [Homebrew](https://brew.sh/) if needed, finish any Apple command line tools prompt, then run:
 
 ```sh
 xcode-select --install  # only if Apple command line tools are missing
@@ -28,7 +30,9 @@ export MOADER_NODE24="$(brew --prefix node@24)/bin/node"
 python3 --version
 ```
 
-On **Ubuntu or Debian Linux x86_64**, including WSL2, keep the checkout in the Linux filesystem (for example under `~/Moader`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
+### Linux x86_64 or Windows with WSL2
+
+On Ubuntu or Debian, keep the checkout in the Linux filesystem (for example under `~/Moader`). Install [Linux Node.js 24](https://nodejs.org/en/download/) inside Linux, then run:
 
 ```sh
 sudo apt-get update
@@ -41,7 +45,7 @@ python3 --version
 
 Node must report `v24`, and Python must be at least `3.10`. On WSL, Node must report `linux`; Windows `node.exe` and Windows paths are not supported. Other Linux distributions can supply the same tools through their package manager. `xcode-select --install` on macOS may report that the tools are already installed.
 
-### WSL2 network check
+#### WSL2 network check
 
 The Seedsow Demo hosts both the HTTP launcher on TCP **8080** and the owned binary listener on TCP **39380**. The Linux process connects **outbound** to the Switch on both ports. Once the Demo is open and **Y** has started its launcher, confirm that WSL can reach `http://SWITCH_LAN_IP:8080/` before beginning a run. The listener on 39380 starts only during the single owned attempt; do not start or probe it separately. The GUI binds only to `127.0.0.1:31338` inside WSL, and [Windows browsers normally reach WSL services through localhost](https://learn.microsoft.com/en-us/windows/wsl/networking#accessing-linux-networking-apps-from-windows-localhost). Open the printed GUI URL in your Windows browser if the Linux launcher does not open one. Keep the build, GUI and installation in the same WSL distro with Linux Node and paths. This route does not use the inbound host listener or port-forwarding instructions for the separate direct ns2jb route.
 
@@ -58,9 +62,9 @@ export MOADER_AARCH64_OBJCOPY="$PWD/vendor/devkitpro/devkitA64/bin/aarch64-none-
 
 Set the assembler before starting the GUI. On macOS use `export MOADER_AARCH64_CLANG="$(xcrun --find clang)"`; on Linux or WSL2 use `export MOADER_AARCH64_CLANG="$(command -v clang)"`.
 
-The first command verifies checksum-pinned, host-specific SDK packages. The second downloads the pinned Seedsow source closure and official kaiHEN base, builds Moader's app, resident, RO, HEN and bootstrap in an isolated source copy, and rejects mismatched output. The third is a read-only local check; it should report `hostProfile: "seedsow-malev0"` and `readyForInstallerCheck: true`. The `clang` and `objcopy` variables select the compilers used to assemble one hash-checked helper during a live attempt. Apple command line tools and the pinned SDK reproduced that helper's 72-byte digest on the tested Mac; Linux host checks exercise the same digest.
+The first command installs the local SDK. The second builds the matched components from pinned source. The third checks the build and should report `hostProfile: "seedsow-malev0"` and `readyForInstallerCheck: true`. Keep the two tool paths set in the terminal that starts the GUI.
 
-The upstream Seedsow source and downloaded archives stay under ignored `research/`; the SDK stays under ignored `vendor/`. None is a console session. If you have already supplied the exact pinned archives, the build command can use `--offline --engine-archive PATH --kaihen-archive PATH`; otherwise leave `--offline` out.
+For an offline build with the exact pinned archives, add `--offline --engine-archive PATH --kaihen-archive PATH` to the build command.
 
 ## Prepare and open the GUI
 
@@ -73,20 +77,20 @@ export MOADER_SEEDSOW_GUI="$PWD/../seedsow-fs-kaihen-moader-main"
 tools/start-seedsow-gui.sh "$MOADER_SEEDSOW_GUI"
 ```
 
-Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Demo launcher starts. Select **Auto-Download Moader kaiHEN**. This button downloads the checksum-pinned official base and stages the exact locally built RO, HEN, bootstrap, `Moader.nro` and resident plugin. Wait for its matched-bundle result. **Start regular kaiHEN** is a separate upstream action and does not install the Moader backend.
+Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Demo launcher starts. Select **Auto-Download Moader kaiHEN**. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
 
 The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse an already checked folder with `--check` and `start-seedsow-gui.sh`. If you kept an earlier locally patched GUI folder, provision this new folder so its source and patch hashes match the repository.
 
 ## Install on one fresh boot
 
 1. Fully reboot the Switch. Open Seedsow Lullaby Demo with the working launcher save, then press **Y**. Wait for **Console Online** in the GUI. Do not run FS acquisition or regular kaiHEN separately on this boot.
-2. Select **Install Moader on this boot** **once**. Leave the host computer, GUI and Demo running. The controller checks fresh Demo code signatures, owns one bounded acquisition, proves FS memory read/write/restoration, runs RO checks, installs the Moader runtime and matched HEN, then inspects the running HEN and resident service.
-3. Continue when the GUI reports the held **Moader device-verification gate**. A prepared bundle, launcher connection, or copied NRO alone is not this result. If the GUI stops or reports an uncertain native result, follow [Recovery](#recovery) before another attempt.
-4. Press **HOME** and close Seedsow. Hold **R** while starting a native Switch 2 game. Let it load, close the game, then hold **R** while starting it a second time to enter hbmenu. This is the upstream kaiHEN route used in the device test.
-5. Open **Moader** from hbmenu. Press **ZL** and check that the native runtime and FS/backend report connected. Press **Y** if the web listener is off; **ZR** displays its current URL and private six-digit pairing code. Open that URL from a browser on your local network, enter the code there, and check the library and settings. Keep the code private.
-6. Press **+** to return to hbmenu. The paired browser should still load because the resident service runs separately. Enable a mod only when you intend to test that game's file routing. Read its apply state; cached content may need to reopen and executable changes may need a game relaunch. [Mod use and limits](USAGE.md).
+2. Select **Install Moader on this boot** **once**. Leave the host computer, GUI and Demo running. Wait while the installer sets up the backend and checks the running service.
+3. Wait for **Moader service check passed** in the GUI. You can close the Demo once you see that message. Keep the GUI and host open for the checks below. If setup stops or the result is uncertain, follow [Recovery](#recovery).
+4. Press **HOME** and close Seedsow. Hold **R** while starting a native Switch 2 game. Let it load, close it, then hold **R** while starting it again to enter hbmenu.
+5. Open **Moader**. Check the runtime connection under **Settings → Advanced**, then [pair your browser](USAGE.md#connect-a-browser).
+6. Press **+** to return to hbmenu. Reload the page to confirm the resident is still serving it.
 
-The backend runs for this boot. The library and settings remain on SD, but a full Switch reboot ends the running HEN, FS routing and resident service. Repeat this workflow from a new Demo launcher session when you need the backend on a later boot. Do not replay a saved run, PID, handle, address or installer command.
+The backend runs until you reboot. Repeat setup with a fresh Demo session for that boot. Your library and settings stay on SD.
 
 ## Recovery
 

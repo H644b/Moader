@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare local Moader inputs for a pinned held-FS host; print installation command."""
+"""Prepare the Moader installer on this computer. With --prepare, print the command that installs it on the Switch."""
 from __future__ import annotations
 import argparse, os, pathlib, re, shlex, shutil, subprocess, sys
 
@@ -32,13 +32,13 @@ def run_directory(value):
     # Check lexical ancestors before resolve: link/../run must not conceal a
     # symlink. Only then canonicalize paths relative to the invoking terminal.
     for part in (absolute, *absolute.parents):
-        require(not part.is_symlink(), 'Run folder path contains a symlink: ' + str(part) + '; use the real, nonsymlink ns2jb/mac2jb run path')
+        require(not part.is_symlink(), 'Run folder path contains a symlink: ' + str(part) + '. Use the folder’s real path')
     try:
         resolved = absolute.resolve(strict=True)
     except OSError as error:
-        raise ValueError('Run folder is missing or inaccessible; use the existing runs folder printed by the held ns2jb/mac2jb runner: ' + str(absolute)) from error
+        raise ValueError('Run folder is missing or inaccessible. Use the folder printed by your host tool: ' + str(absolute)) from error
     require(resolved.is_dir(), 'Run folder must be an existing directory: ' + str(resolved))
-    require(re.fullmatch(r'switch2-[A-Za-z0-9]+', resolved.name), 'Invalid ns2jb/mac2jb run folder name; use the folder printed by the held runner')
+    require(re.fullmatch(r'switch2-[A-Za-z0-9]+', resolved.name), 'Unrecognized run folder name. Use the folder printed by your host tool')
     return resolved
 
 
@@ -113,11 +113,11 @@ def prepare(root, node, run, host_profile='smilebasic-kurumuz'):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     route = parser.add_mutually_exclusive_group(required=True)
-    route.add_argument('--status-command', help='the full quoted mac2jb status command (not just its run path)')
-    route.add_argument('--run-dir', help='an existing switch2-* held-run folder; absolute or relative POSIX path; Seedsow requires a new Moader-owned run')
-    parser.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned host family; nondefault profiles require --run-dir; Seedsow uses its dedicated GUI')
-    parser.add_argument('--node', help='Node.js 24 command or executable path (default: node); --run-dir route only')
-    parser.add_argument('--prepare', action='store_true', help='prepare pinned local inputs and print installation command; use the dedicated GUI for Seedsow')
+    route.add_argument('--status-command', help='the entire mac2jb status command, with its quotes')
+    route.add_argument('--run-dir', help='the current held session folder from the host tool')
+    parser.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='setup method. Use --run-dir with a nondefault method. Use the Seedsow GUI for Seedsow')
+    parser.add_argument('--node', help='Node.js 24 for --run-dir (default: node)')
+    parser.add_argument('--prepare', action='store_true', help='prepare files on this computer and print the installation command for SmileBASIC or CivSwitch')
     parser.add_argument('--root', type=pathlib.Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     require(sys.platform != 'win32', 'Native Windows is unsupported; run this helper in Linux/WSL or macOS with Node.js 24')
@@ -133,10 +133,10 @@ def main(argv=None):
     if not args.prepare:
         print('Parsed Node executable: ' + node)
         print('Parsed run folder: ' + str(run))
-        print('Add --prepare to prepare local inputs. No status command was executed.' if args.status_command is not None else 'Add --prepare to prepare local inputs. No commands were executed.')
+        print('Input check passed. Add --prepare to prepare the installer on this computer.')
         return None
     command = prepare(args.root.resolve(), node, run, args.host_profile)
-    print('Local snapshot prepared. No console connection opened. Review and run this command once:')
+    print('Installer files are ready on this computer. Review the command below and run it once with your current held session.')
     print(shlex.join(command))
     return command
 

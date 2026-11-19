@@ -1,6 +1,6 @@
 # Moader mark
 
-[`mark.svg`](mark.svg) is the canonical Moader M. Use its geometry for every app icon and interface header; do not substitute a font glyph or redraw it independently.
+[`mark.svg`](mark.svg) is the canonical Moader M. Use the same shape in every app icon and interface header.
 
 | File | Used by |
 | --- | --- |
@@ -15,7 +15,7 @@ The exported shapes share a `0 0 64 64` view box. The native mask is 96 × 96. T
 
 ## Regenerating assets
 
-The checked-in exports are sufficient to build Moader. To change them deliberately:
+Use the checked-in exports for regular builds. When updating the artwork:
 
 1. Read [`export.py`](export.py) and update the canonical geometry/colors there and in `mark.svg` consistently.
 2. Install the Python dependencies used by the exporter in a local environment.

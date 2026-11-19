@@ -1,12 +1,10 @@
 # Maintaining the release inputs
 
-Release preparation must preserve the link between public source, qualified HEN/bootstrap pair, portable runtime manifest, host kit and SD app/plugin ZIP. Use a clean staging directory. Never package the working checkout wholesale: `research/`, `state/`, `evidence/`, mac2jb run folders, captured policies, local journals, developer SDKs and prepared installer snapshots can contain machine or device state.
-
-The public source includes Moader source, tests, scripts, documentation, licensing, `runtime/kaihen` source and the shipped portable runtime assets. Keep the sanitized `software-builds/kaihen-mo.json` and corresponding `.patch` as the public HEN provenance record. Preserve the base revision, release base, patch reference, toolchain and HEN/bootstrap digests with their validation scope; do not publish private evidence paths or session identifiers.
+Package a clean, committed source tree with the exact binaries recorded in `config/release.json`. Keep research, device logs, SDKs, captured policies and installer snapshots in the local checkout. Include the corresponding source, patches and license notices.
 
 ## Release layout
 
-The current release tag is `v0.1.2`. PR #7 has been merged; exact build and validation scope are recorded separately. Publication is not hardware acceptance: keep `console_retest_passed` and `appAndResidentHardwareTested` false unless the exact claimed checks pass. GitHub's `releases/latest` endpoint can skip prereleases, so use explicit tag download links.
+The latest published release is **v0.1.2**. Use the [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and its component proof to reproduce that layout. Current `main` has a different matched Seedsow build. Its proof and binaries cannot be used with v0.1.2's recorded digests.
 
 | Artifact | Contents |
 | --- | --- |
@@ -42,19 +40,19 @@ This descriptor is optional for the populated host kit and for `--build`. Do not
 
 ## Package the committed public source
 
-`config/release.json` records the version/tag, exact app/resident/HEN/bootstrap sizes and SHA-256 digests, and the validation document. Its `appAndResidentHardwareTested` flag records whether the exact app/resident pair has console validation. The v0.1.2 app/resident use matching version labels. Its custom HEN source retains physical-card/reload integration and removes the local pending-launch adjustment; fresh build and host qualification are recorded separately from the earlier startup-tested candidate. Read the build proof and validation document for exact host/device scope; do not inherit the old HEN's console-tested claim. A fresh source rebuild can have different app/resident hashes because of debug paths. Record an intentional build and its validation boundary before updating pins; do not replace them merely to make packaging pass.
+The descriptor records the tag, exact binary sizes and SHA-256 digests. Set hardware-validation flags only for checks that passed on the exact components named by the descriptor. Build paths can change the app or resident hashes. Keep the checked source and output digests connected when they change.
 
-Finish the intended build and checks, audit the public source, and commit all release source/documentation/config changes before packaging:
+For a matching release checkout, audit and commit the source before packaging:
 
 ```sh
 python3 tools/package-release.py
 ```
 
-The release packager exports committed public source from `HEAD`, adds only the four exact binaries above, and uses `tools/package-homebrew.py` for the SD ZIP. Uncommitted source changes are not included. Outputs go to `dist/releases/`: `Moader-v0.1.2.zip`, `Moader-backend-v0.1.2.zip`, `Moader.nro`, `moader.nso`, and `SHA256SUMS.txt`, with a manifest if emitted by the packager. Inspect and test these final exported bytes before uploading them. Keep the source commit used for packaging in the release record.
+The packager reads the source from `HEAD`, verifies the component proof and checks the exported public tree. It writes both ZIPs, the standalone programs, `release-manifest.json` and `SHA256SUMS.txt` under `dist/releases/`. Use an empty output directory. Review the final bytes before release and record the source commit with the downloads.
 
 ## Native changes
 
-The supported SDK bootstrap covers Apple Silicon macOS and Linux x86_64 with the pins documented in [BUILDING.md](BUILDING.md). Use a fresh checkout and `python3 tools/setup-backend.py --build` for isolated HEN/bootstrap/app compilation. The HEN/bootstrap pair must reproduce the source-qualified proof before provisioning. The app's debug information can encode its build directory, so distinguish successful builds from byte reproducibility.
+The supported SDK bootstrap covers Apple Silicon macOS and Linux x86_64 with the pins documented in [BUILDING.md](BUILDING.md). Build in a fresh checkout with the method and profile for the source revision you selected. The backend components must reproduce the source-qualified proof before setup accepts them.
 
 Changes to `runtime/modloader/native` or a source listed in its prebuilt manifest require Zig 0.15.2 and a maintainer rebuild:
 

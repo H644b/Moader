@@ -19,69 +19,30 @@ for notice in sorted((root / 'native/third_party/licenses').glob('*.txt')):
     files['Moader-docs/licenses/' + notice.name] = notice
 app, service = files['switch/Moader.nro'].read_bytes(), files['kaihen/plugins/moader.nso'].read_bytes()
 assert app[16:20] == b'NRO0' and service[:4] == b'NSO0'
-instructions = '''Moader RELEASE_TAG (app display version APP_VERSION)
+tag = release['tag']
+repository = 'https://github.com/' + release['repository']
+instructions = f'''Moader {tag}
 
-Validation scope and release details:
-https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/VALIDATION.md
-https://github.com/H644b/Moader/releases/tag/RELEASE_TAG
+1. Close Moader on the Switch if it is open.
+2. Copy switch/Moader.nro to the SD card's switch folder.
+3. Open Moader from hbmenu.
 
-Extract the switch/ and kaihen/ directories to the SD root. Open Moader
-normally from hbmenu. The M mark is shared by the app, web GUI and favicon.
+If the matching backend is running, the app connects to it. Otherwise the
+app can manage the library and serve the browser while it stays open.
+Press Y if the web listener is off. Press ZR for the address and six-digit
+pairing code. Open the displayed address on the same local network.
 
-Y: web on/off. ZR: address and six-digit pairing code. Left stick: Settings.
-A: enable/disable request. X then X: recoverable removal. B: back/cancel.
-L/R: game. D-pad: navigation. Right stick: full mod details. ZL: debug.
-Minus: save a screenshot. Plus: hbmenu. Settings includes Advanced and Credits.
+This ZIP also contains kaihen/plugins/moader.nso. Copy it to the matching
+folder on SD to stage a replacement. Open Settings > Advanced >
+Reload Moader service to load it if your running backend supports reload.
+For first-time backend setup, a reboot or a HEN update, use the matching
+backend kit and the installation guide.
 
-Settings persist on the Switch: game names/Title IDs, reduced motion,
-debug-log following, automatic web startup and the web port. Unknown game
-names fall back to their Title IDs. A changed port applies at the next
-listener start. The web server defaults off at port 7712.
-
-Select each game, then open Settings / Game copy. Cartridge and game-key
-copies require their matching inserted card. Choose Digital only for a copy
-you can play without that card. Unspecified checks the inserted card; it does
-not infer digital ownership from downloaded files. Missing/uncertain games
-keep requested settings but are omitted from new routing. Read apply details
-for acknowledgement or withdrawal errors. Already loaded changes may remain.
-
-State polling keeps the last complete library available during imports.
-Refresh in the browser explicitly rescans SD; failed scans retain that list
-with a separate warning and pause changes until a complete scan succeeds.
-
-The standalone foreground app hosts the web GUI while Moader stays open.
-Copying moader.nso alone does not start or reload its process. With the
-matching protocol-7 backend installed, use Settings / Advanced / Reload Moader
-service. Older HEN installations need the updated backend kit once first. Resident browser access during games
-also requires the separate privileged filesystem-runtime installation.
-This archive does not perform that installation. Beginner setup and usage:
-https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/INSTALLATION.md
-https://github.com/H644b/Moader/blob/RELEASE_TAG/docs/USAGE.md
-https://github.com/H644b/Moader/wiki
-
-Native debug output in this build requires the matching updated filesystem
-runtime, which publishes closed log snapshots. The app and resident include
-the compressed ZIP boundary fix, verified by host tests. These rebuilt binaries
-have not been console-tested. Resident browser management,
-native debug output and live enable/disable/removal of an MK8 course-preview
-texture passed device checks with the original binaries. That preview refreshed after a race, quitting
-to the main menu and reopening course selection, without closing the game.
-Copying the new app/plugin does not update FS hooks.
-
-Resident browser uploads use the running service's ZIP reader. Copying only
-the new NRO does not fix uploads handled by an older resident. Use the matched
-updated backend kit for the next supported per-boot setup.
-
-Requested settings and runtime acknowledgement are separate. Same-sized
-loose-file replacements support live reads; the MK8 texture test confirmed
-this after a scene reload. Game caches,
-changed file geometry and executable changes can require content to reopen
-or the game to relaunch. Do not infer game success from a library write.
-
-No device pairing code, saves, firmware, game files or private state are
-included in this package. Corresponding source, credits and build instructions:
-https://github.com/H644b/Moader/tree/RELEASE_TAG
-'''.replace('RELEASE_TAG', release['tag']).replace('APP_VERSION', release['version'])
+Install and update: {repository}/blob/{tag}/docs/INSTALLATION.md
+Manage mods: {repository}/blob/{tag}/docs/USAGE.md
+Downloads and checksums: {repository}/releases/tag/{tag}
+Corresponding source: {repository}/tree/{tag}
+'''
 manifest = {name: {'bytes': path.stat().st_size,
                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
             for name, path in files.items()}

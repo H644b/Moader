@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the normal NRO and stage its plugin; never patch a running process."""
+"""Copy the console app and stage the resident plugin on SD over FTP."""
 from pathlib import Path
 import argparse
 import datetime
@@ -189,7 +189,7 @@ class Installer:
             self.record['complete'] = True
             self.record['finished'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
             self.save()
-            print('Normal app installed. Plugin staged for a later kaiHEN bootstrap; no FS acquisition performed.')
+            print('Moader app copied to SD. The plugin is staged on SD for backend setup or a compatible service reload.')
         except BaseException as error:
             self.record['error'] = repr(error)
             self.save()
@@ -198,8 +198,8 @@ class Installer:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('host', type=str)
-    parser.add_argument('port', type=int, nargs='?', default=1337)
+    parser.add_argument('host', type=str, help='address of the Switch FTP server')
+    parser.add_argument('port', type=int, nargs='?', default=1337, help='FTP port (default: 1337)')
     args = parser.parse_args()
     Installer(args.host, args.port).run()
 

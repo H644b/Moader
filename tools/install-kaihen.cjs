@@ -277,8 +277,7 @@ async function execute() {
   record.complete = true;
   record.finished = new Date().toISOString();
   await persist();
-  console.log('HEN running. Keep '+(host?.target==='seedsow'?'Seedsow Lullaby Demo':host?'Civilization VII':'SmileBASIC')+
-    ' open for the HEN status check before testing hbmenu.');
+  console.log('HEN startup check passed.');
 }
 try { await execute(); }
 catch (error) {
@@ -288,7 +287,7 @@ catch (error) {
     record.inspectBeforeRetry = true;
     try { await persist(); } catch {}
   }
-  console.error('This install was not replayed. Inspect ' + output + ' before further native work.');
+  console.error('HEN setup stopped. Check the report before trying again: ' + output);
   throw error;
 }
 }

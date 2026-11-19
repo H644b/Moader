@@ -1,16 +1,20 @@
 # How Moader modifies kaiHEN
 
-Moader publishes the full modified source and the complete patch against the pinned upstream revision. The current patch adds cooperative plugin reload and the read-only game trace. The application, resident service and FS hook have separate roles and validation records.
+Moader ships a modified kaiHEN for features such as cooperative service reload and game trace diagnostics. Use the exact source and build records for the version you are reviewing.
 
 | Record | Value |
 | --- | --- |
 | Upstream project | [ouncebrew/kaihen](https://github.com/ouncebrew/kaihen) |
 | Source base | [`e897f991524590833b82fbe8d63a3c6775fb8101`](https://github.com/ouncebrew/kaihen/tree/e897f991524590833b82fbe8d63a3c6775fb8101) |
 | Official release inputs | [`20261114c`](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) |
-| Exact changes | [kaihen-mo.patch](../software-builds/kaihen-mo.patch) |
+| Current source changes | [kaihen-mo.patch](../software-builds/kaihen-mo.patch) |
 | Full modified source | [runtime/kaihen](../runtime/kaihen/) |
-| Source, patch and HEN/bootstrap digests | [kaihen-mo.json](../software-builds/kaihen-mo.json) |
-| Shipping app/resident and HEN/bootstrap sizes and hashes | [release.json](../config/release.json) |
+| Current source, patch and component digests | [kaihen-mo.json](../software-builds/kaihen-mo.json) |
+| v0.1.2 release source and binary digests | [Tagged build proof](https://github.com/H644b/Moader/blob/v0.1.2/software-builds/kaihen-mo.json) · [Tagged release descriptor](https://github.com/H644b/Moader/blob/v0.1.2/config/release.json) |
+
+## Current source profile
+
+The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the component hashes and one Demo installation. See [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) for host and console results. Use the tagged proof above for the v0.1.2 kit.
 
 ## v0.1.2 source selection
 
@@ -62,7 +66,7 @@ The `PluginService` source structure gains lifecycle and thread ownership fields
 
 The FS runtime derived from ns2jb-modloader lives under [runtime/modloader](../runtime/modloader/) and is unchanged by the reload feature. It remains installed in FS while the selected resident process restarts. This command cannot repair an FS/system failure or clear a game's loaded assets.
 
-RO, the game loader and hbmenu remain checksum-qualified official release components. HEN **and bootstrap** use the paired source-qualified bytes above. Setup and installation verify the repository's source-tree digest, patch digest, both binary descriptors and their prepared-snapshot proof identity. These hashes record a reviewed build relationship; they are not themselves proof of hardware behavior.
+The v0.1.2 kit uses the official RO, game loader and hbmenu with a matched custom HEN and bootstrap. The Seedsow source build also provides its own matched RO. Setup and installation verify the repository's source-tree digest, patch digest, both binary descriptors and their prepared-snapshot proof identity. These hashes record a reviewed build relationship; they are not themselves proof of hardware behavior.
 
 The experimental [CivSwitch profile](CIV7.md) additionally selects target-specific transports and appends a 24-byte tagged-thread try-wait adapter to its in-memory bootstrap image. That adaptation does not modify the pinned file on disk and does not establish Civ7 console acceptance. Its implementation and qualification remain separate from the public kaiHEN patch.
 

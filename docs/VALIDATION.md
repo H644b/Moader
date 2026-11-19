@@ -1,5 +1,11 @@
 # What has been tested
 
+Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
+
+## Community mod report
+
+Ben216k reported using extensive RomFS and ExeFS patches and additional subSDKs with Splatoon 3 and Splatoon Raiders. The same report describes a system crash on the stock v0.1.2 setup with Splatoon 3 and a local workaround. The report is a community observation. The controlled Mario Kart test below measured a specific in-game content reload. [Issue #14](https://github.com/H644b/Moader/issues/14)
+
 ## Seedsow Lullaby Demo source workflow
 
 One combined installation was observed on a Seedsow Lullaby **Demo** on firmware 23.0.1 using the reviewed `Malev0/seedsow-fs-kaihen` source revision `7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17` and Moader's matched local RO/HEN/bootstrap build. This is the repository source workflow, separate from the published v0.1.2 backend kit and the earlier SmileBASIC and CivSwitch records.
@@ -102,7 +108,7 @@ No console installation or reproduction of the ZIP boundary fix has been perform
 
 ## The live-mod test
 
-One existing, equal-size Mario Kart 8 Deluxe course-preview texture was used. The replacement and game assets are **not distributed**.
+The original app and resident were tested with one existing Mario Kart 8 Deluxe course-preview texture replaced by a file of the same size. The goal was to observe toggles and removal in one running game.
 
 | Action | Observed preview |
 | --- | --- |
@@ -155,9 +161,7 @@ These are host results with Node 24. The CI workflow repeats them on Ubuntu. Syn
 
 ## Limits
 
-- Hardware proof covers the test above, not every game, file format or firmware. The installer checks the supported FS code/ABI and refuses mismatches; it is not a universal jailbreak installer.
-- Equal-size loose RomFS replacements can affect future reads. Games may cache their contents. New/resized files, full images and executable changes can require content to reopen or the game to relaunch.
-- There is no automatic game-cache invalidation or in-game overlay.
-- No original-game SHA-256 or whole-file original → replacement → original trace through one uniquely identified file handle was obtained. The bounded source sample is not a full-read cryptographic hash.
-- Normal game close/reopen was tested. Recovery after a forced game error was not. A game-only error is expected to leave the separate service available; a backend/FS/HEN/system failure may need a fresh bootstrap.
-- The backend lasts until the Switch reboots. Removed payload paths are retained for recovery and in-flight readers; removal does not claim immediate physical SD erasure.
+- Hardware results apply to the versions, games and workflows named above. The installer rejects unsupported filesystem code or interfaces.
+- The Mario Kart check captured a partial replacement read and a visible effect. A whole-file original → replacement → original hash trace remains untested.
+- The browser stayed available during a normal game close and relaunch. Recovery after a forced game error remains untested.
+- See [How Moader works](RUNTIME.md) for what happens to cached content, open files and the backend after a reboot.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision pinned local backend inputs; never acquire or contact a console."""
+"""Download, build or check Moader backend files on this computer. This tool leaves the Switch untouched."""
 from __future__ import annotations
 import argparse, hashlib, io, json, os, pathlib, platform, re, shutil, stat, subprocess, tarfile, tempfile, urllib.parse, urllib.request, zipfile
 
@@ -472,13 +472,13 @@ def setup(args):
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--root', type=pathlib.Path, default=ROOT, help='isolated public checkout/host-kit root')
-    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='pinned source profile; Civ7 is hardware untested; Seedsow uses the dedicated GUI and this check does not qualify a held session')
-    p.add_argument('--check', action='store_true', help='read-only local validation; no downloads/builds/preparation')
-    p.add_argument('--sources-only', action='store_true', help='fetch/validate only selected host sources; no acquisition/HEN/app/SDK/Node work')
-    p.add_argument('--offline', action='store_true', help='refuse downloads; use supplied/host-kit inputs')
-    p.add_argument('--build', action='store_true', help='explicit isolated pinned RO/HEN/bootstrap/app rebuild with the matching macOS or Linux SDK')
-    p.add_argument('--node', help='Node executable (default: node); pass mac2jb Node 24 path when appropriate')
+    p.add_argument('--root', type=pathlib.Path, default=ROOT, help='path to the extracted backend kit or source checkout')
+    p.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='setup method. CivSwitch is experimental. Seedsow installation uses its own GUI')
+    p.add_argument('--check', action='store_true', help='check files on this computer without downloading, building or preparing them')
+    p.add_argument('--sources-only', action='store_true', help='download and verify only the selected upstream source files')
+    p.add_argument('--offline', action='store_true', help='use local files only')
+    p.add_argument('--build', action='store_true', help='build the backend, app and resident in a separate staging directory using the matching SDK')
+    p.add_argument('--node', help='Node.js executable (default: node). Local checks accept 22+. Use Node 24 for installation')
     p.add_argument('--release-manifest', type=pathlib.Path)
     p.add_argument('--kaihen-archive', type=pathlib.Path)
     p.add_argument('--engine-archive', type=pathlib.Path, help='offline archive for the selected pinned host profile')
