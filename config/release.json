@@ -22,7 +22,7 @@
     "sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a"
   },
   "validation": "docs/VALIDATION.md",
-  "appAndResidentHardwareTested": false,
+  "appAndResidentHardwareTested": true,
   "patched_bootstrap": {
     "source": "vendor/kaihen-mo/bootstrap.bin",
     "bytes": 30016,
