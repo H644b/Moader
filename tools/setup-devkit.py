@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Install pinned macOS arm64 or Linux x86_64 SDK packages without system changes."""
 import concurrent.futures
-import argparse
 import hashlib
 import json
 import os
@@ -17,7 +16,6 @@ VENDOR = ROOT / 'vendor'
 SDK = VENDOR / 'devkitpro'
 NAMES = ['devkitA64', 'devkita64-binutils', 'devkita64-gcc', 'devkita64-newlib',
          'devkita64-rules', 'switch-tools', 'general-tools', 'dkp-toolchain-vars', 'switch-zlib', 'switch-curl']
-NATIVE_PAIR_UNUSED = frozenset(('switch-tools', 'general-tools'))
 OUNCE_URL = 'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261117/ounce-devkit-20261117.tar.xz'
 OUNCE_SHA256 = '33cc5478324f8243dc801c3d4b8fe781885a306975f63937bd246ffdfd73cf79'
 TOOLCHAIN_VARS_OFFICIAL = 'https://pkg.devkitpro.org/packages/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst'
@@ -37,9 +35,6 @@ def register(host_name):
     if host_name == 'linux-x86_64':
         base.update(json.loads((ROOT / 'tools/toolchain-packages-linux-x86_64.json').read_text()))
     return base
-
-def package_names(native_pair_only=False):
-    return [name for name in NAMES if not native_pair_only or name not in NATIVE_PAIR_UNUSED]
 
 def verified_download(file, url, expected, user_agent):
     if file.is_symlink():
@@ -92,10 +87,6 @@ def extract_package(file, sdk):
                     '--strip-components=2', 'opt/devkitpro/'], check=True)
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--native-pair-only', action='store_true',
-                        help='Provision only packages used to rebuild the matched RO/HEN/bootstrap pair')
-    args = parser.parse_args()
     host_name, user_agent = host()
     packages = register(host_name)
     VENDOR.mkdir(parents=True, exist_ok=True)
@@ -106,7 +97,7 @@ def main():
         return file
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        files = list(executor.map(download, package_names(args.native_pair_only)))
+        files = list(executor.map(download, NAMES))
     SDK.mkdir(parents=True, exist_ok=True)
     for file in files:
         extract_package(file, SDK)
