@@ -10,12 +10,12 @@ import tempfile
 import urllib.request
 import zipfile
 
-SDK = ('ounce-devkit-20261114.tar.xz',
-       'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261114/ounce-devkit-20261114.tar.xz',
-       'f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59')
-KAIHEN = ('kaiHEN-20261114c.zip',
-          'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip',
-          '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967')
+SDK = ('ounce-devkit-20261117.tar.xz',
+       'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261117/ounce-devkit-20261117.tar.xz',
+       '33cc5478324f8243dc801c3d4b8fe781885a306975f63937bd246ffdfd73cf79')
+KAIHEN = ('kaiHEN-20261117.1.zip',
+          'https://github.com/ouncebrew/kaihen/releases/download/20261117.1/kaiHEN-20261117.1.zip',
+          '3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978')
 MAX_DOWNLOAD = 64 * 1024 * 1024
 
 

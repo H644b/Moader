@@ -24,6 +24,13 @@ def zip_bytes(files):
 
 
 class DevkitHostTests(unittest.TestCase):
+    def test_native_pair_selection_keeps_compiler_and_libraries(self):
+        names = devkit.package_names(True)
+        self.assertEqual(set(devkit.package_names()), set(devkit.NAMES))
+        self.assertEqual(set(devkit.NAMES) - set(names), {'switch-tools', 'general-tools'})
+        self.assertIn('devkita64-gcc', names)
+        self.assertIn('switch-zlib', names)
+
     def test_toolchain_vars_403_uses_only_exact_digest_mirror(self):
         payload = b'pinned helper fixture'
         expected = hashlib.sha256(payload).hexdigest()
