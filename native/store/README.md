@@ -7,3 +7,5 @@ The bundled `catalog.json` is a curated snapshot of the listings used in the des
 When Store access is enabled, the client reads one HTTPS catalog URL per line from `sdmc:/moader/store/sources.txt`, loads feeds in the background, and fetches images as a release becomes visible. Source URLs and catalog fields stay separate from the console’s pairing credentials. The browser opens the creator’s source page when a player chooses a host.
 
 Authors can copy the [publisher template](https://github.com/H644b/moader-mod-repo-template) for the catalog format, example package, GitHub Pages workflow and self-hosting instructions. Its [live catalog](https://h644b.github.io/moader-mod-repo-template/catalog.json) is a working independent feed.
+
+The [community repository and modding page outline](../../docs/design/community-mod-repositories.md) follows a release from the publisher's workshop to the player's installed mods.
