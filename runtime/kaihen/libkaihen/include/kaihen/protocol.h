@@ -10,7 +10,7 @@
 #include <switch/types.h>
 
 /// The version of HEN's protocol, in HenStatus::protocol_version.
-#define HEN_PROTOCOL_VERSION 7
+#define HEN_PROTOCOL_VERSION 8
 
 #define HEN_PLUGIN_NAME_SIZE 64
 #define HEN_MAX_PLUGINS 16
@@ -86,11 +86,15 @@ typedef enum {
     HenHomebrewCommand_GetPluginName = 21,
     /// Takes HenPluginName and returns a new plugin session by COPY.
     HenHomebrewCommand_OpenPlugin = 22,
-    HenHomebrewCommand_GetPluginInfo = 23,
-    HenHomebrewCommand_ReloadPlugin = 24,
-    HenHomebrewCommand_GetPluginReloadStatus = 25,
-    HenHomebrewCommand_GetReloadCapabilities = 26,
-    HenHomebrewCommand_GetPluginReloadDiagnostics = 27,
+    /// Returns a new clone of HEN's fsp-ldr root by COPY. The loader passes
+    /// it to Switch 2 programs as their fsp-ldr override. Every clone shares
+    /// the root's object: a client must not send SetCurrentProcess on it.
+    HenHomebrewCommand_GetLoaderRoot = 23,
+    HenHomebrewCommand_GetPluginInfo = 24,
+    HenHomebrewCommand_ReloadPlugin = 25,
+    HenHomebrewCommand_GetPluginReloadStatus = 26,
+    HenHomebrewCommand_GetReloadCapabilities = 27,
+    HenHomebrewCommand_GetPluginReloadDiagnostics = 28,
 } HenHomebrewCommand;
 
 /// The reply of HenHomebrewCommand_GetStatus.

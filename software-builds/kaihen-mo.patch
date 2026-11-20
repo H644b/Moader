@@ -73,7 +73,7 @@ index 0000000..ea41161
 +
 +} // namespace ounce
 diff --git a/bootstrap/source/main.cpp b/bootstrap/source/main.cpp
-index 6fc0705..70d0376 100644
+index 52cc368..70d0376 100644
 --- a/bootstrap/source/main.cpp
 +++ b/bootstrap/source/main.cpp
 @@ -3,6 +3,7 @@
@@ -84,12 +84,12 @@ index 6fc0705..70d0376 100644
  #include "../../common/package.hpp"
  #include "policies.hpp"
  #include "../../common/control.h"
-@@ -84,65 +85,6 @@ static Result _launchOpenProcessReader(LaunchState* args) {
+@@ -84,63 +85,6 @@ static Result _launchOpenProcessReader(LaunchState* args) {
      );
  }
  
 -static void _launchExchangeMount(LaunchState* args, BootstrapGate& gate,
--                                 BootstrapMount& mount, ounce::CompilerTlsScope& tls) {
+-                                 BootstrapMount& mount) {
 -    for (u32 step = 0; step < 30000 && !args->exchanged; step++) {
 -        bool ready = false;
 -        args->result = gate.pending(ready);
@@ -97,12 +97,10 @@ index 6fc0705..70d0376 100644
 -            break;
 -        }
 -        if (!ready) {
--            tls.suspend();
--            u64 finished = args->input.pthread_trywait(args->thread, 0, 0);
--            tls.resume();
--            // PM can return the new PID before Loader opens its CodeFS.
--            // Keep watching the parked gate after a successful PM reply.
--            if (finished == 1 && R_FAILED(args->pm.result)) {
+-            // Poll completion without calling into the worker's thread
+-            // runtime while this loop serves Loader's pending mount.
+-            if (__atomic_load_n(&args->pm.completed, __ATOMIC_ACQUIRE) &&
+-                R_FAILED(args->pm.result)) {
 -                break;
 -            }
 -            svcSleepThread(1000000);
@@ -150,16 +148,16 @@ index 6fc0705..70d0376 100644
  
  static void _launchRequest(LaunchState* args, BootstrapGate& gate,
                             BootstrapMount& mount, ounce::CompilerTlsScope& tls) {
-@@ -162,7 +104,7 @@ static void _launchRequest(LaunchState* args, BootstrapGate& gate,
+@@ -160,7 +104,7 @@ static void _launchRequest(LaunchState* args, BootstrapGate& gate,
          return;
      }
  
--    _launchExchangeMount(args, gate, mount, tls);
+-    _launchExchangeMount(args, gate, mount);
 +    ounce::exchangeLaunchMount(args, gate, mount);
  }
  
  static void _launchRestoreAndJoin(LaunchState* args, BootstrapGate& gate,
-@@ -394,6 +336,17 @@ static void _launchConnectServices(LaunchState* args, bool plugin) {
+@@ -392,6 +336,17 @@ static void _launchConnectServices(LaunchState* args, bool plugin) {
      if (R_SUCCEEDED(args->result)) {
          args->result = henAdoptServiceManager(&hen, args->input.sm_session);
      }
@@ -177,38 +175,6 @@ index 6fc0705..70d0376 100644
      if (R_SUCCEEDED(args->result)) {
          args->result = henReleaseControlPort(&hen);
      }
-@@ -422,7 +375,7 @@ static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
-     if (args->report) {
-         args->report->process_id = 0;
-     }
--    args->pm.completed = 0;
-+    __atomic_store_n(&args->pm.completed, 0u, __ATOMIC_RELAXED);
-     args->thread = 0;
-     args->mounts = 0;
-     args->exchanged = false;
-@@ -471,7 +424,8 @@ static void _launchOne(LaunchState* args, ounce::CompilerTlsScope& tls,
-         args->result = args->pm.result;
-         return;
-     }
--    if (!args->exchanged || !args->pm.completed) {
-+    if (!args->exchanged ||
-+        !__atomic_load_n(&args->pm.completed, __ATOMIC_ACQUIRE)) {
-         package.close();
-         args->mark(failed_stage);
-         args->result = MAKERESULT(Module_Libnx, LibnxError_BadInput);
-diff --git a/bootstrap/source/pm_launch.hpp b/bootstrap/source/pm_launch.hpp
-index aca3bd7..0a8dec5 100644
---- a/bootstrap/source/pm_launch.hpp
-+++ b/bootstrap/source/pm_launch.hpp
-@@ -34,7 +34,7 @@ inline void* launchFromSdkThread(void* argument) {
-     // The host owns the borrowed handle. Do not call pmshellExit here.
-     request->pid = pid;
-     request->result = rc;
--    request->completed = 1;
-+    __atomic_store_n(&request->completed, 1u, __ATOMIC_RELEASE);
-     return reinterpret_cast<void*>(static_cast<uintptr_t>(rc));
- }
- 
 diff --git a/bootstrap/source/startup.hpp b/bootstrap/source/startup.hpp
 index db2b6af..285c91a 100644
 --- a/bootstrap/source/startup.hpp
@@ -1080,7 +1046,7 @@ index 4d2ba21..c0be8fd 100644
      if (package_) package_->close();
      package_.reset();
 diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
-index 441bdbf..a102c55 100644
+index d93d4bf..80b257c 100644
 --- a/hen/source/game_arm.hpp
 +++ b/hen/source/game_arm.hpp
 @@ -7,13 +7,22 @@
@@ -1107,7 +1073,7 @@ index 441bdbf..a102c55 100644
    public:
      ~GameArm();
  
-@@ -27,6 +36,9 @@ class GameArm {
+@@ -33,6 +42,9 @@ class GameArm {
      Result start(Handle filesystem_root, Handle bootstrap_process);
      void step();
      HenGameStatus status() const;
@@ -1117,7 +1083,7 @@ index 441bdbf..a102c55 100644
  
    private:
      enum class InputChoice {
-@@ -50,8 +62,10 @@ class GameArm {
+@@ -56,8 +68,10 @@ class GameArm {
  
      Result openPackage();
      Result waitForInput();
@@ -1128,7 +1094,7 @@ index 441bdbf..a102c55 100644
      Result waitForProcess();
      Result capturePolicy();
      Result pollProcessExit();
-@@ -98,9 +112,11 @@ class GameArm {
+@@ -104,9 +118,11 @@ class GameArm {
      bool handles1_ = false;
      bool started_ = false;
      bool policy_ready_ = false;
@@ -2093,7 +2059,7 @@ index 0000000..beecdc0
 +}
 +} // namespace reload
 diff --git a/hen/source/server.cpp b/hen/source/server.cpp
-index 0245a79..dcc335b 100644
+index 317110a..b965d11 100644
 --- a/hen/source/server.cpp
 +++ b/hen/source/server.cpp
 @@ -23,6 +23,7 @@ bool hasBuffers(const HipcMetadata& meta) {
@@ -2218,7 +2184,7 @@ index 0245a79..dcc335b 100644
      case HenHomebrewCommand_GetFilesystemRoot:
          if (fs_root_ == INVALID_HANDLE) {
              reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
-@@ -516,6 +589,12 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
+@@ -524,6 +597,12 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
          if (std::strcmp(plugins_[index].name.name, name.name)) {
              continue;
          }
@@ -2231,7 +2197,7 @@ index 0245a79..dcc335b 100644
          Service control = {};
          serviceCreate(&control, plugins_[index].control_session);
          control.own_handle = false;
-@@ -525,6 +604,10 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
+@@ -533,6 +612,10 @@ Result HenServer::openPlugin(const HenPluginName& name, Handle* out_session) {
          );
          // The plugin closed its control session, so it no longer serves.
          if (rc == KERNELRESULT(ConnectionClosed)) {
@@ -2242,7 +2208,7 @@ index 0245a79..dcc335b 100644
              removePlugin(index);
              return MAKERESULT(Module_Libnx, LibnxError_NotFound);
          }
-@@ -547,8 +630,111 @@ void HenServer::removePlugin(u32 index) {
+@@ -555,8 +638,111 @@ void HenServer::removePlugin(u32 index) {
  /// the two can still name a plugin that exits in the meantime.
  void HenServer::removeExitedPlugins() {
      for (u32 index = plugin_count_; index > 0; index--) {
@@ -3153,10 +3119,10 @@ index 0000000..638fd25
 +}
 diff --git a/hen/tests/reload_test.cpp b/hen/tests/reload_test.cpp
 new file mode 100644
-index 0000000..3747804
+index 0000000..86663a0
 --- /dev/null
 +++ b/hen/tests/reload_test.cpp
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,303 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +#include <cassert>
 +#include <cstdio>
@@ -3417,7 +3383,8 @@ index 0000000..3747804
 +    static_assert(sizeof(HenPluginReloadStatus) <= 64);
 +    static_assert(sizeof(HenPluginReloadStatus) == 56);
 +    static_assert(sizeof(HenPluginReloadDiagnostics) == 64);
-+    static_assert(HenHomebrewCommand_GetPluginReloadDiagnostics == 27);
++    static_assert(HenHomebrewCommand_GetLoaderRoot == 23);
++    static_assert(HenHomebrewCommand_GetPluginReloadDiagnostics == 28);
 +    alignas(16) u8 message[0x100] = {};
 +    CmifRequestFormat format = {};
 +    format.request_id = HenHomebrewCommand_ReloadPlugin;
@@ -3436,7 +3403,7 @@ index 0000000..3747804
 +    const u64 operation = 19;
 +    std::memcpy(built.data, &operation, sizeof(operation));
 +    parsed = ounce::parseRequest(message);
-+    assert(parsed.valid && parsed.command_id == 27 && parsed.data_size >= sizeof(operation));
++    assert(parsed.valid && parsed.command_id == 28 && parsed.data_size >= sizeof(operation));
 +    HenPluginReloadDiagnostics diagnostics = {};
 +    diagnostics.version = 1; diagnostics.operation_id = operation;
 +    diagnostics.primary_gate_step = 0x1100;
@@ -4075,7 +4042,7 @@ index 0000000..a0700e5
 +    std::puts("actual plugin runtime/SM proxy: 40 reloads, host exits, next-game service admission, bounded clone/handle counts and retained failed joins passed");
 +}
 diff --git a/libkaihen/include/kaihen.h b/libkaihen/include/kaihen.h
-index eb2ffbd..f33afc4 100644
+index 21ce2fe..ee315f6 100644
 --- a/libkaihen/include/kaihen.h
 +++ b/libkaihen/include/kaihen.h
 @@ -24,6 +24,7 @@
@@ -4086,7 +4053,7 @@ index eb2ffbd..f33afc4 100644
  
  /// Gets the ldr:ro session that hbloader passes to the NRO. The Service does
  /// not own the handle: do not close it. Returns LibnxError_NotFound when the
-@@ -167,3 +168,20 @@ NX_INLINE Result henOpenPlugin(Service* s, const HenPluginName* name, Service* o
+@@ -176,3 +177,20 @@ NX_INLINE Result henOpenPlugin(Service* s, const HenPluginName* name, Service* o
          serviceCreate(out, session);
      return rc;
  }
@@ -4166,27 +4133,27 @@ index 816737e..fef3d06 100644
  Result pluginServiceStop(PluginService* service);
  
 diff --git a/libkaihen/include/kaihen/protocol.h b/libkaihen/include/kaihen/protocol.h
-index b32fd22..065fb04 100644
+index 7244020..b5954bd 100644
 --- a/libkaihen/include/kaihen/protocol.h
 +++ b/libkaihen/include/kaihen/protocol.h
 @@ -10,7 +10,7 @@
  #include <switch/types.h>
  
  /// The version of HEN's protocol, in HenStatus::protocol_version.
--#define HEN_PROTOCOL_VERSION 6
-+#define HEN_PROTOCOL_VERSION 7
+-#define HEN_PROTOCOL_VERSION 7
++#define HEN_PROTOCOL_VERSION 8
  
  #define HEN_PLUGIN_NAME_SIZE 64
  #define HEN_MAX_PLUGINS 16
-@@ -86,6 +86,11 @@ typedef enum {
-     HenHomebrewCommand_GetPluginName = 21,
-     /// Takes HenPluginName and returns a new plugin session by COPY.
-     HenHomebrewCommand_OpenPlugin = 22,
-+    HenHomebrewCommand_GetPluginInfo = 23,
-+    HenHomebrewCommand_ReloadPlugin = 24,
-+    HenHomebrewCommand_GetPluginReloadStatus = 25,
-+    HenHomebrewCommand_GetReloadCapabilities = 26,
-+    HenHomebrewCommand_GetPluginReloadDiagnostics = 27,
+@@ -90,6 +90,11 @@ typedef enum {
+     /// it to Switch 2 programs as their fsp-ldr override. Every clone shares
+     /// the root's object: a client must not send SetCurrentProcess on it.
+     HenHomebrewCommand_GetLoaderRoot = 23,
++    HenHomebrewCommand_GetPluginInfo = 24,
++    HenHomebrewCommand_ReloadPlugin = 25,
++    HenHomebrewCommand_GetPluginReloadStatus = 26,
++    HenHomebrewCommand_GetReloadCapabilities = 27,
++    HenHomebrewCommand_GetPluginReloadDiagnostics = 28,
  } HenHomebrewCommand;
  
  /// The reply of HenHomebrewCommand_GetStatus.

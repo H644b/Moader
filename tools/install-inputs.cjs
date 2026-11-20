@@ -11,10 +11,10 @@ const COMPONENTS=['ro/main','hen/main','bootstrap.bin','game/main','hbmenu.nro']
 const MAX=32*1024*1024;
 const LEGACY_HEN_SHA='e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c';
 const OFFICIAL_COMPONENTS=Object.freeze({
- 'ro/main':'eed2f243fa7261607f33c19ee4fe916a7a1fe77319d38a17cca9dd759a97a2a0',
- 'bootstrap.bin':'c7a00d324ef1a13f43596b9806539b027761ffb2dd7ab6d4d8cf5fd1327b0be1',
- 'game/main':'f72ac5f94b8263a83e2ae698ca5ef91b192127d01778105293419d896247563c',
- 'hbmenu.nro':'bbb2de170be91749ae186bcae9853897dc4ec1e01790ef507b3504a9ea2c628a',
+ 'ro/main':'2e577a4c680a3ba580bcda2f8d41ada443cb33cad79e06230ce4bcf6700661b7',
+ 'bootstrap.bin':'92481a1622ccde9978d789eec251d6d1d338c9bd1e6adbcc62f4057c2f188665',
+ 'game/main':'cd57628d91f11784085c858438fb392add20c6126bf7411c43d5a3dc83048874',
+ 'hbmenu.nro':'1a6c34c007577544aa4ace67adf405d9a740d509e2c0c4a2f3dcc9ad3514edff',
 });
 const SOURCE_TREE_ALGORITHM='sha256-sorted-path-nul-sha256-newline-v1';
 const isDigest=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
@@ -46,8 +46,8 @@ function validateKaihenProof(proof,observed={}){
    'hen/main':{sha256:LEGACY_HEN_SHA}}};
  }
  check(proof.schema===2||proof.schema===3,'Unsupported kaiHEN build proof schema');
- check(proof.base_commit==='e897f991524590833b82fbe8d63a3c6775fb8101'&&proof.release_base==='20261114c'&&
-  proof.patch==='software-builds/kaihen-mo.patch'&&proof.protocol_version===7,'Unqualified kaiHEN base, patch or protocol');
+ check(proof.base_commit==='3695f364f9270686aa72cc39627bb1281752b2d3'&&proof.release_base==='20261117.1'&&
+  proof.patch==='software-builds/kaihen-mo.patch'&&proof.protocol_version===8,'Unqualified kaiHEN base, patch or protocol');
  check(proof.native_build_passed===true&&typeof proof.console_retest_passed==='boolean','Missing explicit native build/console validation scope');
  check(proof.source_tree_algorithm===SOURCE_TREE_ALGORITHM&&isDigest(proof.source_tree_sha256)&&
   proof.source_tree_sha256===observed.sourceSha256,'kaiHEN source identity differs from build proof');
@@ -60,7 +60,7 @@ function validateKaihenProof(proof,observed={}){
    item.bytes>0&&item.bytes<=MAX&&isDigest(item.sha256),'Invalid patched component descriptor: '+name);
  }
  check(proof.hen_sha256===proof.components['hen/main'].sha256,'HEN proof descriptors disagree');
- return{schema:proof.schema,protocolVersion:7,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),...proof.components}};
+ return{schema:proof.schema,protocolVersion:8,components:{...Object.fromEntries(Object.entries(OFFICIAL_COMPONENTS).map(([name,sha256])=>[name,{sha256}])),...proof.components}};
 }
 async function qualifyKaihenBuild(root=path.resolve(__dirname,'..')){
  const raw=await regularBytes(path.join(root,'software-builds/kaihen-mo.json')),proof=JSON.parse(raw.toString('utf8'));
@@ -69,7 +69,7 @@ async function qualifyKaihenBuild(root=path.resolve(__dirname,'..')){
  const build=validateKaihenProof(proof,observed);
  if(build.schema>=2){
   const protocol=(await regularBytes(path.join(root,'runtime/kaihen/libkaihen/include/kaihen/protocol.h'))).toString('utf8');
-  check(/^#define HEN_PROTOCOL_VERSION\s+7\s*$/m.test(protocol),'Native protocol header differs from build proof');
+  check(/^#define HEN_PROTOCOL_VERSION\s+8\s*$/m.test(protocol),'Native protocol header differs from build proof');
  }
  return{...build,identity:digest(raw)};
 }

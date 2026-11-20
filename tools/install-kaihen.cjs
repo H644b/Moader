@@ -22,8 +22,8 @@ function guardKaihenTransports(run, load, host) {
   return state;
 }
 async function qualifyRelease(prepared) {
-  const archive = await fs.readFile(path.join(rootDir, 'research/artifacts/kaiHEN-20261114c.zip'));
-  if (inputs.digest(archive) !== '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967')
+  const archive = await fs.readFile(path.join(rootDir, 'research/artifacts/kaiHEN-20261117.1.zip'));
+  if (inputs.digest(archive) !== '3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978')
     throw Error('kaiHEN release checksum differs');
   const build=await inputs.qualifyKaihenBuild(rootDir);
   if(prepared){
@@ -115,7 +115,7 @@ const packages = load('switch2/ro/package.cjs');
 const {verifySdFile} = require('./sd-install.cjs');
 const {guardSession} = require('../runtime/modloader/lib/game-files/uncertain.cjs');
 const record = {session: live.session, run: process.env.NS2_RUN_DIR,
-  runtime: '20261114c', packageDirectory: ship, started: new Date().toISOString(), steps: [], complete: false};
+  runtime: '20261117.1', packageDirectory: ship, started: new Date().toISOString(), steps: [], complete: false};
 const persist = () => fs.writeFile(output, JSON.stringify(record, null, 2) + '\n', {mode: 0o600});
 const read = file => fs.readFile(file, 'utf8').then(JSON.parse);
 async function step(name, action) {

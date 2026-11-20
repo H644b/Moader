@@ -210,7 +210,7 @@ def release_binaries(kit, work, baseline=False):
     require(len(data)<=8<<20 and sha(data)==BACKEND_SHA,'Pinned public backend kit checksum/size mismatch')
     selected=baseline_members(data)
     # This is the disposable test kit, never ROOT or a mutable development
-    # checkout. Replace its entire native closure so no protocol-7 source can
+    # checkout. Replace its entire native closure so no older protocol source can
     # be combined accidentally with the pinned legacy binaries/proof.
     require(kit.resolve().is_relative_to(work.resolve()) and kit.resolve()!=ROOT.resolve(),'Baseline destination is not an isolated test kit')
     if (kit/'runtime/kaihen').exists():shutil.rmtree(kit/'runtime/kaihen')
@@ -238,7 +238,7 @@ def paired_setup_checks(node, work):
             for name,value in files.items():archive.writestr(name,value)
         return data.getvalue()
     for name,data in {
-        'runtime/kaihen/libkaihen/include/kaihen/protocol.h':b'#define HEN_PROTOCOL_VERSION 7\n',
+        'runtime/kaihen/libkaihen/include/kaihen/protocol.h':b'#define HEN_PROTOCOL_VERSION 8\n',
         'runtime/kaihen/hen/source/main.cpp':b'fixture HEN source',
         'runtime/kaihen/bootstrap/source/main.cpp':b'fixture bootstrap source',
         'software-builds/kaihen-mo.patch':b'fixture patch',
@@ -248,8 +248,8 @@ def paired_setup_checks(node, work):
     hen,bootstrap=b'NSO0-paired-fixture-HEN',b'paired-flat-bootstrap'
     hen_file=work/'paired HEN';hen_file.write_bytes(hen)
     bootstrap_file=work/'paired bootstrap';bootstrap_file.write_bytes(bootstrap)
-    proof={'schema':2,'base_commit':'e897f991524590833b82fbe8d63a3c6775fb8101','release_base':'20261114c',
-           'patch':'software-builds/kaihen-mo.patch','protocol_version':7,'native_build_passed':True,'console_retest_passed':False,
+    proof={'schema':2,'base_commit':'3695f364f9270686aa72cc39627bb1281752b2d3','release_base':'20261117.1',
+           'patch':'software-builds/kaihen-mo.patch','protocol_version':8,'native_build_passed':True,'console_retest_passed':False,
            'source_tree_algorithm':backend.SOURCE_TREE_ALGORITHM,'source_tree_sha256':backend.kaihen_source_sha(root),
            'patch_sha256':sha(b'fixture patch'),'hen_sha256':sha(hen),
            'components':{'hen/main':{'bytes':len(hen),'sha256':sha(hen)},'bootstrap.bin':{'bytes':len(bootstrap),'sha256':sha(bootstrap)}}}
@@ -257,7 +257,7 @@ def paired_setup_checks(node, work):
     require(backend.proof(root)==proof,'Python rejected valid paired proof')
     js="const p=require(process.argv[1]); p.qualifyKaihenBuild(process.argv[2]).then(x=>console.log(JSON.stringify(x))).catch(e=>{console.error(e.message);process.exitCode=1;});"
     qualified=json.loads(subprocess.check_output([node,'-e',js,str(ROOT/'tools/install-inputs.cjs'),str(root)],text=True))
-    require(qualified['schema']==2 and qualified['protocolVersion']==7 and qualified['identity']==sha(proof_file.read_bytes()),'Python/Node proof identity differs')
+    require(qualified['schema']==2 and qualified['protocolVersion']==8 and qualified['identity']==sha(proof_file.read_bytes()),'Python/Node proof identity differs')
     official={name:('official-'+name).encode() for name in
               (*backend.KAIHEN_COMPONENTS,*backend.KAIHEN_PROGRAMS,'licenses/COPYING')}
     archive=work/'official fixture.zip';archive.write_bytes(zipped(official))
@@ -275,7 +275,7 @@ def paired_setup_checks(node, work):
         try:backend.setup(args);raise AssertionError('Old bootstrap accepted')
         except ValueError as error:require('pinned build/tested bytes' in str(error),'Unexpected mixed-pair failure')
         require(tree(root)==before,'Failed pair qualification wrote inputs');bootstrap_file.write_bytes(bootstrap)
-    for changed in [dict(proof,schema=3),dict(proof,schema=True),dict(proof,protocol_version=8),dict(proof,base_commit='0'*40),
+    for changed in [dict(proof,schema=3),dict(proof,schema=True),dict(proof,protocol_version=9),dict(proof,base_commit='0'*40),
                     dict(proof,release_base='other'),dict(proof,source_tree_sha256='0'*64),dict(proof,patch_sha256='0'*64),
                     dict(proof,console_retest_passed=None),dict(proof,native_build_passed=False),
                     dict(proof,components={'hen/main':proof['components']['hen/main']})]:
@@ -302,7 +302,7 @@ def paired_setup_checks(node, work):
     require(pair=={'hen/main':hen,'bootstrap.bin':bootstrap} and len(calls)==3 and tree(root)==before,'Paired build did not remain isolated/complete')
     put('tools/setup-backend.py',(ROOT/'tools/setup-backend.py').read_bytes().replace(
         backend.KAIHEN_SHA.encode(),sha(archive.read_bytes()).encode()))
-    put('research/artifacts/kaiHEN-20261114c.zip',archive.read_bytes())
+    put('research/artifacts/kaiHEN-20261117.1.zip',archive.read_bytes())
     release={'patched_hen':{'source':'vendor/kaihen-mo/hen/main','bytes':len(hen),'sha256':sha(hen)},
              'patched_bootstrap':{'source':'vendor/kaihen-mo/bootstrap.bin','bytes':len(bootstrap),'sha256':sha(bootstrap)}}
     require(package.native_pair(root,release)[:2]==(hen,bootstrap),'Release pair qualification differs')
@@ -334,7 +334,7 @@ def paired_setup_checks(node, work):
         prefix='Moader-backend-v0.0.0-fixture/'
         require(archive.read(prefix+'vendor/kaihen-mo/hen/main')==hen and archive.read(prefix+'vendor/kaihen-mo/bootstrap.bin')==bootstrap,'Host ZIP omitted or changed paired binary')
     recorded=json.loads((output/'release-manifest.json').read_text())
-    require(recorded['patchedBootstrapSha256']==sha(bootstrap) and recorded['kaihenProtocolVersion']==7 and
+    require(recorded['patchedBootstrapSha256']==sha(bootstrap) and recorded['kaihenProtocolVersion']==8 and
             recorded['kaihenConsoleRetestPassed'] is False and recorded['appAndResidentHardwareTested'] is False,'Release manifest overstates pair/hardware validation')
     with patch.dict(globals(),{'ROOT':work/'missing candidate root'}),\
          patch.object(urllib.request,'urlopen',side_effect=AssertionError('Candidate mode must not download a baseline')):

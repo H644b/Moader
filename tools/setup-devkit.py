@@ -16,8 +16,8 @@ VENDOR = ROOT / 'vendor'
 SDK = VENDOR / 'devkitpro'
 NAMES = ['devkitA64', 'devkita64-binutils', 'devkita64-gcc', 'devkita64-newlib',
          'devkita64-rules', 'switch-tools', 'general-tools', 'dkp-toolchain-vars', 'switch-zlib', 'switch-curl']
-OUNCE_URL = 'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261114/ounce-devkit-20261114.tar.xz'
-OUNCE_SHA256 = 'f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59'
+OUNCE_URL = 'https://github.com/ouncebrew/ounce-devkit/releases/download/devkit-20261117/ounce-devkit-20261117.tar.xz'
+OUNCE_SHA256 = '33cc5478324f8243dc801c3d4b8fe781885a306975f63937bd246ffdfd73cf79'
 TOOLCHAIN_VARS_OFFICIAL = 'https://pkg.devkitpro.org/packages/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst'
 TOOLCHAIN_VARS_SHA256 = 'e6e26af3147061090572b61c576114ee9a45d5ed8c77c7d93cc5f5559198c288'
 TOOLCHAIN_VARS_MIRROR = 'https://wii.leseratte10.de/devkitPro/other-stuff/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst'
@@ -101,7 +101,7 @@ def main():
     SDK.mkdir(parents=True, exist_ok=True)
     for file in files:
         extract_package(file, SDK)
-    archive = ROOT / 'research/artifacts/ounce-devkit-20261114.tar.xz'
+    archive = ROOT / 'research/artifacts/ounce-devkit-20261117.tar.xz'
     verified_download(archive, OUNCE_URL, OUNCE_SHA256, user_agent)
     subprocess.run(['tar', '-xJf', str(archive), '-C', str(SDK)], check=True)
     print('Native build SDK:', SDK)

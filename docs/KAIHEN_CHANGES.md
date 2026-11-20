@@ -5,8 +5,8 @@ Moader ships a modified kaiHEN for features such as cooperative service reload a
 | Record | Value |
 | --- | --- |
 | Upstream project | [ouncebrew/kaihen](https://github.com/ouncebrew/kaihen) |
-| Source base | [`e897f991524590833b82fbe8d63a3c6775fb8101`](https://github.com/ouncebrew/kaihen/tree/e897f991524590833b82fbe8d63a3c6775fb8101) |
-| Official release inputs | [`20261114c`](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) |
+| Source base | [`3695f364f9270686aa72cc39627bb1281752b2d3`](https://github.com/ouncebrew/kaihen/tree/3695f364f9270686aa72cc39627bb1281752b2d3) |
+| Official release inputs | [`20261117.1`](https://github.com/ouncebrew/kaihen/releases/tag/20261117.1) |
 | Current source changes | [kaihen-mo.patch](../software-builds/kaihen-mo.patch) |
 | Full modified source | [runtime/kaihen](../runtime/kaihen/) |
 | Current source, patch and component digests | [kaihen-mo.json](../software-builds/kaihen-mo.json) |
@@ -14,7 +14,7 @@ Moader ships a modified kaiHEN for features such as cooperative service reload a
 
 ## Current source profile
 
-The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. The current HEN passed a controlled clean-card Demo installation and game-entry check; its proof sets `console_retest_passed` to true for that bounded result. The earlier Demo installation records in [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) apply to previous HEN bytes. Use the tagged proof above for the v0.1.2 kit.
+The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. This experimental `v0.2.6-new` set is host-tested only; its proof sets `console_retest_passed` to false. The clean-card Demo installation and game-entry check used the older `v0.2.6-rc.2` HEN and does not establish behavior for this set. Upstream command 23 is now the Loader root; Moader reload commands occupy 24–28 under protocol 8. Use the tagged proof above for the v0.1.2 kit.
 
 ## Hold-R game entry candidate
 

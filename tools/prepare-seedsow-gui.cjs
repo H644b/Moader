@@ -12,7 +12,7 @@ const ROOT = path.resolve(__dirname, '..');
 const PATCH = path.join(ROOT, 'integration/seedsow-gui.patch');
 const REVISION = '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17';
 const OFFICIAL = 'https://github.com/Malev0/seedsow-fs-kaihen.git';
-const PATCH_SHA256 = 'dd2d1a22ac51d23eecc87c74790bae5eccebfc3c4e2a8583bd40a38a8b666ac3';
+const PATCH_SHA256 = '06127042012a3f4c610b89e1a48c08ca5185827ec7d7a797e7b96e61f639c804';
 const FILES = Object.freeze({
   'gui/ns2-gui.cjs': {
     before: '8818822df303f940e44414faafcd199cf064a6e7a24fb80ac56fbdbd40d7c35c',
@@ -24,7 +24,7 @@ const FILES = Object.freeze({
   },
   'tools/moader-local.cjs': {
     before: null,
-    after: 'b1e6ac44e20dd232a374d46b4ba5d6b62ed4fa32f684a6a9b0f1e809c8a2da0c',
+    after: '304edd5d6e5e839a9cd141cdf5306efc36d84e92c2ba8a625f682b42a2e5c58f',
   },
 });
 const check = (ok, message) => { if (!ok) throw Error(message); };

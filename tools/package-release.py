@@ -144,7 +144,7 @@ def full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp):
     backend_spec = importlib.util.spec_from_file_location('moader_bundle_backend', root / 'tools/setup-backend.py')
     backend = importlib.util.module_from_spec(backend_spec)
     backend_spec.loader.exec_module(backend)
-    original = root / 'research/artifacts/kaiHEN-20261114c.zip'
+    original = root / 'research/artifacts/kaiHEN-20261117.1.zip'
     require(sha(original.read_bytes()) == backend.KAIHEN_SHA, 'Official kaiHEN base checksum differs')
     base = backend.zip_files(original)
     require(all(name in base for name in (*backend.KAIHEN_COMPONENTS, *backend.KAIHEN_PROGRAMS)) and
@@ -207,9 +207,9 @@ def main():
     host[prefix + 'dist/Moader.nro'] = (app, 0o100644)
     host[prefix + 'dist/moader.nso'] = (service, 0o100644)
     full_kaihen, full_count = full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp)
-    host[prefix + 'research/artifacts/kaiHEN-20261114c.zip'] = (
-        (root / 'research/artifacts/kaiHEN-20261114c.zip').read_bytes(), 0o100644)
-    host[prefix + 'bundles/kaiHEN-Moader-20261114c.zip'] = (full_kaihen, 0o100644)
+    host[prefix + 'research/artifacts/kaiHEN-20261117.1.zip'] = (
+        (root / 'research/artifacts/kaiHEN-20261117.1.zip').read_bytes(), 0o100644)
+    host[prefix + 'bundles/kaiHEN-Moader-20261117.1.zip'] = (full_kaihen, 0o100644)
     start_here = f'''Moader backend kit {tag}
 
 Use this kit to set up the backend for the current Switch boot. Start by
@@ -224,7 +224,7 @@ The kit includes the Moader app, resident service and matching backend
 binaries. Install Python 3.10 or newer. The first preparation downloads
 pinned dependencies, so have internet access. SmileBASIC setup uses prebuilt
 files without an SDK. The full patched kaiHEN release is in
-bundles/kaiHEN-Moader-20261114c.zip, including hbmenu, hbloader, OunceShell,
+bundles/kaiHEN-Moader-20261117.1.zip, including hbmenu, hbloader, OunceShell,
 licenses, and the matched RO/HEN/bootstrap and Moader binaries. The Seedsow
 guide provisions the pinned patched
 GUI from upstream and installs the SDK needed by its live helper.

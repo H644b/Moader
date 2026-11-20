@@ -569,9 +569,9 @@ index 0000000..5499ece
 +const ROOT = path.resolve(__dirname, '..');
 +const MOADER = process.env.MOADER_ROOT ? path.resolve(process.env.MOADER_ROOT) : null;
 +const NODE24 = process.env.MOADER_NODE24 || process.execPath;
-+const BASE_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip';
-+const BASE_SHA256 = '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967';
-+const FULL_BUNDLE = 'bundles/kaiHEN-Moader-20261114c.zip';
++const BASE_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261117.1/kaiHEN-20261117.1.zip';
++const BASE_SHA256 = '3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978';
++const FULL_BUNDLE = 'bundles/kaiHEN-Moader-20261117.1.zip';
 +const REVISION = '7d0d8b370a0ae9cf7fb70b4f8d532886d0ec4a17';
 +const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 +const check = (ok, message) => { if (!ok) throw Error(message); };
@@ -652,7 +652,7 @@ index 0000000..5499ece
 +  const {manifest} = await prepare();
 +  const build = await require(path.join(MOADER, 'tools/install-inputs.cjs'))
 +    .qualifyKaihenBuild(MOADER);
-+  check(build.schema === 3 && build.protocolVersion === 7,
++  check(build.schema === 3 && build.protocolVersion === 8,
 +    'Moader matched kaiHEN build proof differs');
 +  const target = path.join(ROOT, 'kaihen');
 +  const runs = path.join(ROOT, 'runs');
@@ -668,7 +668,7 @@ index 0000000..5499ece
 +    if (hasIncluded) {
 +      check(fs.realpathSync(included) === included && fs.lstatSync(included).isFile(),
 +        'Included full Moader kaiHEN bundle is not a regular file');
-+      const official = path.join(MOADER, 'research/artifacts/kaiHEN-20261114c.zip');
++      const official = path.join(MOADER, 'research/artifacts/kaiHEN-20261117.1.zip');
 +      check(fs.realpathSync(official) === official &&
 +        sha(fs.readFileSync(official)) === BASE_SHA256,
 +      'Pinned official kaiHEN base for the included bundle differs');
@@ -686,7 +686,7 @@ index 0000000..5499ece
 +          fs.readFileSync(path.join(candidate, relative))),
 +        'Included kaiHEN changed an unpatched official release file: ' + relative);
 +    } else {
-+      const zip = path.join(staging, 'kaiHEN-20261114c.zip');
++      const zip = path.join(staging, 'kaiHEN-20261117.1.zip');
 +      const received = await download(BASE_URL, zip);
 +      check(received.sha256 === BASE_SHA256,
 +        'Pinned official kaiHEN release checksum differs');
@@ -733,7 +733,7 @@ index 0000000..5499ece
 +    }
 +    try { fs.renameSync(next, target); }
 +    catch (error) { if (backup) fs.renameSync(backup, target); throw error; }
-+    return {tag: '20261114c + local Moader build', target,
++    return {tag: '20261117.1 + local Moader build', target,
 +      downloaded: hasIncluded ? null : BASE_URL, includedFullBundle: hasIncluded,
 +      roSha256: marker.roSha256,
 +      henSha256: marker.henSha256,

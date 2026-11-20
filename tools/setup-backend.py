@@ -15,8 +15,8 @@ SEEDSOW_TREE_SHA = '4d4375f2729ca4b95a98348419c1e2b7edffa684bf53316f00a38194c5f4
 SEEDSOW_ARCHIVE_SHA = '616660cb65acc703402a212e8691aff84b7f4c228aeedcef80a7763130291976'
 SEEDSOW_URL = f'https://github.com/Malev0/seedsow-fs-kaihen/archive/{SEEDSOW_REV}.tar.gz'
 HOST_PROFILES = ('smilebasic-kurumuz', 'civ7-s8n', 'seedsow-malev0')
-KAIHEN_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip'
-KAIHEN_SHA = '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967'
+KAIHEN_URL = 'https://github.com/ouncebrew/kaihen/releases/download/20261117.1/kaiHEN-20261117.1.zip'
+KAIHEN_SHA = '3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978'
 HEN_SHA = 'e6341b1932b450e25f04ccf425c3034bd45dd3cccfadbf5e5fb2778b6a673e5c'
 SOURCE_TREE_ALGORITHM = 'sha256-sorted-path-nul-sha256-newline-v1'
 PROGRAM_ENTRIES = {'dist/Moader.nro': 'switch/Moader.nro', 'dist/moader.nso': 'kaihen/plugins/moader.nso'}
@@ -232,8 +232,8 @@ def proof(root):
                 ('components', 'bootstrap_sha256', 'protocol_version', 'source_tree_sha256')), 'Public legacy HEN proof/hash differs or mixes new descriptors')
         return p
     require(p.get('schema') in (2, 3), 'Unsupported kaiHEN build proof schema')
-    require(p.get('base_commit') == 'e897f991524590833b82fbe8d63a3c6775fb8101' and p.get('release_base') == '20261114c' and
-            p.get('patch') == 'software-builds/kaihen-mo.patch' and p.get('protocol_version') == 7, 'Unqualified kaiHEN base, patch or protocol')
+    require(p.get('base_commit') == '3695f364f9270686aa72cc39627bb1281752b2d3' and p.get('release_base') == '20261117.1' and
+            p.get('patch') == 'software-builds/kaihen-mo.patch' and p.get('protocol_version') == 8, 'Unqualified kaiHEN base, patch or protocol')
     require(p.get('native_build_passed') is True and type(p.get('console_retest_passed')) is bool, 'Missing explicit native build/console validation scope')
     require(p.get('source_tree_algorithm') == SOURCE_TREE_ALGORITHM and p.get('source_tree_sha256') == kaihen_source_sha(root), 'kaiHEN source identity differs from build proof')
     require(p.get('patch_sha256') == digest(patch), 'kaiHEN patch identity differs from build proof')
@@ -246,7 +246,7 @@ def proof(root):
                 isinstance(item['sha256'], str) and re.fullmatch(r'[a-f0-9]{64}', item['sha256']), 'Invalid patched component descriptor: ' + name)
     require(p.get('hen_sha256') == components['hen/main']['sha256'], 'HEN proof descriptors disagree')
     protocol = regular(root / 'runtime/kaihen/libkaihen/include/kaihen/protocol.h').read_text()
-    require(re.search(r'^#define HEN_PROTOCOL_VERSION\s+7\s*$', protocol, re.M), 'Native protocol header differs from build proof')
+    require(re.search(r'^#define HEN_PROTOCOL_VERSION\s+8\s*$', protocol, re.M), 'Native protocol header differs from build proof')
     return p
 
 
@@ -355,7 +355,7 @@ def bundled_programs(root, allow_missing=False):
 def check_root(root, node='node', host_profile='smilebasic-kurumuz'):
     profile = source_profile(host_profile)
     p = proof(root)
-    archive = checked_archive(root / 'research/artifacts/kaiHEN-20261114c.zip', KAIHEN_SHA)
+    archive = checked_archive(root / 'research/artifacts/kaiHEN-20261117.1.zip', KAIHEN_SHA)
     shipped = zip_files(archive)
     engine = profile_files(root, profile)
     require(tree_sha(engine) == profile['sha256'], 'Local engine is not the pinned source tree')
@@ -419,7 +419,7 @@ def setup(args):
     engine_target = safe_destination(root, profile['directory'])
     if engine_target.exists():
         require(tree_sha(profile_files(root, profile)) == profile['sha256'], 'Existing engine differs; use a separate clean checkout')
-    existing_archive = root / 'research/artifacts/kaiHEN-20261114c.zip'
+    existing_archive = root / 'research/artifacts/kaiHEN-20261117.1.zip'
     if existing_archive.exists():
         checked_archive(existing_archive, KAIHEN_SHA)
     with tempfile.TemporaryDirectory(prefix='moader-backend-setup-') as temporary:
@@ -466,7 +466,7 @@ def setup(args):
                 require(isinstance(expected, str) and len(expected) == 64 and all(c in '0123456789abcdef' for c in expected), 'Missing pinned homebrew ZIP checksum; use host kit or public release manifest')
                 program_archive = args.programs_archive or download(release.get('url', ''), work / 'programs.zip', expected, args.offline)
                 checked_archive(program_archive, expected); app = programs(zip_files(program_archive))
-        files = {'research/artifacts/kaiHEN-20261114c.zip': archive.read_bytes(), **app}
+        files = {'research/artifacts/kaiHEN-20261117.1.zip': archive.read_bytes(), **app}
         files.update({profile['directory'] + '/' + name: data for name, data in engine.items()})
         files.update({'vendor/kaihen-mo/' + name: pair.get(name, shipped[name]) for name in KAIHEN_COMPONENTS})
         files.update({'vendor/kaihen-mo/' + name: shipped[name] for name in KAIHEN_PROGRAMS})

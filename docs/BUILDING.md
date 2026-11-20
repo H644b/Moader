@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.5 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.5 stable and v0.2.6-new experimental backend ZIPs each supply their own matched binaries. This source tree is for the experimental `20261117.1` kaiHEN base; use the v0.2.5 source commit to rebuild the stable release. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
@@ -12,13 +12,13 @@ To validate already prepared inputs without downloading, compiling or creating a
 python3 tools/setup-backend.py --check --node /absolute/path/to/node24
 ```
 
-On a kit that still needs its upstream inputs, run `python3 tools/setup-backend.py --node /absolute/path/to/node24` first. The fetched official archive is kept locally at `research/artifacts/kaiHEN-20261114c.zip` for installer qualification; only the pinned engine is retained from the ns2jb source archive. No existing research checkout or copied private state is needed. Setup refuses to replace changed existing inputs. Use a fresh kit directory to change versions.
+On a kit that still needs its upstream inputs, run `python3 tools/setup-backend.py --node /absolute/path/to/node24` first. This experimental kit keeps its official archive at `research/artifacts/kaiHEN-20261117.1.zip` for installer qualification; only the pinned engine is retained from the ns2jb source archive. No existing research checkout or copied private state is needed. Setup refuses to replace changed existing inputs. Use a fresh kit directory to change versions.
 
 Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnostics if supplied there, are preserved and appear as `bundledPrograms` in check output. The installer includes them. The v0.2.5 backend kit includes the complete regular kaiHEN bundle, so its Seedsow setup also extracts and checks OunceShell.
 
 ## Build from a clean source checkout
 
-The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114 into the checkout. Linux needs `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
+The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261117 into the checkout. Linux needs `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
 
 If devkitPro's official endpoint returns HTTP 403 for the architecture-independent `dkp-toolchain-vars` 1.0.5 package, `setup-devkit.py` tries one [alternate host](https://wii.leseratte10.de/devkitPro/other-stuff/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst). This exception applies only to that exact URL and SHA-256 `e6e26af3147061090572b61c576114ee9a45d5ed8c77c7d93cc5f5559198c288`; the downloaded bytes must match before extraction.
 
@@ -52,9 +52,9 @@ HEN and bootstrap rebuilds must reproduce the pair recorded in `software-builds/
 | Matched bootstrap SHA-256 | `df8482f82e1e462206bb9e8128ec0ff2bb53636d8723aa3fdfaa978efd67b801` |
 | ounce-devkit archive SHA-256 | `f24d5773b1ee1c2b19317f57e8ae54a60fcdcefe493a0e495297c241c4912f59` |
 
-The Seedsow workflow's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json). Its prebuilt kit and GUI instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix this pair with the v0.1.2 release kit.
+The table above is historical v0.1.2 data. The experimental new-base Seedsow workflow's matched RO/HEN/bootstrap hashes are recorded in [`software-builds/kaihen-mo.json`](../software-builds/kaihen-mo.json); its official archive is `20261117.1`, SHA-256 `3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978`, and its SDK is ounce-devkit 20261117. Its prebuilt kit and GUI instructions are in the [Seedsow guide](SEEDSOW.md). Do not mix either pair with the v0.1.2 release kit.
 
-Source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [official kaiHEN release](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit release](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.
+The historical v0.1.2 source URLs are the [pinned ns2jb archive](https://gitlab.com/kurumuz/ns2jb/-/archive/28f03b5895e5569d8fbc35cbed84906b8f0a65b2/ns2jb-28f03b5895e5569d8fbc35cbed84906b8f0a65b2.tar.gz), [kaiHEN 20261114c](https://github.com/ouncebrew/kaihen/releases/tag/20261114c) and [ounce-devkit 20261114](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261114). The new-base experiment pins [kaiHEN 20261117.1](https://github.com/ouncebrew/kaihen/releases/tag/20261117.1) and [ounce-devkit 20261117](https://github.com/ouncebrew/ounce-devkit/releases/tag/devkit-20261117). The engine tree digest hashes sorted relative POSIX paths, each followed by NUL, its lowercase file SHA-256, and newline. The engine currently contains 116 files totaling 542,813 bytes. The helper accepts only that content; it never falls back to another revision.
 
 The experimental Civ7 profile fetches the [pinned s8n archive](https://github.com/s8n/civ7-fs-kaihen/archive/51a804cbce09216e1a42e65929644fd436b4c8bf.tar.gz) instead of the kurumuz engine. Its 120 selected files total 720,866 bytes and include `engine/`, `targets/civ7/` and `bridge/civ_bridge.js`. [config/civ7-provider.json](../config/civ7-provider.json) records each source file and its materialized run counterpart. Its tree digest uses the same format. Source identity and host checks do not establish a Civ7 console installation.
 

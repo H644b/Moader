@@ -148,6 +148,15 @@ NX_INLINE Result henGetServiceManager(Service* s, Handle* out) {
     );
 }
 
+/// Gets a new clone of HEN's fsp-ldr root. The caller owns it. libounce
+/// uses it as the fsp-ldr override and does not send SetCurrentProcess on it.
+NX_INLINE Result henGetLoaderRoot(Service* s, Handle* out) {
+    return serviceDispatch(s, HenHomebrewCommand_GetLoaderRoot,
+        .out_handle_attrs = { SfOutHandleAttr_HipcCopy },
+        .out_handles = out,
+    );
+}
+
 /// Returns the number of plugins that published an IPC service.
 NX_INLINE Result henGetPluginCount(Service* s, u32* out_count) {
     return serviceDispatchOut(s, HenHomebrewCommand_GetPluginCount, *out_count);

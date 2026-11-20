@@ -258,7 +258,8 @@ void wire() {
     static_assert(sizeof(HenPluginReloadStatus) <= 64);
     static_assert(sizeof(HenPluginReloadStatus) == 56);
     static_assert(sizeof(HenPluginReloadDiagnostics) == 64);
-    static_assert(HenHomebrewCommand_GetPluginReloadDiagnostics == 27);
+    static_assert(HenHomebrewCommand_GetLoaderRoot == 23);
+    static_assert(HenHomebrewCommand_GetPluginReloadDiagnostics == 28);
     alignas(16) u8 message[0x100] = {};
     CmifRequestFormat format = {};
     format.request_id = HenHomebrewCommand_ReloadPlugin;
@@ -277,7 +278,7 @@ void wire() {
     const u64 operation = 19;
     std::memcpy(built.data, &operation, sizeof(operation));
     parsed = ounce::parseRequest(message);
-    assert(parsed.valid && parsed.command_id == 27 && parsed.data_size >= sizeof(operation));
+    assert(parsed.valid && parsed.command_id == 28 && parsed.data_size >= sizeof(operation));
     HenPluginReloadDiagnostics diagnostics = {};
     diagnostics.version = 1; diagnostics.operation_id = operation;
     diagnostics.primary_gate_step = 0x1100;

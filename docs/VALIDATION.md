@@ -2,6 +2,10 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
+## Experimental new kaiHEN base
+
+The `v0.2.6-new` kit pins the official kaiHEN `20261117.1` archive and ounce-devkit 20261117. Moader's native patch was ported to that release tag and replayed exactly across 97 selected native source files. The HEN, RO and bootstrap cross-builds and their host fixtures passed. The new protocol 8 preserves upstream Loader-root command 23 and allocates Moader's reload commands 24–28. The new app and resident were cross-built with the same SDK. The Seedsow GUI auto-download host fixture accepted the matched protocol-8 set and used the included full new bundle without another download. Backend setup and installer host checks passed. There has been no console installation or game-entry check with this new binary set; `console_retest_passed` and `appAndResidentHardwareTested` are false.
+
 ## Hold-R candidate after v0.2.5
 
 A supplied v0.2.5 Seedsow backend archive records verified HEN startup, a game arm waiting for input, complete game-loader/hbmenu staging and clean listener retirement. It has no trace after the user launched a game, so it cannot prove R sampling, first-launch policy capture or hbmenu entry. Read-only FTP inspection of the maintainer's working SD found an existing `main.npdm` dated before the successful installation. That installation therefore does not prove the empty-policy path.

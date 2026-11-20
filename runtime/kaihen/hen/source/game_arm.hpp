@@ -33,6 +33,12 @@ class GameArm {
     /// HEN has the pm:dmnt session, every process counts as existing.
     bool processExists(u64 process_id);
     Result adoptLoaderRoot(Handle root);
+    /// The Loader root that the bootstrap gave HEN, or INVALID_HANDLE before
+    /// AdoptLoaderRoot. It stays GameArm's: a caller borrows it. Programs get
+    /// clones (homebrew command 23), never the root itself. Every clone shares
+    /// the system Loader's object, so a client's SetCurrentProcess on any of
+    /// them would rebind it; libounce does not send it on the override.
+    Handle loaderRoot() const { return loader_root_; }
     Result start(Handle filesystem_root, Handle bootstrap_process);
     void step();
     HenGameStatus status() const;

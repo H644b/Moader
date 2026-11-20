@@ -456,6 +456,14 @@ void HenServer::serveHomebrewCommand(const ReceivedRequest& request, u32 index,
         reply.result = sm_proxy_.openSession(&reply.copy_handle);
         reply.close_copy_after_send = R_SUCCEEDED(reply.result);
         break;
+    case HenHomebrewCommand_GetLoaderRoot:
+        if (game_.loaderRoot() == INVALID_HANDLE) {
+            reply.result = MAKERESULT(Module_Libnx, LibnxError_NotInitialized);
+            break;
+        }
+        reply.result = cmifCloneCurrentObject(game_.loaderRoot(), &reply.copy_handle);
+        reply.close_copy_after_send = R_SUCCEEDED(reply.result);
+        break;
     case HenHomebrewCommand_GetPluginCount:
         removeExitedPlugins();
         reply.result = 0;

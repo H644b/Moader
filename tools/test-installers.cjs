@@ -225,7 +225,7 @@ test('combined release qualification rejects a self-consistent snapshot of chang
 }));
 async function pairedProof(directory){
  for(const [name,data] of Object.entries({
-  'runtime/kaihen/libkaihen/include/kaihen/protocol.h':'#define HEN_PROTOCOL_VERSION 7\n',
+  'runtime/kaihen/libkaihen/include/kaihen/protocol.h':'#define HEN_PROTOCOL_VERSION 8\n',
   'runtime/kaihen/hen/source/main.cpp':'fixture HEN source',
   'runtime/kaihen/bootstrap/source/main.cpp':'fixture bootstrap source',
   'software-builds/kaihen-mo.patch':'fixture patch',
@@ -233,8 +233,8 @@ async function pairedProof(directory){
   const file=path.join(directory,name);await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file,data);
  }
  const hen=Buffer.from('NSO0-paired-fixture-HEN'),bootstrap=Buffer.from('paired-flat-bootstrap');
- const proof={schema:2,base_commit:'e897f991524590833b82fbe8d63a3c6775fb8101',release_base:'20261114c',patch:'software-builds/kaihen-mo.patch',
-  protocol_version:7,native_build_passed:true,console_retest_passed:false,source_tree_algorithm:inputs.SOURCE_TREE_ALGORITHM,
+ const proof={schema:2,base_commit:'3695f364f9270686aa72cc39627bb1281752b2d3',release_base:'20261117.1',patch:'software-builds/kaihen-mo.patch',
+  protocol_version:8,native_build_passed:true,console_retest_passed:false,source_tree_algorithm:inputs.SOURCE_TREE_ALGORITHM,
   source_tree_sha256:await inputs.kaihenSourceDigest(directory),patch_sha256:inputs.digest(Buffer.from('fixture patch')),
   hen_sha256:inputs.digest(hen),components:{'hen/main':{bytes:hen.length,sha256:inputs.digest(hen)},'bootstrap.bin':{bytes:bootstrap.length,sha256:inputs.digest(bootstrap)}}};
  const file=path.join(directory,'software-builds/kaihen-mo.json');await fs.writeFile(file,JSON.stringify(proof));
@@ -242,9 +242,9 @@ async function pairedProof(directory){
 }
 async function pairedRepo(directory){
  const original=await shipping(directory),proofFixture=await pairedProof(directory);
- const archive=await fs.readFile(path.join(root,'research/artifacts/kaiHEN-20261114c.zip'));
- assert.equal(inputs.digest(archive),'63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967');
- const localArchive=path.join(directory,'research/artifacts/kaiHEN-20261114c.zip');
+ const archive=await fs.readFile(path.join(root,'research/artifacts/kaiHEN-20261117.1.zip'));
+ assert.equal(inputs.digest(archive),'3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978');
+ const localArchive=path.join(directory,'research/artifacts/kaiHEN-20261117.1.zip');
  await fs.mkdir(path.dirname(localArchive),{recursive:true});await fs.writeFile(localArchive,archive);
  // These three immutable official components remain production-pinned.
  // Python only reads fixed bounded members from the already hash-qualified
@@ -264,11 +264,11 @@ async function pairedRepo(directory){
 }
 test('versioned pair proof binds the source, patch, protocol and bounded exact components',()=>fixture(async directory=>{
  const {proof}=await pairedProof(directory),observed={sourceSha256:proof.source_tree_sha256,patchSha256:proof.patch_sha256};
- const build=inputs.validateKaihenProof(proof,observed);assert.equal(build.protocolVersion,7);
+ const build=inputs.validateKaihenProof(proof,observed);assert.equal(build.protocolVersion,8);
  assert.equal(build.components['bootstrap.bin'].sha256,proof.components['bootstrap.bin'].sha256);
  for(const changed of [
   {...proof,schema:3},{...proof,schema:1},{...proof,base_commit:'0'.repeat(40)},{...proof,release_base:'other'},
-  {...proof,patch:'other.patch'},{...proof,protocol_version:8},{...proof,native_build_passed:false},
+  {...proof,patch:'other.patch'},{...proof,protocol_version:9},{...proof,native_build_passed:false},
   {...proof,console_retest_passed:undefined},{...proof,source_tree_algorithm:'other'},
   {...proof,source_tree_sha256:'0'.repeat(64)},{...proof,patch_sha256:'0'.repeat(64)},
   {...proof,hen_sha256:'0'.repeat(64)},
@@ -304,7 +304,7 @@ test('source proof ignores generated build outputs but rejects links and changed
  await fs.writeFile(path.join(directory,'software-builds/kaihen-mo.patch'),'fixture patch');
  await fs.symlink(path.join(directory,'software-builds/kaihen-mo.patch'),path.join(directory,'runtime/kaihen/link'));
  await assert.rejects(()=>inputs.qualifyKaihenBuild(directory),/symlink/);await fs.unlink(path.join(directory,'runtime/kaihen/link'));
- await fs.writeFile(path.join(directory,'runtime/kaihen/libkaihen/include/kaihen/protocol.h'),'#define HEN_PROTOCOL_VERSION 8\n');
+ await fs.writeFile(path.join(directory,'runtime/kaihen/libkaihen/include/kaihen/protocol.h'),'#define HEN_PROTOCOL_VERSION 9\n');
  f.proof.source_tree_sha256=await inputs.kaihenSourceDigest(directory);await fs.writeFile(f.file,JSON.stringify(f.proof));
  await assert.rejects(()=>inputs.qualifyKaihenBuild(directory),/protocol header differs/);
 }));

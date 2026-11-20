@@ -13,10 +13,10 @@ const root = path.resolve(__dirname, '..');
 const gui = path.resolve(process.argv[2] || '');
 assert.ok(process.argv[2] && fs.statSync(gui).isDirectory(),
   'Pass the freshly provisioned Seedsow GUI checkout');
-const official = fs.readFileSync(path.join(root, 'research/artifacts/kaiHEN-20261114c.zip'));
+const official = fs.readFileSync(path.join(root, 'research/artifacts/kaiHEN-20261117.1.zip'));
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 assert.equal(sha(official),
-  '63b91e5e7c6f411aad758758e5a1a3cbe1f855b4304d87916afe5319b9dfd967');
+  '3f7ded0b360b2f0bf97f8e958c3bfe93a8d76dd8d43ce2e8f7d060e647ad0978');
 
 async function main() {
   const work = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'moader-gui-download-')));
@@ -72,7 +72,7 @@ async function main() {
       'module.exports.prepare=async()=>(' + JSON.stringify(manifest) + ');\n');
     fs.writeFileSync(path.join(moader, 'tools/install-inputs.cjs'),
       'module.exports.qualifyKaihenBuild=async()=>(' + JSON.stringify({
-        schema: 3, protocolVersion: 7, components,
+        schema: 3, protocolVersion: 8, components,
       }) + ');\n');
 
     process.env.MOADER_ROOT = moader;
@@ -80,7 +80,7 @@ async function main() {
     let downloads = 0;
     global.fetch = async url => {
       assert.equal(url,
-        'https://github.com/ouncebrew/kaihen/releases/download/20261114c/kaiHEN-20261114c.zip');
+        'https://github.com/ouncebrew/kaihen/releases/download/20261117.1/kaiHEN-20261117.1.zip');
       downloads++;
       return {ok: true, arrayBuffer: async () => official};
     };
@@ -95,8 +95,8 @@ async function main() {
     helper.verifyBundle(manifest);
     for (const [name, item] of Object.entries(components))
       assert.equal(sha(fs.readFileSync(path.join(gui, 'kaihen', name))), item.sha256);
-    const officialCopy = path.join(moader, 'research/artifacts/kaiHEN-20261114c.zip');
-    const bundled = path.join(moader, 'bundles/kaiHEN-Moader-20261114c.zip');
+    const officialCopy = path.join(moader, 'research/artifacts/kaiHEN-20261117.1.zip');
+    const bundled = path.join(moader, 'bundles/kaiHEN-Moader-20261117.1.zip');
     fs.mkdirSync(path.dirname(officialCopy), {recursive: true});
     fs.mkdirSync(path.dirname(bundled), {recursive: true});
     fs.writeFileSync(officialCopy, official);

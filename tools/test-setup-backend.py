@@ -160,15 +160,15 @@ class SetupTests(unittest.TestCase):
         bootstrap_file = self.base / 'bootstrap'; bootstrap_file.write_bytes(bootstrap)
         components = {name: {'bytes': len(data), 'sha256': backend.digest(data)} for name, data in
                       {'ro/main': ro, 'hen/main': self.hen, 'bootstrap.bin': bootstrap}.items()}
-        descriptor = {'schema': 3, 'base_commit': 'e897f991524590833b82fbe8d63a3c6775fb8101',
-                      'release_base': '20261114c', 'patch': 'software-builds/kaihen-mo.patch',
-                      'protocol_version': 7, 'native_build_passed': True,
+        descriptor = {'schema': 3, 'base_commit': '3695f364f9270686aa72cc39627bb1281752b2d3',
+                      'release_base': '20261117.1', 'patch': 'software-builds/kaihen-mo.patch',
+                      'protocol_version': 8, 'native_build_passed': True,
                       'console_retest_passed': False,
                       'source_tree_algorithm': backend.SOURCE_TREE_ALGORITHM,
                       'source_tree_sha256': backend.kaihen_source_sha(self.root),
                       'patch_sha256': backend.digest(b'patch'),
                       'hen_sha256': components['hen/main']['sha256'], 'components': components}
-        self.put('runtime/kaihen/libkaihen/include/kaihen/protocol.h', b'#define HEN_PROTOCOL_VERSION 7\n')
+        self.put('runtime/kaihen/libkaihen/include/kaihen/protocol.h', b'#define HEN_PROTOCOL_VERSION 8\n')
         descriptor['source_tree_sha256'] = backend.kaihen_source_sha(self.root)
         self.put('software-builds/kaihen-mo.json', json.dumps(descriptor).encode())
         args = self.args('--ro-binary', str(ro_file), '--bootstrap-binary', str(bootstrap_file))

@@ -45,7 +45,7 @@ define copy_licenses
 	cp $(HBMENU)/LICENSE.md $(LICENSES)/nx-hbmenu-ISC.md
 	cp $(HBMENU)/switch2/third_party/nanosvg/README.md $(LICENSES)/nanosvg-zlib.md
 	cp $(OUNCESHELL)/LICENSE $(LICENSES)/ounceshell-GPL-3.0.txt
-	cp $(OUNCESHELL)/switch2/third_party/ftpvita/LICENSE $(LICENSES)/ftpvita-MIT.txt
+	cp $(OUNCESHELL)/switch2/third_party/ftpd/LICENSE $(LICENSES)/ftpd-Unlicense.txt
 	cp $(OUNCESHELL)/switch2/resources/NotoSans-OFL.txt $(LICENSES)/notosans-OFL.txt
 	cp $(DEVKITPRO)/libounce/licenses/* $(LICENSES)/
 	cp -r $(DEVKITPRO)/portlibs/switch2/share/licenses/ouncevk $(LICENSES)/
