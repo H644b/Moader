@@ -12,6 +12,11 @@ const crypto = require('node:crypto');
 const check = (ok, message) => { if (!ok) throw Error(message); };
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const ENV_SHA = 'b0d58c43c05ff707ce3429fa4392139cc554ad0ee2cecb7e9b3cc1f598d86bd4';
+// programs/ounceshell.nro in the checksum-pinned official kaiHEN 20261117.1 archive.
+const OFFICIAL_OUNCESHELL = Object.freeze({
+  bytes: 22294859,
+  sha256: 'e506fab96b6031831cfbf3cf9459ed70f0bda92f6d619f8230b8e0a000165735',
+});
 const ROOT = path.resolve(__dirname, '..');
 function args(argv) {
   check(argv.length === 7 && ['--check', '--start'].includes(argv[0]) &&
@@ -84,6 +89,13 @@ function createRun() {
   }
   throw Error('Could not create a unique Seedsow run');
 }
+function qualifyOfficialShell(prepared) {
+  const shells = prepared.bundledPrograms?.filter(item => item.target === '/switch/ounceshell.nro');
+  check(shells?.length === 1 && shells[0].bytes === OFFICIAL_OUNCESHELL.bytes &&
+    shells[0].sha256 === OFFICIAL_OUNCESHELL.sha256,
+  'Seedsow requires the complete official kaiHEN program set');
+  return shells[0];
+}
 async function main(argv = process.argv.slice(2)) {
   check(process.version.startsWith('v24.') && ['darwin', 'linux'].includes(process.platform),
     'Seedsow installation requires POSIX Node.js 24');
@@ -93,9 +105,7 @@ async function main(argv = process.argv.slice(2)) {
   hosts.qualifySources(hosts.resolveProfile('seedsow-malev0'));
   const install = require('./install-moader.cjs');
   const prepared = await install.prepare('seedsow-malev0');
-  const shell = prepared.bundledPrograms?.find(item => item.target === '/switch/ounceshell.nro');
-  check(shell?.sha256 === '675b492a1922b3dafa7a69fe3afe37cda117ecdc406ae5fc964d093fc761c9ba',
-    'Seedsow requires the complete official kaiHEN program set');
+  qualifyOfficialShell(prepared);
   check(typeof prepared.kaihen === 'string' &&
     fs.realpathSync(prepared.kaihen) === prepared.kaihen &&
     fs.lstatSync(prepared.kaihen).isDirectory(),
@@ -263,5 +273,5 @@ async function main(argv = process.argv.slice(2)) {
     await producer.preserve();
   }
 }
-module.exports = {main, args, applyEnvironment, createRun, qualifyHenInspection};
+module.exports = {main, args, applyEnvironment, createRun, qualifyHenInspection, qualifyOfficialShell};
 if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });
