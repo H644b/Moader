@@ -62,6 +62,7 @@ class GameArm {
 
     Result openPackage();
     Result waitForInput();
+    void beginPolicyCapture();
     Result parkGate();
     Result receiveGameMount();
     Result exchangeGameCode();
@@ -115,6 +116,7 @@ class GameArm {
     bool capture_pending_ = false;
     u32 capture_attempts_ = 0;
     u64 capture_next_tick_ = 0;
+    u64 capture_probe_next_tick_ = 0;
     Result recovery_primary_result_ = 0;
     State recovery_target_ = State::Fault;
     Result last_restore_result_ = 0;

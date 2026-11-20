@@ -57,6 +57,13 @@ constexpr u64 MemoryBase = 0x200000, Domain = MemoryBase + 0x80, Table = MemoryB
 constexpr u64 DonorObject = MemoryBase + 0x4100, StockObject = MemoryBase + 0x4200, OtherObject = MemoryBase + 0x4300;
 std::array<u8, 0x8000> memory;
 Service monitor_service{};
+bool full_key_r = false;
+bool full_key_stale = false;
+u64 full_key_samples = 0;
+u64 application_pid = 0;
+u64 application_program = 0;
+bool policy_read_ready = false;
+unsigned policy_writes = 0;
 template <typename T> void put(u64 address, const T& value) {
     assert(address >= MemoryBase && address + sizeof(T) <= MemoryBase + memory.size());
     std::memcpy(memory.data() + address - MemoryBase, &value, sizeof(value));
@@ -311,20 +318,56 @@ void fsFsClose(FsFileSystem* fs) { serviceClose(&fs->s); }
 Result svcCancelSynchronization(Handle) { return 0; }
 void svcSleepThread(s64) { std::this_thread::yield(); }
 Service* pmdmntGetServiceSession() { return &kernel::monitor_service; }
-Result pmdmntGetProgramId(u64* program, u64 pid) { Handle ignored[8]{}; return serviceDispatchInOut(&kernel::monitor_service, 7, pid, *program, .out_handles = ignored); }
+Result pmdmntGetProgramId(u64* program, u64 pid) {
+    if (pid == kernel::application_pid) {
+        *program = kernel::application_program;
+        return 0;
+    }
+    Handle ignored[8]{};
+    return serviceDispatchInOut(&kernel::monitor_service, 7, pid, *program,
+                                .out_handles = ignored);
+}
 Result pmdmntGetProcessId(u64*, u64) { return MAKERESULT(15, 1); }
-Result pmdmntGetApplicationProcessId(u64*) { return MAKERESULT(15, 1); }
+Result pmdmntGetApplicationProcessId(u64* pid) {
+    if (!kernel::application_pid) return MAKERESULT(15, 1);
+    *pid = kernel::application_pid;
+    return 0;
+}
 Result hidInitialize() { return 0; }
 void hidExit() {}
 Result hidActivateNpadWithRevision(u32) { return 0; }
 Result hidSetSupportedNpadStyleSet(u32) { return 0; }
 Result hidSetSupportedNpadIdType(const HidNpadIdType*, size_t) { return 0; }
 size_t hidGetNpadStatesSystemExt(HidNpadIdType, HidNpadSystemExtState*, size_t) { return 0; }
+size_t hidGetNpadStatesFullKey(HidNpadIdType id, HidNpadFullKeyState* states, size_t count) {
+    if (!kernel::full_key_r || id != HidNpadIdType_No1 || count != 1) return 0;
+    *states = {};
+    states->sampling_number = kernel::full_key_stale ? 1 : ++kernel::full_key_samples;
+    states->attributes = HidNpadAttribute_IsConnected;
+    if (kernel::full_key_stale || kernel::full_key_samples >= 2)
+        states->buttons = HidNpadButton_R;
+    return 1;
+}
+size_t hidGetNpadStatesHandheld(HidNpadIdType, HidNpadHandheldState*, size_t) { return 0; }
+size_t hidGetNpadStatesJoyDual(HidNpadIdType, HidNpadJoyDualState*, size_t) { return 0; }
+size_t hidGetNpadStatesJoyRight(HidNpadIdType, HidNpadJoyRightState*, size_t) { return 0; }
 }
 Result readSavedPolicy(Handle, const char*, SignedPolicy*) { return MAKERESULT(2, 1); }
-Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy&, u8*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
+Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy* out) {
+    if (!kernel::policy_read_ready) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
+    out->size = 1;
+    out->bytes[0] = 0x42;
+    return 0;
+}
+Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy& policy, u8*) {
+    assert(policy.size == 1 && policy.bytes[0] == 0x42);
+    ++kernel::policy_writes;
+    return 0;
+}
+Result saveSignedPolicy(Handle, const char*, const SignedPolicy& policy) {
+    assert(policy.size == 1 && policy.bytes[0] == 0x42);
+    return 0;
+}
 
 struct GameArmLifetimeTest {
     static void run(Handle root) {
@@ -373,6 +416,60 @@ struct GameArmLifetimeTest {
         game.step(); assert(game.state_ == GameArm::State::WaitForInput);
         ounce::DomainEntry recycled[] = {{0x100, 0x200, 1}};
         assert(!containsEntry(recycled, 1, {0x100, 0x300, 1}));
+        full_key_r = true;
+        full_key_samples = 0;
+        assert(game.sampleR() == GameArm::InputChoice::Pressed);
+        assert(game.trace().point == GameTracePoint_InputSample);
+        assert(game.trace().value == 0x201); // FullKey, player one
+        full_key_stale = true;
+        full_key_samples = 0;
+        assert(game.sampleR() == GameArm::InputChoice::Unknown);
+        full_key_stale = false;
+        full_key_r = false;
+        // First-launch capture must wait through a still-closing Seedsow
+        // process, then bind the native game when PM reports it.
+        game.state_ = GameArm::State::WaitProcess;
+        game.capture_pending_ = true;
+        game.active_title_ = 0;
+        game.status_.phase = HenGamePhase_WaitingForProcess;
+        application_pid = 700;
+        application_program = 0x0100c9100b06a000ull; // Seedsow Demo
+        game.step();
+        assert(game.state_ == GameArm::State::WaitProcess);
+        assert(game.active_title_ == 0 && game.status_.process_id == 0);
+        assert(game.status_.result == 0);
+        application_program = 0x0400000000010000ull;
+        game.step();
+        assert(game.state_ == GameArm::State::CapturePolicy);
+        assert(game.active_title_ == application_program);
+        assert(game.status_.process_id == application_pid);
+        // A first native launch without an observed R still captures policy.
+        // It must ignore the Switch 1 entrypoint and leave that game stock.
+        game.state_ = GameArm::State::WaitForInput;
+        game.capture_pending_ = false;
+        game.capture_probe_next_tick_ = 0;
+        game.active_title_ = 0;
+        game.status_.process_id = 0;
+        full_key_r = false;
+        application_program = 0x0100c9100b06a000ull;
+        game.step();
+        assert(game.state_ == GameArm::State::WaitForInput);
+        assert(game.status_.process_id == 0);
+        application_program = 0x0400000000010000ull;
+        game.capture_probe_next_tick_ = 0;
+        game.step();
+        assert(game.state_ == GameArm::State::CapturePolicy);
+        assert(game.trace().point == GameTracePoint_AutomaticPolicyCapture);
+        assert(game.status_.process_id == application_pid);
+        policy_read_ready = true;
+        const unsigned previous_writes = policy_writes;
+        game.step();
+        assert(game.policy_ready_ && policy_writes == previous_writes + 1);
+        assert(game.status_.phase == HenGamePhase_WaitingForExit);
+        assert(game.trace().point == GameTracePoint_PolicyCaptured);
+        policy_read_ready = false;
+        application_pid = 0;
+        application_program = 0;
     }
 };
 

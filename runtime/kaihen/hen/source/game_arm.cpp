@@ -32,6 +32,9 @@ constexpr char GamePackageFile[] = "/kaihen/bin/game/exefs.nsp";
 /// a second, while the game runs.
 constexpr u32 CaptureAttempts = 20;
 constexpr u64 CaptureIntervalNs = 1000000000;
+/// A missed first-launch R sample must not prevent policy capture. Probe PM
+/// sparingly while no saved policy exists; the observed game remains stock.
+constexpr u64 CaptureProbeIntervalNs = 250000000;
 /// How long sampleR waits for each controller to post a new sample.
 constexpr u64 InputSampleIntervalNs = 50000000;
 
@@ -281,6 +284,7 @@ Result GameArm::openPackage() {
     active_title_ = 0;
     active_storage_ = 0;
     capture_pending_ = false;
+    capture_probe_next_tick_ = 0;
     gate_failure_step_ = 0;
     step_started_ = false;
     before_step_count_ = 0;
@@ -307,24 +311,44 @@ Result GameArm::openPackage() {
 }
 
 Result GameArm::waitForInput() {
-    if (sampleR() != InputChoice::Pressed) {
-        return 0;
-    }
-
+    const InputChoice input = sampleR();
     if (!policy_ready_) {
-        // The first R launch stays stock. PM identifies the running title,
-        // then its live CodeFS supplies the signed policy for later launches.
-        capture_pending_ = true;
-        capture_attempts_ = 0;
-        capture_next_tick_ = 0;
-        trace_.write(GameTracePoint_FirstLaunchCapture);
-        state_ = State::WaitProcess;
-        status_.phase = HenGamePhase_WaitingForProcess;
+        // The first native launch stays stock. A fresh R press starts the
+        // existing PM wait immediately; if its sample is missed, observe the
+        // native process itself and still capture its signed policy.
+        if (input == InputChoice::Pressed) {
+            beginPolicyCapture();
+            trace_.write(GameTracePoint_FirstLaunchCapture);
+            return 0;
+        }
+        const u64 now = GameClock::now();
+        if (capture_probe_next_tick_ && now < capture_probe_next_tick_) return 0;
+        capture_probe_next_tick_ = now + GameClock::toTicks(CaptureProbeIntervalNs);
+        u64 pid = 0;
+        Result rc = pmdmntGetApplicationProcessId(&pid);
+        if (R_FAILED(rc) || !pid) return 0;
+        u64 title = 0;
+        rc = pmdmntGetProgramId(&title, pid);
+        if (R_FAILED(rc) || !isApplicationProgram(title)) return 0;
+        beginPolicyCapture();
+        active_title_ = title;
+        status_.process_id = pid;
+        state_ = State::CapturePolicy;
+        trace_.write(GameTracePoint_AutomaticPolicyCapture);
         return 0;
     }
+    if (input != InputChoice::Pressed) return 0;
     state_ = State::ParkGate;
     status_.phase = HenGamePhase_Parking;
     return 0;
+}
+
+void GameArm::beginPolicyCapture() {
+    capture_pending_ = true;
+    capture_attempts_ = 0;
+    capture_next_tick_ = 0;
+    state_ = State::WaitProcess;
+    status_.phase = HenGamePhase_WaitingForProcess;
 }
 
 Result GameArm::parkGate() {
@@ -395,43 +419,45 @@ GameArm::InputChoice GameArm::sampleR() {
         HidNpadIdType_No4, HidNpadIdType_No5, HidNpadIdType_No6,
         HidNpadIdType_No7, HidNpadIdType_No8, HidNpadIdType_Handheld,
     };
-    u64 previous[sizeof(ids) / sizeof(ids[0])] = {};
-    bool baseline_valid[sizeof(ids) / sizeof(ids[0])] = {};
-    for (size_t index = 0; index < sizeof(ids) / sizeof(ids[0]); index++) {
-        HidNpadSystemExtState state = {};
-        if (hidGetNpadStatesSystemExt(ids[index], &state, 1) == 1 &&
-            (state.attributes & HidNpadAttribute_IsConnected) &&
-                   state.sampling_number != 0) {
-            previous[index] = state.sampling_number;
-            baseline_valid[index] = true;
+    // SystemExt does not necessarily publish the active pad's state in every
+    // controller configuration. Read the standard styles that HEN activated
+    // as well, especially FullKey for a docked Pro Controller.
+    using Reader = size_t (*)(HidNpadIdType, HidNpadCommonState*, size_t);
+    const Reader readers[] = {
+        hidGetNpadStatesSystemExt, hidGetNpadStatesFullKey,
+        hidGetNpadStatesHandheld, hidGetNpadStatesJoyDual,
+        hidGetNpadStatesJoyRight,
+    };
+    constexpr size_t IdCount = sizeof(ids) / sizeof(ids[0]);
+    const size_t reader_count = sizeof(readers) / sizeof(readers[0]);
+    u64 previous[sizeof(readers) / sizeof(readers[0])][IdCount] = {};
+    for (size_t style = 0; style < reader_count; style++) {
+        for (size_t index = 0; index < IdCount; index++) {
+            HidNpadCommonState state = {};
+            if (readers[style](ids[index], &state, 1) == 1 &&
+                (state.attributes & HidNpadAttribute_IsConnected)) {
+                previous[style][index] = state.sampling_number;
+            }
         }
     }
     svcSleepThread(InputSampleIntervalNs);
     bool fresh = false;
-    bool incomplete = false;
-    for (size_t index = 0; index < sizeof(ids) / sizeof(ids[0]); index++) {
-        HidNpadSystemExtState state = {};
-        if (!baseline_valid[index]) {
-            const bool observed = hidGetNpadStatesSystemExt(ids[index], &state, 1) == 1;
-            if (!observed || (state.attributes & HidNpadAttribute_IsConnected)) {
-                incomplete = true;
+    for (size_t style = 0; style < reader_count; style++) {
+        for (size_t index = 0; index < IdCount; index++) {
+            if (!previous[style][index]) continue;
+            HidNpadCommonState state = {};
+            if (readers[style](ids[index], &state, 1) != 1 ||
+                state.sampling_number <= previous[style][index] ||
+                !(state.attributes & HidNpadAttribute_IsConnected)) continue;
+            fresh = true;
+            if (state.buttons & HidNpadButton_R) {
+                trace_.write(GameTracePoint_InputSample, 0,
+                             static_cast<u32>(((style + 1) << 8) | (index + 1)));
+                return InputChoice::Pressed;
             }
-            continue;
-        }
-        if (hidGetNpadStatesSystemExt(ids[index], &state, 1) != 1 ||
-            state.sampling_number <= previous[index] ||
-            !(state.attributes & HidNpadAttribute_IsConnected)) {
-            incomplete = true;
-            continue;
-        }
-        fresh = true;
-        if (state.buttons & HidNpadButton_R) {
-            trace_.write(GameTracePoint_InputSample, 0, static_cast<u32>(index + 1));
-            return InputChoice::Pressed;
         }
     }
-    const InputChoice choice = fresh && !incomplete ? InputChoice::Released
-                                                    : InputChoice::Unknown;
+    const InputChoice choice = fresh ? InputChoice::Released : InputChoice::Unknown;
     trace_.write(GameTracePoint_InputSample, 0,
                  choice == InputChoice::Released ? 0 : 0xffffffffu);
     return choice;
@@ -559,6 +585,10 @@ Result GameArm::waitForProcess() {
             return rc;
         }
         if (!allow_bridge_process_ && !isApplicationProgram(title)) {
+            // The user may begin holding R while the Seedsow (Switch 1)
+            // entrypoint is still closing. Do not permanently fault the
+            // first-launch capture before the native game appears in PM.
+            if (capture_pending_) return 0;
             return UnexpectedState;
         }
         active_title_ = title;

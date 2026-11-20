@@ -823,10 +823,20 @@ index d18dd69..6253ee7 100644
  all: $(OUT)/main
  
 diff --git a/hen/source/game_arm.cpp b/hen/source/game_arm.cpp
-index 4d2ba21..de6c265 100644
+index 4d2ba21..c0be8fd 100644
 --- a/hen/source/game_arm.cpp
 +++ b/hen/source/game_arm.cpp
-@@ -46,9 +46,10 @@ u32 faultCause(u32 point, u32 value) {
+@@ -32,6 +32,9 @@ constexpr char GamePackageFile[] = "/kaihen/bin/game/exefs.nsp";
+ /// a second, while the game runs.
+ constexpr u32 CaptureAttempts = 20;
+ constexpr u64 CaptureIntervalNs = 1000000000;
++/// A missed first-launch R sample must not prevent policy capture. Probe PM
++/// sparingly while no saved policy exists; the observed game remains stock.
++constexpr u64 CaptureProbeIntervalNs = 250000000;
+ /// How long sampleR waits for each controller to post a new sample.
+ constexpr u64 InputSampleIntervalNs = 50000000;
+ 
+@@ -46,9 +49,10 @@ u32 faultCause(u32 point, u32 value) {
  }
  
  bool containsEntry(const ounce::DomainEntry entries[ounce::MaxDomainEntries], u32 count,
@@ -839,7 +849,7 @@ index 4d2ba21..de6c265 100644
              return true;
          }
      }
-@@ -191,6 +192,7 @@ void GameArm::fault(Result result) {
+@@ -191,6 +195,7 @@ void GameArm::fault(Result result) {
  }
  
  void GameArm::step() {
@@ -847,7 +857,7 @@ index 4d2ba21..de6c265 100644
      Result rc = 0;
      switch (state_) {
      case State::Inactive:
-@@ -243,6 +245,16 @@ void GameArm::step() {
+@@ -243,6 +248,16 @@ void GameArm::step() {
      }
  }
  
@@ -864,7 +874,150 @@ index 4d2ba21..de6c265 100644
  Result GameArm::openPackage() {
      if (!memory_) {
          trace_.write(GameTracePoint_WorkerEntered);
-@@ -468,7 +480,7 @@ Result GameArm::receiveGameMount() {
+@@ -269,6 +284,7 @@ Result GameArm::openPackage() {
+     active_title_ = 0;
+     active_storage_ = 0;
+     capture_pending_ = false;
++    capture_probe_next_tick_ = 0;
+     gate_failure_step_ = 0;
+     step_started_ = false;
+     before_step_count_ = 0;
+@@ -295,26 +311,46 @@ Result GameArm::openPackage() {
+ }
+ 
+ Result GameArm::waitForInput() {
+-    if (sampleR() != InputChoice::Pressed) {
+-        return 0;
+-    }
+-
++    const InputChoice input = sampleR();
+     if (!policy_ready_) {
+-        // The first R launch stays stock. PM identifies the running title,
+-        // then its live CodeFS supplies the signed policy for later launches.
+-        capture_pending_ = true;
+-        capture_attempts_ = 0;
+-        capture_next_tick_ = 0;
+-        trace_.write(GameTracePoint_FirstLaunchCapture);
+-        state_ = State::WaitProcess;
+-        status_.phase = HenGamePhase_WaitingForProcess;
++        // The first native launch stays stock. A fresh R press starts the
++        // existing PM wait immediately; if its sample is missed, observe the
++        // native process itself and still capture its signed policy.
++        if (input == InputChoice::Pressed) {
++            beginPolicyCapture();
++            trace_.write(GameTracePoint_FirstLaunchCapture);
++            return 0;
++        }
++        const u64 now = GameClock::now();
++        if (capture_probe_next_tick_ && now < capture_probe_next_tick_) return 0;
++        capture_probe_next_tick_ = now + GameClock::toTicks(CaptureProbeIntervalNs);
++        u64 pid = 0;
++        Result rc = pmdmntGetApplicationProcessId(&pid);
++        if (R_FAILED(rc) || !pid) return 0;
++        u64 title = 0;
++        rc = pmdmntGetProgramId(&title, pid);
++        if (R_FAILED(rc) || !isApplicationProgram(title)) return 0;
++        beginPolicyCapture();
++        active_title_ = title;
++        status_.process_id = pid;
++        state_ = State::CapturePolicy;
++        trace_.write(GameTracePoint_AutomaticPolicyCapture);
+         return 0;
+     }
++    if (input != InputChoice::Pressed) return 0;
+     state_ = State::ParkGate;
+     status_.phase = HenGamePhase_Parking;
+     return 0;
+ }
+ 
++void GameArm::beginPolicyCapture() {
++    capture_pending_ = true;
++    capture_attempts_ = 0;
++    capture_next_tick_ = 0;
++    state_ = State::WaitProcess;
++    status_.phase = HenGamePhase_WaitingForProcess;
++}
++
+ Result GameArm::parkGate() {
+     status_.phase = HenGamePhase_Parking;
+     Result rc = gate_->park();
+@@ -383,43 +419,45 @@ GameArm::InputChoice GameArm::sampleR() {
+         HidNpadIdType_No4, HidNpadIdType_No5, HidNpadIdType_No6,
+         HidNpadIdType_No7, HidNpadIdType_No8, HidNpadIdType_Handheld,
+     };
+-    u64 previous[sizeof(ids) / sizeof(ids[0])] = {};
+-    bool baseline_valid[sizeof(ids) / sizeof(ids[0])] = {};
+-    for (size_t index = 0; index < sizeof(ids) / sizeof(ids[0]); index++) {
+-        HidNpadSystemExtState state = {};
+-        if (hidGetNpadStatesSystemExt(ids[index], &state, 1) == 1 &&
+-            (state.attributes & HidNpadAttribute_IsConnected) &&
+-                   state.sampling_number != 0) {
+-            previous[index] = state.sampling_number;
+-            baseline_valid[index] = true;
++    // SystemExt does not necessarily publish the active pad's state in every
++    // controller configuration. Read the standard styles that HEN activated
++    // as well, especially FullKey for a docked Pro Controller.
++    using Reader = size_t (*)(HidNpadIdType, HidNpadCommonState*, size_t);
++    const Reader readers[] = {
++        hidGetNpadStatesSystemExt, hidGetNpadStatesFullKey,
++        hidGetNpadStatesHandheld, hidGetNpadStatesJoyDual,
++        hidGetNpadStatesJoyRight,
++    };
++    constexpr size_t IdCount = sizeof(ids) / sizeof(ids[0]);
++    const size_t reader_count = sizeof(readers) / sizeof(readers[0]);
++    u64 previous[sizeof(readers) / sizeof(readers[0])][IdCount] = {};
++    for (size_t style = 0; style < reader_count; style++) {
++        for (size_t index = 0; index < IdCount; index++) {
++            HidNpadCommonState state = {};
++            if (readers[style](ids[index], &state, 1) == 1 &&
++                (state.attributes & HidNpadAttribute_IsConnected)) {
++                previous[style][index] = state.sampling_number;
++            }
+         }
+     }
+     svcSleepThread(InputSampleIntervalNs);
+     bool fresh = false;
+-    bool incomplete = false;
+-    for (size_t index = 0; index < sizeof(ids) / sizeof(ids[0]); index++) {
+-        HidNpadSystemExtState state = {};
+-        if (!baseline_valid[index]) {
+-            const bool observed = hidGetNpadStatesSystemExt(ids[index], &state, 1) == 1;
+-            if (!observed || (state.attributes & HidNpadAttribute_IsConnected)) {
+-                incomplete = true;
++    for (size_t style = 0; style < reader_count; style++) {
++        for (size_t index = 0; index < IdCount; index++) {
++            if (!previous[style][index]) continue;
++            HidNpadCommonState state = {};
++            if (readers[style](ids[index], &state, 1) != 1 ||
++                state.sampling_number <= previous[style][index] ||
++                !(state.attributes & HidNpadAttribute_IsConnected)) continue;
++            fresh = true;
++            if (state.buttons & HidNpadButton_R) {
++                trace_.write(GameTracePoint_InputSample, 0,
++                             static_cast<u32>(((style + 1) << 8) | (index + 1)));
++                return InputChoice::Pressed;
+             }
+-            continue;
+-        }
+-        if (hidGetNpadStatesSystemExt(ids[index], &state, 1) != 1 ||
+-            state.sampling_number <= previous[index] ||
+-            !(state.attributes & HidNpadAttribute_IsConnected)) {
+-            incomplete = true;
+-            continue;
+-        }
+-        fresh = true;
+-        if (state.buttons & HidNpadButton_R) {
+-            trace_.write(GameTracePoint_InputSample, 0, static_cast<u32>(index + 1));
+-            return InputChoice::Pressed;
+         }
+     }
+-    const InputChoice choice = fresh && !incomplete ? InputChoice::Released
+-                                                    : InputChoice::Unknown;
++    const InputChoice choice = fresh ? InputChoice::Released : InputChoice::Unknown;
+     trace_.write(GameTracePoint_InputSample, 0,
+                  choice == InputChoice::Released ? 0 : 0xffffffffu);
+     return choice;
+@@ -468,7 +506,7 @@ Result GameArm::receiveGameMount() {
      trace_.write(GameTracePoint_SecondSnapshotDone, rc, after_count);
      if (R_FAILED(rc)) return restoreGate(rc);
  
@@ -873,7 +1026,7 @@ index 4d2ba21..de6c265 100644
          first_closed_ = true;
      }
      bool matching = false;
-@@ -514,10 +526,19 @@ Result GameArm::receiveGameMount() {
+@@ -514,10 +552,19 @@ Result GameArm::receiveGameMount() {
          // restored, the pending title can continue on its stock CodeFS.
          return restoreGate(rc, State::WaitProcess);
      }
@@ -894,7 +1047,18 @@ index 4d2ba21..de6c265 100644
  Result GameArm::waitForProcess() {
      u64 pid = 0;
      Result rc = active_title_ ? pmdmntGetProcessId(&pid, active_title_)
-@@ -563,9 +584,9 @@ Result GameArm::capturePolicy() {
+@@ -538,6 +585,10 @@ Result GameArm::waitForProcess() {
+             return rc;
+         }
+         if (!allow_bridge_process_ && !isApplicationProgram(title)) {
++            // The user may begin holding R while the Seedsow (Switch 1)
++            // entrypoint is still closing. Do not permanently fault the
++            // first-launch capture before the native game appears in PM.
++            if (capture_pending_) return 0;
+             return UnexpectedState;
+         }
+         active_title_ = title;
+@@ -563,9 +614,9 @@ Result GameArm::capturePolicy() {
      if (R_FAILED(rc)) return rc;
      if (program_id != active_title_) return UnexpectedState;
  
@@ -906,7 +1070,7 @@ index 4d2ba21..de6c265 100644
      capture_attempts_++;
      trace_.write(GameTracePoint_PolicyCaptureAttempt, 0, capture_attempts_);
  
-@@ -619,7 +640,7 @@ Result GameArm::pollProcessExit() {
+@@ -619,7 +670,7 @@ Result GameArm::pollProcessExit() {
          u32 count = 0;
          GameMount final_mount(*memory_, mount_config_);
          R_TRY(final_mount.snapshot(entries, count));
@@ -916,7 +1080,7 @@ index 4d2ba21..de6c265 100644
      if (package_) package_->close();
      package_.reset();
 diff --git a/hen/source/game_arm.hpp b/hen/source/game_arm.hpp
-index 441bdbf..8658394 100644
+index 441bdbf..a102c55 100644
 --- a/hen/source/game_arm.hpp
 +++ b/hen/source/game_arm.hpp
 @@ -7,13 +7,22 @@
@@ -953,15 +1117,18 @@ index 441bdbf..8658394 100644
  
    private:
      enum class InputChoice {
-@@ -52,6 +64,7 @@ class GameArm {
+@@ -50,8 +62,10 @@ class GameArm {
+ 
+     Result openPackage();
      Result waitForInput();
++    void beginPolicyCapture();
      Result parkGate();
      Result receiveGameMount();
 +    Result exchangeGameCode();
      Result waitForProcess();
      Result capturePolicy();
      Result pollProcessExit();
-@@ -98,6 +111,7 @@ class GameArm {
+@@ -98,9 +112,11 @@ class GameArm {
      bool handles1_ = false;
      bool started_ = false;
      bool policy_ready_ = false;
@@ -969,6 +1136,22 @@ index 441bdbf..8658394 100644
      bool capture_pending_ = false;
      u32 capture_attempts_ = 0;
      u64 capture_next_tick_ = 0;
++    u64 capture_probe_next_tick_ = 0;
+     Result recovery_primary_result_ = 0;
+     State recovery_target_ = State::Fault;
+     Result last_restore_result_ = 0;
+diff --git a/hen/source/game_trace.hpp b/hen/source/game_trace.hpp
+index ced7db6..b697b6b 100644
+--- a/hen/source/game_trace.hpp
++++ b/hen/source/game_trace.hpp
+@@ -27,6 +27,7 @@ enum GameTracePoint : u32 {
+     GameTracePoint_PolicyCaptureAttempt = 49,
+     GameTracePoint_PolicyCaptured = 50,
+     GameTracePoint_PolicyCaptureFailed = 51,
++    GameTracePoint_AutomaticPolicyCapture = 52,
+     GameTracePoint_Fault = 0xff,
+ };
+ 
 diff --git a/hen/source/lifecycle_client.hpp b/hen/source/lifecycle_client.hpp
 new file mode 100644
 index 0000000..c45c059
@@ -3278,10 +3461,10 @@ index 0000000..3747804
 +}
 diff --git a/hen/tests/session_lifetime_test.cpp b/hen/tests/session_lifetime_test.cpp
 new file mode 100644
-index 0000000..9189aa0
+index 0000000..a0700e5
 --- /dev/null
 +++ b/hen/tests/session_lifetime_test.cpp
-@@ -0,0 +1,512 @@
+@@ -0,0 +1,609 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// Actual plugin runtime and SM proxy loops, real SDK clone/close/IPC packing,
 +// counted fake kernel. FS's quota/peer teardown are a MODEL, not device proof.
@@ -3341,6 +3524,13 @@ index 0000000..9189aa0
 +constexpr u64 DonorObject = MemoryBase + 0x4100, StockObject = MemoryBase + 0x4200, OtherObject = MemoryBase + 0x4300;
 +std::array<u8, 0x8000> memory;
 +Service monitor_service{};
++bool full_key_r = false;
++bool full_key_stale = false;
++u64 full_key_samples = 0;
++u64 application_pid = 0;
++u64 application_program = 0;
++bool policy_read_ready = false;
++unsigned policy_writes = 0;
 +template <typename T> void put(u64 address, const T& value) {
 +    assert(address >= MemoryBase && address + sizeof(T) <= MemoryBase + memory.size());
 +    std::memcpy(memory.data() + address - MemoryBase, &value, sizeof(value));
@@ -3595,20 +3785,56 @@ index 0000000..9189aa0
 +Result svcCancelSynchronization(Handle) { return 0; }
 +void svcSleepThread(s64) { std::this_thread::yield(); }
 +Service* pmdmntGetServiceSession() { return &kernel::monitor_service; }
-+Result pmdmntGetProgramId(u64* program, u64 pid) { Handle ignored[8]{}; return serviceDispatchInOut(&kernel::monitor_service, 7, pid, *program, .out_handles = ignored); }
++Result pmdmntGetProgramId(u64* program, u64 pid) {
++    if (pid == kernel::application_pid) {
++        *program = kernel::application_program;
++        return 0;
++    }
++    Handle ignored[8]{};
++    return serviceDispatchInOut(&kernel::monitor_service, 7, pid, *program,
++                                .out_handles = ignored);
++}
 +Result pmdmntGetProcessId(u64*, u64) { return MAKERESULT(15, 1); }
-+Result pmdmntGetApplicationProcessId(u64*) { return MAKERESULT(15, 1); }
++Result pmdmntGetApplicationProcessId(u64* pid) {
++    if (!kernel::application_pid) return MAKERESULT(15, 1);
++    *pid = kernel::application_pid;
++    return 0;
++}
 +Result hidInitialize() { return 0; }
 +void hidExit() {}
 +Result hidActivateNpadWithRevision(u32) { return 0; }
 +Result hidSetSupportedNpadStyleSet(u32) { return 0; }
 +Result hidSetSupportedNpadIdType(const HidNpadIdType*, size_t) { return 0; }
 +size_t hidGetNpadStatesSystemExt(HidNpadIdType, HidNpadSystemExtState*, size_t) { return 0; }
++size_t hidGetNpadStatesFullKey(HidNpadIdType id, HidNpadFullKeyState* states, size_t count) {
++    if (!kernel::full_key_r || id != HidNpadIdType_No1 || count != 1) return 0;
++    *states = {};
++    states->sampling_number = kernel::full_key_stale ? 1 : ++kernel::full_key_samples;
++    states->attributes = HidNpadAttribute_IsConnected;
++    if (kernel::full_key_stale || kernel::full_key_samples >= 2)
++        states->buttons = HidNpadButton_R;
++    return 1;
++}
++size_t hidGetNpadStatesHandheld(HidNpadIdType, HidNpadHandheldState*, size_t) { return 0; }
++size_t hidGetNpadStatesJoyDual(HidNpadIdType, HidNpadJoyDualState*, size_t) { return 0; }
++size_t hidGetNpadStatesJoyRight(HidNpadIdType, HidNpadJoyRightState*, size_t) { return 0; }
 +}
 +Result readSavedPolicy(Handle, const char*, SignedPolicy*) { return MAKERESULT(2, 1); }
-+Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-+Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy&, u8*) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
-+Result saveSignedPolicy(Handle, const char*, const SignedPolicy&) { return MAKERESULT(Module_Libnx, LibnxError_BadInput); }
++Result readSignedPolicy(Handle, u64, u8, u8, SignedPolicy* out) {
++    if (!kernel::policy_read_ready) return MAKERESULT(Module_Libnx, LibnxError_BadInput);
++    out->size = 1;
++    out->bytes[0] = 0x42;
++    return 0;
++}
++Result writeExeFsPackage(Handle, const char*, const char*, const SignedPolicy& policy, u8*) {
++    assert(policy.size == 1 && policy.bytes[0] == 0x42);
++    ++kernel::policy_writes;
++    return 0;
++}
++Result saveSignedPolicy(Handle, const char*, const SignedPolicy& policy) {
++    assert(policy.size == 1 && policy.bytes[0] == 0x42);
++    return 0;
++}
 +
 +struct GameArmLifetimeTest {
 +    static void run(Handle root) {
@@ -3657,6 +3883,60 @@ index 0000000..9189aa0
 +        game.step(); assert(game.state_ == GameArm::State::WaitForInput);
 +        ounce::DomainEntry recycled[] = {{0x100, 0x200, 1}};
 +        assert(!containsEntry(recycled, 1, {0x100, 0x300, 1}));
++        full_key_r = true;
++        full_key_samples = 0;
++        assert(game.sampleR() == GameArm::InputChoice::Pressed);
++        assert(game.trace().point == GameTracePoint_InputSample);
++        assert(game.trace().value == 0x201); // FullKey, player one
++        full_key_stale = true;
++        full_key_samples = 0;
++        assert(game.sampleR() == GameArm::InputChoice::Unknown);
++        full_key_stale = false;
++        full_key_r = false;
++        // First-launch capture must wait through a still-closing Seedsow
++        // process, then bind the native game when PM reports it.
++        game.state_ = GameArm::State::WaitProcess;
++        game.capture_pending_ = true;
++        game.active_title_ = 0;
++        game.status_.phase = HenGamePhase_WaitingForProcess;
++        application_pid = 700;
++        application_program = 0x0100c9100b06a000ull; // Seedsow Demo
++        game.step();
++        assert(game.state_ == GameArm::State::WaitProcess);
++        assert(game.active_title_ == 0 && game.status_.process_id == 0);
++        assert(game.status_.result == 0);
++        application_program = 0x0400000000010000ull;
++        game.step();
++        assert(game.state_ == GameArm::State::CapturePolicy);
++        assert(game.active_title_ == application_program);
++        assert(game.status_.process_id == application_pid);
++        // A first native launch without an observed R still captures policy.
++        // It must ignore the Switch 1 entrypoint and leave that game stock.
++        game.state_ = GameArm::State::WaitForInput;
++        game.capture_pending_ = false;
++        game.capture_probe_next_tick_ = 0;
++        game.active_title_ = 0;
++        game.status_.process_id = 0;
++        full_key_r = false;
++        application_program = 0x0100c9100b06a000ull;
++        game.step();
++        assert(game.state_ == GameArm::State::WaitForInput);
++        assert(game.status_.process_id == 0);
++        application_program = 0x0400000000010000ull;
++        game.capture_probe_next_tick_ = 0;
++        game.step();
++        assert(game.state_ == GameArm::State::CapturePolicy);
++        assert(game.trace().point == GameTracePoint_AutomaticPolicyCapture);
++        assert(game.status_.process_id == application_pid);
++        policy_read_ready = true;
++        const unsigned previous_writes = policy_writes;
++        game.step();
++        assert(game.policy_ready_ && policy_writes == previous_writes + 1);
++        assert(game.status_.phase == HenGamePhase_WaitingForExit);
++        assert(game.trace().point == GameTracePoint_PolicyCaptured);
++        policy_read_ready = false;
++        application_pid = 0;
++        application_program = 0;
 +    }
 +};
 +
@@ -4288,108 +4568,6 @@ index d8fdcf9..0b8d22d 100644
  
  /// Sends the plugin copies of the SM session and the FS root. The reply has
  /// the release event (writable), the ready event (readable) and the client
-diff --git a/ro/test.sh b/ro/test.sh
-index 3515454..09a396a 100644
---- a/ro/test.sh
-+++ b/ro/test.sh
-@@ -3,19 +3,18 @@
- set -eu
- cd "$(dirname "$0")"
- nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
--mkdir -p build/tests
-+out=${TEST_OUT:-build/tests}
-+mkdir -p "$out"
- cxx=${CXX:-g++}
- # libnx's HIPC parser reads the kernel PID at an unaligned offset, as allowed
- # on AArch64. Keep other ASan/UBSan checks enabled for the host fixtures.
--flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
--$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o build/tests/wire
--build/tests/wire
--$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o build/tests/image
--build/tests/image
--$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o build/tests/session
--$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
--build/tests/mapping
--build/tests/session
--$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
--build/tests/mapping
-+flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
-+$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o "$out/wire"
-+"$out/wire"
-+$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o "$out/image"
-+"$out/image"
-+$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o "$out/session"
-+"$out/session"
-+$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o "$out/mapping"
-+"$out/mapping"
- echo 'RO wire, image, session and mapping tests: PASS'
-diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
-index 874dd9e..533f8ef 100644
---- a/ro/tests/session_test.cpp
-+++ b/ro/tests/session_test.cpp
-@@ -13,6 +13,7 @@ extern "C" {
- 
- static Handle g_closed[8];
- static u32 g_closeCount;
-+static u64 g_clientPid = 213;
- static u32 g_mapCount, g_unmapCount;
- static Result g_mapResult;
- static u32 g_jitMapCount, g_jitUnmapCount;
-@@ -39,7 +40,7 @@ Result svcCloseHandle(Handle handle) {
- Result svcGetProcessId(u64* pid, Handle handle) {
-     if (handle != 42 && handle != 43)
-         return 0xd401;
--    *pid = 213;
-+    *pid = g_clientPid;
-     return 0;
- }
- 
-@@ -132,7 +133,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special,
-     words[0] = 6;
-     words[1] = 0x80000000 | num_data_words;
-     words[2] = special;
--    words[3] = 213;
-+    words[3] = static_cast<u32>(g_clientPid);
-     words[5] = handle;
-     words[8] = 0x49434653;
-     words[9] = 1;
-@@ -140,7 +141,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special,
- }
- 
- int main(void) {
--    RoSession sessions[2] = {0};
-+    RoSession sessions[2] = {};
-     u32 words[64];
- 
-     request(words, RoCmd_Initialize, 10, 3, 42);
-@@ -386,6 +387,27 @@ int main(void) {
-     request(words, RoCmd_Initialize, 10, 3, 42);
-     roDispatch(sessions, 2, 0, words);
-     assert(words[6] == 0 && sessions[0].process_handle == 42);
-+    // Repeated host shutdown and next-process admission: execute the actual
-+    // dispatcher/courier/close paths, retaining no old process or image/JIT
-+    // records. Fixed logging storage is reset per cycle, not a pool increase.
-+    assert(!roSessionClose(&sessions[0]));
-+    g_aliasUnmapResult = 0;
-+    for (u64 next_pid = 1000; next_pid != 1040; ++next_pid) {
-+        g_closeCount = 0;
-+        g_clientPid = next_pid;
-+        request(words, RoCmd_Initialize, 10, 3, 42);
-+        roDispatch(sessions, 2, 0, words);
-+        assert(!words[6] && sessions[0].process_id == next_pid);
-+        request(words, RoCmd_GetHomebrewSession, 10, 1, 0);
-+        const Handle courier = roDispatch(sessions, 2, 0, words);
-+        assert(courier == 77);
-+        svcCloseHandle(courier); // same reply-side ownership as RoServer
-+        assert(!roSessionClose(&sessions[0]));
-+        assert(g_closeCount == 2 && g_closed[0] == 77 && g_closed[1] == 42);
-+        assert(!sessions[0].process_handle && !sessions[0].process_id);
-+        for (const auto& mapping : sessions[0].jit) assert(!mapping.size && !mapping.alias);
-+        for (const auto& image : sessions[0].nro) assert(!image.mapped);
-+    }
-     return 0;
- }
- 
 diff --git a/ro/README.md b/ro/README.md
 index 7c11d6c..951bb27 100644
 --- a/ro/README.md
@@ -4757,6 +4935,108 @@ index 082a3d9..e8d709c 100644
 +/// Private diagnostic reply with the kernel's server PID and bounded raw data.
 +/// The PID is required to bind every process command to the challenged RO.
 +void roWriteDiagnosticReply(void* base, Result rc, const void* data, u32 size);
+diff --git a/ro/test.sh b/ro/test.sh
+index 3515454..09a396a 100644
+--- a/ro/test.sh
++++ b/ro/test.sh
+@@ -3,19 +3,18 @@
+ set -eu
+ cd "$(dirname "$0")"
+ nx=${LIBOUNCE:-../../../../api_reimplement/libounce-nx/nx}
+-mkdir -p build/tests
++out=${TEST_OUT:-build/tests}
++mkdir -p "$out"
+ cxx=${CXX:-g++}
+ # libnx's HIPC parser reads the kernel PID at an unaligned offset, as allowed
+ # on AArch64. Keep other ASan/UBSan checks enabled for the host fixtures.
+-flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o build/tests/wire
+-build/tests/wire
+-$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o build/tests/image
+-build/tests/image
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o build/tests/session
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
+-build/tests/mapping
+-build/tests/session
+-$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o build/tests/mapping
+-build/tests/mapping
++flags="-std=gnu++20 -Wall -Wextra -Werror -Wno-missing-field-initializers -Wno-invalid-constexpr -fsanitize=address,undefined -fno-sanitize=alignment -D__SWITCH__ -D__SWITCH2__ -DLIBNX_HOST_TEST_TLS"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp tests/wire_test.cpp -o "$out/wire"
++"$out/wire"
++$cxx $flags -I"$nx/include" source/image.cpp tests/image_test.cpp -o "$out/image"
++"$out/image"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/wire.cpp source/session.cpp tests/session_test.cpp -o "$out/session"
++"$out/session"
++$cxx $flags -I"$nx/include" -I../libkaihen/include source/mapping.cpp source/image.cpp tests/mapping_test.cpp -o "$out/mapping"
++"$out/mapping"
+ echo 'RO wire, image, session and mapping tests: PASS'
+diff --git a/ro/tests/session_test.cpp b/ro/tests/session_test.cpp
+index 874dd9e..533f8ef 100644
+--- a/ro/tests/session_test.cpp
++++ b/ro/tests/session_test.cpp
+@@ -13,6 +13,7 @@ extern "C" {
+ 
+ static Handle g_closed[8];
+ static u32 g_closeCount;
++static u64 g_clientPid = 213;
+ static u32 g_mapCount, g_unmapCount;
+ static Result g_mapResult;
+ static u32 g_jitMapCount, g_jitUnmapCount;
+@@ -39,7 +40,7 @@ Result svcCloseHandle(Handle handle) {
+ Result svcGetProcessId(u64* pid, Handle handle) {
+     if (handle != 42 && handle != 43)
+         return 0xd401;
+-    *pid = 213;
++    *pid = g_clientPid;
+     return 0;
+ }
+ 
+@@ -132,7 +133,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special,
+     words[0] = 6;
+     words[1] = 0x80000000 | num_data_words;
+     words[2] = special;
+-    words[3] = 213;
++    words[3] = static_cast<u32>(g_clientPid);
+     words[5] = handle;
+     words[8] = 0x49434653;
+     words[9] = 1;
+@@ -140,7 +141,7 @@ static void request(u32 words[64], u32 cmd_id, u32 num_data_words, u32 special,
+ }
+ 
+ int main(void) {
+-    RoSession sessions[2] = {0};
++    RoSession sessions[2] = {};
+     u32 words[64];
+ 
+     request(words, RoCmd_Initialize, 10, 3, 42);
+@@ -386,6 +387,27 @@ int main(void) {
+     request(words, RoCmd_Initialize, 10, 3, 42);
+     roDispatch(sessions, 2, 0, words);
+     assert(words[6] == 0 && sessions[0].process_handle == 42);
++    // Repeated host shutdown and next-process admission: execute the actual
++    // dispatcher/courier/close paths, retaining no old process or image/JIT
++    // records. Fixed logging storage is reset per cycle, not a pool increase.
++    assert(!roSessionClose(&sessions[0]));
++    g_aliasUnmapResult = 0;
++    for (u64 next_pid = 1000; next_pid != 1040; ++next_pid) {
++        g_closeCount = 0;
++        g_clientPid = next_pid;
++        request(words, RoCmd_Initialize, 10, 3, 42);
++        roDispatch(sessions, 2, 0, words);
++        assert(!words[6] && sessions[0].process_id == next_pid);
++        request(words, RoCmd_GetHomebrewSession, 10, 1, 0);
++        const Handle courier = roDispatch(sessions, 2, 0, words);
++        assert(courier == 77);
++        svcCloseHandle(courier); // same reply-side ownership as RoServer
++        assert(!roSessionClose(&sessions[0]));
++        assert(g_closeCount == 2 && g_closed[0] == 77 && g_closed[1] == 42);
++        assert(!sessions[0].process_handle && !sessions[0].process_id);
++        for (const auto& mapping : sessions[0].jit) assert(!mapping.size && !mapping.alias);
++        for (const auto& image : sessions[0].nro) assert(!image.mapped);
++    }
+     return 0;
+ }
+ 
 diff --git a/ro/tests/wire_test.cpp b/ro/tests/wire_test.cpp
 index 75041b7..feaf541 100644
 --- a/ro/tests/wire_test.cpp

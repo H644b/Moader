@@ -4,15 +4,15 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "3c3e44a19f89d9f547a4d40417d90cb5ce6eb1032d211cec989539953b6d0604",
+  "patch_sha256": "1b22bf5948265406bd7bef864ae5753a367410091968b06fff9e720d138e90da",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "2553c4dca89deff98e93209c1c357b539733ae119790143c5fb3613ae774b23b",
+  "source_tree_sha256": "af72a8de6c84c266b1251ce643d05b1cc01fb030cf219472903473fff07c460a",
   "protocol_version": 7,
-  "hen_sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a",
+  "hen_sha256": "092fd1987a018944975dfa02a14e348d02c576595a4c697a6d217d407b41b607",
   "components": {
     "hen/main": {
-      "bytes": 130965,
-      "sha256": "f56cd3c224453664cc2aaf99a02e47c4278a3eebd2d3342993617c8c841bba5a"
+      "bytes": 131480,
+      "sha256": "092fd1987a018944975dfa02a14e348d02c576595a4c697a6d217d407b41b607"
     },
     "bootstrap.bin": {
       "bytes": 30016,
@@ -25,6 +25,6 @@
   },
   "native_build_passed": true,
   "console_retest_passed": true,
-  "reason": "The exact matched RO/HEN/bootstrap pair passed one combined Seedsow Lullaby Demo installation with current-boot FS and RO proof, HEN startup and same-owner resident inspection.",
-  "validation_scope": "One Demo boot also opened Moader and kept its paired browser available after app exit. No same-boot replacement-file read trace or new-console-run proof of the corrected final GUI message is claimed."
+  "reason": "On a replacement SD card reported blank before setup, a fresh Seedsow Demo boot installed this exact HEN. The maintainer reported a normal first Pokemon Z-A launch without R, then hbmenu and connected Moader runtime/FS on the second launch with R. Read-only SD FTP confirmed a 1908-byte META game policy afterward. The affected tester and other console setups have not retested this candidate.",
+  "validation_scope": "The same-boot installation receipt verified matched RO/HEN/bootstrap startup, HEN protocol 7/result 0, game arm waiting, connected Moader resident/FS, restored FS cache, retired endpoint and closed listener. The maintainer used a replacement SD card reported blank before setup, launched Pokemon Z-A without R for at least 20 seconds, fully closed it, then held R through a second launch and reported hbmenu and Moader runtime/FS connected. Read-only FTP found /kaihen/bin/game/main.npdm with a META header and 1908 bytes after the game launches. The first-launch policy file was not independently read before the first launch; the blank-card initial state is user-reported. The affected tester's failure cause and behavior on their console remain unverified."
 }

@@ -14,7 +14,17 @@ Moader ships a modified kaiHEN for features such as cooperative service reload a
 
 ## Current source profile
 
-The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the component hashes and one Demo installation. See [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) for host and console results. Use the tagged proof above for the v0.1.2 kit.
+The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. The current HEN passed a controlled clean-card Demo installation and game-entry check; its proof sets `console_retest_passed` to true for that bounded result. The earlier Demo installation records in [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) apply to previous HEN bytes. Use the tagged proof above for the v0.1.2 kit.
+
+## Hold-R game entry candidate
+
+The v0.2.5 installer success receipt shows HEN waiting for a game. It does not show whether a later R press was sampled, whether the first game supplied a signed policy, or whether the second launch entered hbmenu. A tester's v0.2.5 archive reached that waiting state and contained no post-install game trace. On the maintainer's working console, the saved game policy predates the installation, so its successful entry did not exercise first-launch policy capture.
+
+The rc.1 HEN sampled fresh R state from SystemExt and the enabled standard controller styles, including FullKey, Handheld, JoyDual and JoyRight. During first-launch capture it waited past a still-closing nonnative Seedsow application instead of faulting before the native game appeared. Host tests covered a fresh FullKey R sample, rejected a stale one and covered this PM transition; the native HEN built with the pinned toolchain. One Demo installation and existing-policy hold-R entry passed with the exact rc.1 candidate. Neither mechanism is established as the tester's exact failure cause, and rc.1 did not pass a clean-policy console test.
+
+An affected tester's later archive confirms installation and readback of that exact candidate, but they reported the same no-hbmenu result. The archive ends before either game launch and cannot identify the game-arm step that failed. The candidate remains diagnostic work rather than a validated fix.
+
+The rc.2 candidate also observes the first native game's PM process when no saved policy exists. It captures that game's signed policy while the first launch stays stock, even if HEN missed its R sample. R remains necessary for the later hbmenu takeover. The PM probe is limited to once per quarter second and ignores Switch 1 titles; host tests cover the automatic first-launch transition and policy staging. A replacement-card Demo check installed the exact rc.2 HEN; a normal first Pokémon Z-A launch was followed by an R launch that opened hbmenu and Moader with runtime/FS connected. Read-only FTP found a 1,908-byte `META` game policy afterward. The starting blank-card state is user-reported, and the failed tester has not retested rc.2; their exact failure cause remains unknown.
 
 ## v0.1.2 source selection
 
