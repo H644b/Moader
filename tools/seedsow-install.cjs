@@ -19,11 +19,12 @@ const OFFICIAL_OUNCESHELL = Object.freeze({
 });
 const ROOT = path.resolve(__dirname, '..');
 function args(argv) {
-  check(argv.length === 7 && ['--check', '--start'].includes(argv[0]) &&
+  const fromSnapshot = argv.length === 9 && argv[7] === '--prepared';
+  check((argv.length === 7 || fromSnapshot) && ['--check', '--start'].includes(argv[0]) &&
     argv[1] === '--console' && argv[3] === '--preflight' && argv[5] === '--upstream-env',
-  'Usage: node tools/seedsow-install.cjs --check|--start --console IPv4 --preflight REPORT --upstream-env PINNED_ENV');
+  'Usage: node tools/seedsow-install.cjs --check|--start --console IPv4 --preflight REPORT --upstream-env PINNED_ENV [--prepared MATCHED_MANIFEST]');
   return {mode: argv[0], console: argv[2], preflight: path.resolve(argv[4]),
-    upstreamEnv: path.resolve(argv[6])};
+    upstreamEnv: path.resolve(argv[6]), prepared: fromSnapshot ? path.resolve(argv[8]) : null};
 }
 function qualifyHenInspection(inspection, henReceipt) {
   // The bootstrap overwrites its PM PID slot for each launched plugin. After
@@ -93,8 +94,24 @@ function qualifyOfficialShell(prepared) {
   const shells = prepared.bundledPrograms?.filter(item => item.target === '/switch/ounceshell.nro');
   check(shells?.length === 1 && shells[0].bytes === OFFICIAL_OUNCESHELL.bytes &&
     shells[0].sha256 === OFFICIAL_OUNCESHELL.sha256,
-  'Seedsow requires the complete official kaiHEN program set');
+  'Seedsow requires the complete official kaiHEN program set: expected ' +
+    `${OFFICIAL_OUNCESHELL.bytes} bytes, sha256 ${OFFICIAL_OUNCESHELL.sha256}; prepared ` +
+    (shells?.length === 1 ? `${shells[0].bytes} bytes, sha256 ${shells[0].sha256}` :
+      `${shells?.length ?? 0} OunceShell entries`));
   return shells[0];
+}
+function loadPrepared(file) {
+  const directory = path.dirname(file);
+  check(path.dirname(directory) === path.join(ROOT, 'build/install') &&
+    /^prepared-[A-Za-z0-9]+$/.test(path.basename(directory)) &&
+    path.basename(file) === 'manifest.json' && fs.realpathSync(file) === file &&
+    fs.lstatSync(file).isFile(),
+  'Seedsow prepared manifest must be a canonical local install snapshot');
+  const prepared = JSON.parse(fs.readFileSync(file, 'utf8'));
+  check(prepared.manifestFile === file && prepared.directory === directory &&
+    prepared.hostProfile?.id === 'seedsow-malev0',
+  'Seedsow prepared snapshot identity differs from the GUI selection');
+  return prepared;
 }
 async function main(argv = process.argv.slice(2)) {
   check(process.version.startsWith('v24.') && ['darwin', 'linux'].includes(process.platform),
@@ -104,7 +121,9 @@ async function main(argv = process.argv.slice(2)) {
   const hosts = require('./host-session.cjs');
   hosts.qualifySources(hosts.resolveProfile('seedsow-malev0'));
   const install = require('./install-moader.cjs');
-  const prepared = await install.prepare('seedsow-malev0');
+  const prepared = options.prepared
+    ? await install.qualifyPrepared(loadPrepared(options.prepared))
+    : await install.prepare('seedsow-malev0');
   qualifyOfficialShell(prepared);
   check(typeof prepared.kaihen === 'string' &&
     fs.realpathSync(prepared.kaihen) === prepared.kaihen &&
@@ -273,5 +292,6 @@ async function main(argv = process.argv.slice(2)) {
     await producer.preserve();
   }
 }
-module.exports = {main, args, applyEnvironment, createRun, qualifyHenInspection, qualifyOfficialShell};
+module.exports = {main, args, applyEnvironment, createRun, qualifyHenInspection,
+  qualifyOfficialShell, loadPrepared};
 if (require.main === module) main().catch(error => { console.error(error.stack); process.exitCode = 1; });

@@ -70,6 +70,8 @@ async function main() {
       manifestFile: path.join(work, 'fixture-manifest.json')};
     fs.writeFileSync(path.join(moader, 'tools/install-moader.cjs'),
       'module.exports.prepare=async()=>(' + JSON.stringify(manifest) + ');\n');
+    fs.writeFileSync(path.join(moader, 'tools/seedsow-install.cjs'),
+      'module.exports = require(' + JSON.stringify(path.join(root, 'tools/seedsow-install.cjs')) + ');\n');
     fs.writeFileSync(path.join(moader, 'tools/install-inputs.cjs'),
       'module.exports.qualifyKaihenBuild=async()=>(' + JSON.stringify({
         schema: 3, protocolVersion: 8, components,

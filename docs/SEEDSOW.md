@@ -73,9 +73,9 @@ export MOADER_SEEDSOW_GUI="$PWD/../seedsow-fs-kaihen-moader-main"
 tools/start-seedsow-gui.sh "$MOADER_SEEDSOW_GUI"
 ```
 
-Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Seedsow launcher starts. Select **Auto-Download Moader kaiHEN**. The current kit uses its included complete patched release and checks every unchanged file against the pinned official base, plus the matched RO/HEN/bootstrap and Moader bytes. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
+Keep this Terminal open and open the local GUI address it prints. In the GUI, set the Switch's current LAN address and confirm **Console Online** after the Seedsow launcher starts. Select **Auto-Download Moader kaiHEN**. The current kit uses its included complete patched release and checks every unchanged file against the pinned official base, plus the matched RO/HEN/bootstrap and Moader bytes. It checks the official OunceShell program before reporting ready; Run uses the same qualified snapshot. Wait for the GUI to confirm the matching bundle. Use the Moader install button in the next step.
 
-The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. Provision a new folder if an existing checkout fails that check.
+The GUI source update button is disabled in this integration so it cannot silently replace the pinned patch. `--provision` refuses an existing destination; reuse a folder only if the current kit's `--check` accepts it. Provision a new folder if an existing checkout fails that check. When replacing a backend ZIP with another build under the same release tag, extract it into a new folder and restart the GUI from that folder. Do not merge it over an older extraction or keep using an already running GUI.
 
 ## Install on one fresh boot
 

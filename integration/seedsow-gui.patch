@@ -1,5 +1,5 @@
 diff --git a/gui/ns2-gui.cjs b/gui/ns2-gui.cjs
-index ac4aa44..59c1698 100644
+index ac4aa44..53c3f5d 100644
 --- a/gui/ns2-gui.cjs
 +++ b/gui/ns2-gui.cjs
 @@ -15,6 +15,7 @@ const fs = require('node:fs');
@@ -96,7 +96,7 @@ index ac4aa44..59c1698 100644
  
  async function runPipeline() {
    setState({phase: 'running', message: 'Pipeline running ...', pipeline: null, report: null});
-@@ -681,6 +702,144 @@ async function runPipeline() {
+@@ -681,6 +702,145 @@ async function runPipeline() {
  
  let busy = false;
  let autoRunning = false;
@@ -123,7 +123,7 @@ index ac4aa44..59c1698 100644
 +    stage: '', report: null, pipeline: null, progress: null,
 +    startedAt: Date.now(), finishedAt: null});
 +  try {
-+    const {selected} = await MOADER_LOCAL.prepare({requireBundle: true});
++    const {selected, manifest} = await MOADER_LOCAL.prepare({requireBundle: true});
 +    const preflightDir = path.join(selected.root, 'build', 'seedsow-gui-preflight-' +
 +      Date.now() + '-' + crypto.randomBytes(4).toString('hex'));
 +    const preflightFile = path.join(preflightDir, 'preflight.json');
@@ -145,7 +145,8 @@ index ac4aa44..59c1698 100644
 +      !key.startsWith('NS2_') && !key.startsWith('KAIHEN_')));
 +    const args = [path.join(selected.root, 'tools/seedsow-install.cjs'), '--start',
 +      '--console', CONSOLE, '--preflight', preflightFile, '--upstream-env',
-+      path.join(selected.root, 'research/sources/seedsow-fs-kaihen/env.txt')];
++      path.join(selected.root, 'research/sources/seedsow-fs-kaihen/env.txt'),
++      '--prepared', manifest.manifestFile];
 +    addLine('[moader] One qualified FS acquisition, native backend installation, and matched HEN start.');
 +    const p = spawn(selected.node, args, {cwd: selected.root, env,
 +      windowsHide: true, stdio: ['ignore', 'pipe', 'pipe']});
@@ -241,7 +242,7 @@ index ac4aa44..59c1698 100644
  // Set by the Stop button. A stop is not a failed attempt: it must not run the
  // attempt-failed cleanup, retry, or report a stage. It also aborts a controller
  // restart while it is waiting for the console.
-@@ -761,9 +920,12 @@ async function autoRun(options = {}) {
+@@ -761,9 +921,12 @@ async function autoRun(options = {}) {
  }
  
  async function startRun(options = {}) {
@@ -255,7 +256,7 @@ index ac4aa44..59c1698 100644
    // One acquisition per boot: a second probe on the same process runs against a
    // dirtied FS heap and is the usual way a boot turns into a hard reboot.
    if (!bootFresh) {
-@@ -826,6 +988,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -826,6 +989,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
          file: path.join(TOOLS, 'console-host.txt')}));
      }
      if (req.method === 'POST' && url.pathname === '/api/console-host') {
@@ -264,7 +265,7 @@ index ac4aa44..59c1698 100644
        let body = {};
        try { body = JSON.parse((await readBody(req)) || '{}'); } catch {}
        const host = String(body.host || '').trim();
-@@ -847,6 +1011,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -847,6 +1012,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/kaihen/upload') {
@@ -273,7 +274,7 @@ index ac4aa44..59c1698 100644
        let body = {};
        try {
          body = JSON.parse((await readBody(req, 32 * 1024 * 1024)) || '{}');
-@@ -867,6 +1033,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -867,6 +1034,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/kaihen/validate') {
@@ -282,7 +283,7 @@ index ac4aa44..59c1698 100644
        try {
          const {checkDir, required} = require(path.join(TOOLS, 'update-kaihen.cjs'));
          checkDir(KAIHEN);
-@@ -882,77 +1050,25 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -882,77 +1051,25 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        if (runActive())
          return send(409, JSON.stringify({ok: false,
            error: 'A run is active; stop it before updating kaiHEN.'}));
@@ -370,7 +371,7 @@ index ac4aa44..59c1698 100644
      }
      if (req.method === 'GET' && url.pathname === '/api/state') {
        return send(200, JSON.stringify({...publicState(), logSeq: state.seq}));
-@@ -974,13 +1090,46 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -974,13 +1091,46 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
      if (req.method === 'POST' && url.pathname === '/api/start') {
        let body = {};
        try { body = JSON.parse((await readBody(req)) || '{}'); } catch {}
@@ -418,7 +419,7 @@ index ac4aa44..59c1698 100644
      if (req.method === 'GET' && url.pathname === '/api/controller-status') {
        // Pass the bridge's own answer through: any controller may add fields.
        try {
-@@ -1025,6 +1174,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1025,6 +1175,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/restart-game') {
@@ -427,7 +428,7 @@ index ac4aa44..59c1698 100644
        let body = {};
        try { body = JSON.parse((await readBody(req)) || '{}'); } catch {}
        const aPresses = Number(body.aPresses) === 1 ? 1 : 2;
-@@ -1033,6 +1184,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1033,6 +1185,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        return send(200, JSON.stringify({ok: true, aPresses, yDelayMs}));
      }
      if (req.method === 'POST' && url.pathname === '/api/failed') {
@@ -436,7 +437,7 @@ index ac4aa44..59c1698 100644
        await stopEverything('attempt marked failed; boot marked dead');
        killTree();
        pipelineHeld = false;
-@@ -1042,6 +1195,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1042,6 +1196,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        return send(200, JSON.stringify({ok: true}));
      }
      if (req.method === 'POST' && url.pathname === '/api/stop') {
@@ -445,7 +446,7 @@ index ac4aa44..59c1698 100644
        stopping = true;
        if (pipelineHeld && releasePipeline('stop', false)) {
          // Retire the held endpoint cleanly instead of killing the pipeline; the
-@@ -1065,6 +1220,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1065,6 +1221,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
        }
      }
      if (req.method === 'POST' && url.pathname === '/api/quit') {
@@ -454,7 +455,7 @@ index ac4aa44..59c1698 100644
        if (state.phase === 'setup' || state.phase === 'running' || state.phase === 'restarting')
          return send(409, JSON.stringify({error: 'A run is active; stop it first.'}));
        if (pipelineHeld)
-@@ -1084,6 +1241,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
+@@ -1084,6 +1242,8 @@ const server = http.createServer(async (req, res) => {  const url = new URL(req.
  server.requestTimeout = 0;
  server.listen(PORT, '127.0.0.1', () => {
    addLine(`[gui] listening on http://127.0.0.1:${PORT} (console ${CONSOLE})`);
@@ -551,10 +552,10 @@ index da70953..5e6215d 100644
    post('/api/restart-game', {aPresses: aPresses(), yDelayMs: yDelayMs()});
 diff --git a/tools/moader-local.cjs b/tools/moader-local.cjs
 new file mode 100644
-index 0000000..5499ece
+index 0000000..4b935ae
 --- /dev/null
 +++ b/tools/moader-local.cjs
-@@ -0,0 +1,191 @@
+@@ -0,0 +1,195 @@
 +// Local Moader route for the Seedsow GUI. The public kaiHEN archive supplies
 +// the unchanged release files; the patched Moader RO, HEN and bootstrap are
 +// admitted only as the exact matched build set from the backend kit.
@@ -635,6 +636,10 @@ index 0000000..5499ece
 +    .prepare('seedsow-malev0');
 +  check(manifest.hostProfile?.revision === REVISION,
 +    'Prepared Moader snapshot has a different Seedsow revision');
++  const installer = require(path.join(MOADER, 'tools/seedsow-install.cjs'));
++  check(typeof installer.qualifyOfficialShell === 'function',
++    'Moader backend kit lacks the pinned Seedsow official-program check');
++  installer.qualifyOfficialShell(manifest);
 +  if (requireBundle) verifyBundle(manifest);
 +  return {selected, manifest};
 +}

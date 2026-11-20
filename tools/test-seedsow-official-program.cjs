@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {execFileSync} = require('node:child_process');
-const {qualifyOfficialShell} = require('./seedsow-install.cjs');
+const {args, loadPrepared, qualifyOfficialShell} = require('./seedsow-install.cjs');
 
 const archive = path.resolve(__dirname, '../research/artifacts/kaiHEN-20261117.1.zip');
 const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -31,4 +31,22 @@ test('old, absent, changed or duplicate OunceShell stops before native work', ()
     [shell, shell],
   ]) assert.throws(() => qualifyOfficialShell({bundledPrograms}),
     /complete official kaiHEN program set/);
+});
+
+test('GUI hands one canonical prepared snapshot to the offline installer', () => {
+  const parent = path.resolve(__dirname, '../build/install');
+  fs.mkdirSync(parent, {recursive: true});
+  const directory = fs.mkdtempSync(path.join(parent, 'prepared-'));
+  const file = path.join(directory, 'manifest.json');
+  const prepared = {directory, manifestFile: file, hostProfile: {id: 'seedsow-malev0'}};
+  try {
+    fs.writeFileSync(file, JSON.stringify(prepared));
+    const base = ['--check', '--console', '127.0.0.1', '--preflight', '/dev/null',
+      '--upstream-env', '/dev/null'];
+    assert.equal(args([...base, '--prepared', file]).prepared, file);
+    assert.deepEqual(loadPrepared(file), prepared);
+    assert.throws(() => args([...base, '--prepared']), /Usage:/);
+    assert.throws(() => loadPrepared(path.resolve(__dirname, 'seedsow-install.cjs')),
+      /canonical local install snapshot/);
+  } finally { fs.rmSync(directory, {recursive: true, force: true}); }
 });
