@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import importlib.util
+import subprocess
 import sys
 import tempfile
 
@@ -68,6 +69,10 @@ def main():
             assert 'package.loaded["s2_kaihen"] = dofile("save:/s2_b_kaihen.lua")' in b_entry
             assert 'dofile("save:/s2_b_main.lua")' in b_entry
             assert "['exploitb2.lua', 'exploitb.lua']" in uploader.read_text()
+            subprocess.run([
+                'lua', str(ROOT / 'tests/test_seedsow_standalone_frame.lua'),
+                str(prepared), str(source / 'console-only/lua'),
+            ], check=True, timeout=10)
 
     with tempfile.TemporaryDirectory(prefix='moader-standalone-test-') as temp:
         sd = Path(temp).resolve() / 'sd'

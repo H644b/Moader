@@ -14,6 +14,8 @@ end
 local capture = file(capture_path)
 local profile = assert(loadfile(payload_dir .. "/profile.lua"))()
 local installer = assert(loadfile(root .. "/standalone/s2_moader.lua"))()
+local screen = {}
+_G.n2h = {log = function(line) screen[#screen + 1] = line end}
 local base, context, source, runtime = 0x4000000000, 0x6000000000,
     0x6200000000, 0x7000000000
 local filesystem, report, registry = 0x6100001000, 0x6100002000,
@@ -164,7 +166,7 @@ local ctx = {layout = {captureStart = base + 0x10000000,
     donorRow = {vptr = base + 0x2b1e20},
     notifier = {object = notifier, B = backend, handle = 0x46},
     fsProcess = {handle = 0x45}, launch = {pid = 218}}
-local ro_lookups, ro_waits = 0, 0
+local ro_lookups, ro_waits, registry_reads = 0, 0, 0
 local env = {
     rt = {get_service_sm = function(name)
         assert(name == "ldr:ro")
@@ -186,6 +188,10 @@ local env = {
         return {str = assert(files[path], "missing readback " .. path)}
     end,
     read_fs = function(address, length)
+        if address == base + 0x11e12d0 and length == 8 then
+            registry_reads = registry_reads + 1
+            if registry_reads == 1 then return string.rep("\0", 8) end
+        end
         if invocations >= 5 then
             -- read_fs validates its descriptor, then reads the payload.
             observed_calls = observed_calls + 2
@@ -219,11 +225,22 @@ local env = {
     track = function(handle) assert(handle == 0x44) end,
     log = function() end,
 }
-local receipt = installer.install(env)
+local runner = installer.begin_install(env)
+for _ = 1, #profile.fsAbi.ranges + #profile.fsAbi.padding do
+    local done = runner.step()
+    assert(not done and patches == 0,
+        "code and cave qualification must yield before any native patch")
+end
+assert(not runner.step() and patches == 0,
+    "resident install must start in a later launcher frame")
+assert(table.concat(screen, "\n"):find("FS code verified 36/36", 1, true),
+    "broad FS progress was not reported")
+local done, receipt = runner.step()
+assert(done, "resident install did not complete")
 assert(receipt.fsBase == base and receipt.fsPid == 941 and
        receipt.context == context and receipt.runtime == runtime and
        receipt.hooks == 19 and ctx.moaderFsVerified)
-assert(ro_lookups == 3 and ro_waits == 2)
+assert(ro_lookups == 3 and ro_waits == 4 and registry_reads == 3)
 assert(observed_calls >= 3, "active reader was not sampled twice")
 assert(mapped_pages == 26 and invocations == 5 and patches >= 19,
     string.format("flow count mismatch: maps=%d calls=%d patches=%d",

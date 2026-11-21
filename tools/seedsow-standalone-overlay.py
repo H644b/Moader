@@ -12,6 +12,89 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE = ROOT / 'build/seedsow-standalone-upstream'
 
+FRAME_RO_RUNNER = '''    -- Each completed native stage returns to the launcher for a screen redraw.
+    local stages = {
+        {"checking SD package", verify_and_relocate_sd},
+        {"arming FS endpoint", arm_endpoint},
+        {"checking FS and Loader layout", derive_layout_and_loader},
+        {"opening FS notifier", open_notifier},
+        {"opening PM sessions", open_pm_sessions},
+        {"opening CodeFS donor", copy_loader_and_open_codefs},
+        {"preparing donor workers", prepare_workers_and_donor},
+        {"binding server sessions", bind_sessions_and_gate_event},
+        {"starting replacement RO", launch_and_activate_ro},
+        {"opening Moader FS adapter", start_bootstrap_nro},
+        {"checking and installing Moader FS", function()
+            local done, receipt = ctx.moaderFsRunner.step()
+            if not done then return false end
+            ctx.moaderFs = receipt
+        end},
+        {"starting kaiHEN bootstrap", finish_bootstrap_nro},
+    }
+    local index, announced, failed, completed = 1, false, nil, false
+    local function retire()
+        pcall(function()
+            if not ctx.moaderUncertain and ctx.candidateHandle and ctx.candidateHandle ~= 0 then
+                fs.ipc_storage_invalidate(ctx.candidateHandle, 0, 0x8000)
+                local rbuf = arena_alloc(0x1000)
+                rt.wr(rbuf, str_rep(str_char(0x42), 16))
+                fs.ipc_storage_write(ctx.candidateHandle, 0, rbuf, 16)
+                local sm = fs.open_mount("save")
+                if sm and sm.handle ~= 0 then
+                    local cr, tx = fs.ipc_commit(sm.handle)
+                    rt.close_handle(sm.handle)
+                    kh_log(str_format("RETIRE: cache invalidated + alias neutralised tx=0x%x rc=0x%x", tx or 0, cr or 0))
+                end
+            end
+        end)
+        if not ctx.henStartup and not ctx.moaderUncertain then
+            for i = #ctx.handles, 1, -1 do pcall(rt.close_handle, ctx.handles[i].handle) end
+            _G.__KH_TRACKED = nil
+            if _G.__KH then _G.__KH.sd = nil end
+        end
+    end
+    return {step = function()
+        assert(not completed, "KH: frame runner repeated after completion")
+        if failed then
+            live_stage("stopped; reboot before another attempt")
+            retire()
+            completed = true
+            return true, nil, failed
+        end
+        if index <= #stages then
+            local stage = stages[index]
+            if not announced then
+                live_stage(stage[1])
+                announced = true
+                return false
+            end
+            local ok, result = pcall(stage[2])
+            if not ok then
+                failed = tostring(result)
+                live_stage("failed in " .. stage[1] .. ": " .. failed)
+                return false
+            end
+            if result ~= false then
+                index = index + 1
+                announced = false
+            end
+            return false
+        end
+        if not announced then
+            live_stage("waiting for kaiHEN's first package read")
+            announced = true
+            return false
+        end
+        local retire_wait_ms = (ctx.henStartup and ctx.henStartup.gateRestoreResult == 0xea01) and 8000 or 2000
+        kh_log(str_format("=== HEN IS RUNNING === waiting %ds before retiring cache alias...", retire_wait_ms / 1000))
+        rt.wait_ms(retire_wait_ms)
+        retire()
+        kh_log("=== READY! Close Seedsow Lullaby and hold R while launching a game ===")
+        completed = true
+        return true, ctx.henStartup
+    end}
+'''
+
 
 def upstream_module():
     spec = importlib.util.spec_from_file_location(
@@ -53,11 +136,18 @@ def build(source: Path, output: Path) -> dict[str, Path]:
     original = source / 'console-only/lua'
     kh = (original / 's2_kh_ro.lua').read_text()
     kh = replace_once(kh,
+        'function R.run_ro_and_bootstrap(M, env)\n',
+        'function R.begin_ro_and_bootstrap(M, env)\n',
+        'frame-driven RO stage')
+    kh = replace_once(kh,
         '    local copy_loader_and_open_codefs = env.copy_loader_and_open_codefs\n',
         '    local copy_loader_and_open_codefs = env.copy_loader_and_open_codefs\n'
         '    local function live_stage(label)\n'
-        '        if _G.n2h and type(_G.n2h.log) == "function" then\n'
-        '            _G.n2h.log("MOADER KH: " .. label)\n'
+        '        local line = "MOADER KH: " .. label\n'
+        '        if type(_G.moader_stage) == "function" then\n'
+        '            _G.moader_stage(line)\n'
+        '        elseif _G.n2h and type(_G.n2h.log) == "function" then\n'
+        '            _G.n2h.log(line)\n'
         '        end\n'
         '    end\n', 'live KH stage marker')
     kh = replace_once(kh,
@@ -65,6 +155,13 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         '    local read_fs               = env.read_fs\n'
         '    local write_fs              = env.write_fs\n'
         '    local locate_by_clone       = env.locate_by_clone\n', 'Moader environment')
+    kh = replace_once(kh,
+        '    local function run_bootstrap_nro()\n'
+        '        local ro_h = rt.get_service_sm("ldr:ro")\n',
+        '    local ro_h\n'
+        '    local function start_bootstrap_nro()\n'
+        '        ro_h = rt.get_service_sm("ldr:ro")\n',
+        'split bootstrap before Moader FS')
     kh = replace_once(kh,
         '        ctx.fsProcess = export_handle(0xFFFF8001, "fs-process")\n',
         '''        ctx.fsProcess = export_handle(0xFFFF8001, "fs-process")
@@ -75,13 +172,15 @@ def build(source: Path, output: Path) -> dict[str, Path]:
             "@/kaihen/moader-fs/s2_moader.lua")
         assert(moader_chunk, "KH: Moader FS installer syntax: " .. tostring(moader_syntax))
         local moader_module = moader_chunk()
-        assert(type(moader_module) == "table" and type(moader_module.install) == "function",
+        assert(type(moader_module) == "table" and type(moader_module.begin_install) == "function",
             "KH: Moader FS installer is missing")
-        ctx.moaderFs = moader_module.install({rt=rt, fs=fs, ctx=ctx, slots=slots,
+        ctx.moaderFsRunner = moader_module.begin_install({rt=rt, fs=fs, ctx=ctx, slots=slots,
             arena_alloc=arena_alloc, track=track, open_sd_card=open_sd_card,
             sd_read_file=sd_read_file, read_fs=read_fs, write_fs=write_fs,
             compare_write_fs=compare_write_fs, locate_by_clone=locate_by_clone,
             log=kh_log})
+    end
+    local function finish_bootstrap_nro()
         assert(ctx.moaderFsVerified, "KH: Moader FS runtime was not verified")
         live_stage("Moader FS adapter verified")
 ''', 'Moader FS stage')
@@ -90,47 +189,11 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         '        run_bootstrap_nro()\n'
         '        ctx.moaderUncertain = false\n'
         '        _G.__MOADER_FS_UNCERTAIN = false\n', 'HEN handoff completion')
-    kh = replace_once(kh,
-        '    pcall(function()\n        if ctx.candidateHandle and ctx.candidateHandle ~= 0 then\n',
-        '    pcall(function()\n        if not ctx.moaderUncertain and ctx.candidateHandle and ctx.candidateHandle ~= 0 then\n',
-        'uncertain cache retirement')
-    kh = replace_once(kh,
-        '    if not ctx.henStartup then\n',
-        '    if not ctx.henStartup and not ctx.moaderUncertain then\n',
-        'uncertain handle cleanup')
-    kh = replace_once(kh,
-        '''        verify_and_relocate_sd()
-        arm_endpoint()
-        derive_layout_and_loader()
-        open_notifier()
-        open_pm_sessions()
-        copy_loader_and_open_codefs()
-        prepare_workers_and_donor()
-        bind_sessions_and_gate_event()
-        launch_and_activate_ro()
-        run_bootstrap_nro()
-''',
-        '''        live_stage("verifying matched SD package")
-        verify_and_relocate_sd()
-        live_stage("arming retained FS endpoint")
-        arm_endpoint()
-        live_stage("deriving FS and Loader layout")
-        derive_layout_and_loader()
-        live_stage("opening FS notifier")
-        open_notifier()
-        live_stage("opening PM sessions")
-        open_pm_sessions()
-        live_stage("opening CodeFS donor")
-        copy_loader_and_open_codefs()
-        live_stage("preparing donor workers")
-        prepare_workers_and_donor()
-        live_stage("binding server sessions")
-        bind_sessions_and_gate_event()
-        live_stage("launching replacement RO")
-        launch_and_activate_ro()
-        live_stage("starting bootstrap and Moader FS")
-        run_bootstrap_nro()
-''', 'live A path stage boundaries')
+    start = '    -- Execute Stage C pipeline with Stage D post-HEN alias retirement in `finally`\n'
+    end = '\nend\n\nreturn R\n'
+    if kh.count(start) != 1 or kh.count(end) != 1:
+        raise ValueError('Pinned upstream Lua anchor differs: frame-driven KH pipeline')
+    kh = kh[:kh.index(start)] + FRAME_RO_RUNNER + kh[kh.index(end):]
 
     stage = (original / 's2_kaihen.lua').read_text()
     stage = replace_once(stage,
@@ -142,18 +205,90 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         '        export_handle               = export_handle,\n'
         '        locate_by_clone             = locate_by_clone,\n',
         'owned source locator handoff')
+    stage = replace_once(stage,
+        'function M.run_kaihen(rt, fs, log_fn)\n',
+        'function M.begin_kaihen(rt, fs, log_fn)\n',
+        'frame-driven kaiHEN entry')
+    stage = replace_once(stage,
+        '    return require("s2_kh_ro").run_ro_and_bootstrap(M, {\n',
+        '    return require("s2_kh_ro").begin_ro_and_bootstrap(M, {\n',
+        'frame-driven RO handoff')
+    stage = replace_once(stage,
+        '\nreturn M\n',
+        '''
+function M.run_kaihen(rt, fs, log_fn)
+    local runner = M.begin_kaihen(rt, fs, log_fn)
+    while true do
+        local done, receipt, failure = runner.step()
+        if done then
+            if failure then error(failure) end
+            return receipt
+        end
+    end
+end
+
+return M
+''', 'synchronous fallback')
 
     main = (original / 's2_main.lua').read_text()
+    main = replace_once(main,
+        '    local t_attempt0, t_r0, t_p0 = 0, 0, 0\n',
+        '    local t_attempt0, t_r0, t_p0 = 0, 0, 0\n'
+        '    local kh_runner, t_ro0 = nil, 0\n',
+        'frame-driven kaiHEN state')
+    main = replace_once(main,
+        '    local printed_idx = 0\n    local screen_lines = 0\n',
+        '''    local printed_idx = 0
+    local screen_lines = 0
+    _G.moader_stage = function(line)
+        if screen_lines >= 18 and _G.n2h_clear then
+            _G.n2h_clear()
+            screen_lines = 0
+            default_log("Moader standalone: current boot")
+            screen_lines = 1
+        end
+        default_log(line)
+        screen_lines = screen_lines + 1
+    end
+''', 'bounded live screen buffer')
+    main = replace_once(main,
+        '            if not ln:find("^Wave %d") then\n',
+        '            if not ln:find("^Wave %d") and\n'
+        '                (not ln:find("^KH:") or ln:find("READY") or\n'
+        '                 ln:find("HEN IS RUNNING")) then\n',
+        'broad screen messages')
     main = replace_once(main,
         '            elseif phase == "kaihen" then\n'
         '                local t_ro0 = rt.now_ms()\n'
         '                local kaihen_mod = load_kaihen_module(rt, fs, buf_log)\n',
         '            elseif phase == "kaihen" then\n'
-        '                local t_ro0 = rt.now_ms()\n'
-        '                default_log("MOADER KH: entering Stage C")\n'
-        '                local kaihen_mod = load_kaihen_module(rt, fs, buf_log)\n'
-        '                default_log("MOADER KH: Stage C module loaded")\n',
-        'live A path entry')
+        '                if not kh_runner then\n'
+        '                    t_ro0 = rt.now_ms()\n'
+        '                    default_log("MOADER KH: entering Stage C")\n'
+        '                    local kaihen_mod = load_kaihen_module(rt, fs, buf_log)\n'
+        '                    kh_runner = kaihen_mod.begin_kaihen(rt, fs, buf_log)\n'
+        '                    default_log("MOADER KH: Stage C ready")\n'
+        '                    return\n'
+        '                end\n',
+        'frame-driven A path entry')
+    main = replace_once(main,
+        '''                local ok_kh, startup_or_err = pcall(kaihen_mod.run_kaihen, rt, fs, buf_log)
+                local ro_ms = math.floor((rt.now_ms() - t_ro0) + 0.5)
+''',
+        '''                local done, startup_or_err, failure = kh_runner.step()
+                flush_new_lines()
+                if not done then return end
+                local ro_ms = math.floor((rt.now_ms() - t_ro0) + 0.5)
+''', 'frame-driven A path step')
+    main = replace_once(main,
+        '''                if not ok_kh then
+                    buf_log("KAIHEN ERROR: " .. tostring(startup_or_err))
+                end
+''',
+        '''                if failure then
+                    buf_log("KAIHEN ERROR: " .. tostring(failure))
+                end
+''', 'frame-driven A path failure')
     main = replace_once(main,
         '        if opts.sdLog ~= false and rt and fs then\n',
         '        if opts.sdLog ~= false and rt and fs and not _G.__MOADER_FS_UNCERTAIN then\n',

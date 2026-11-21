@@ -12,8 +12,11 @@ local function check(ok, message)
 end
 
 local function live_stage(message)
-    if _G.n2h and type(_G.n2h.log) == "function" then
-        _G.n2h.log("MOADER FS: " .. message)
+    local line = "MOADER FS: " .. message
+    if type(_G.moader_stage) == "function" then
+        _G.moader_stage(line)
+    elseif _G.n2h and type(_G.n2h.log) == "function" then
+        _G.n2h.log(line)
     end
 end
 
@@ -87,26 +90,39 @@ end
 
 local function qualify_code(read_code, profile, abi, base)
     local cursor = 0
-    for index, row in ipairs(profile.fsAbi.ranges) do
-        check(type(row.offset) == "number" and type(row.size) == "number" and
-            row.size > 0 and cursor + row.size <= #abi,
-            "invalid ABI range")
-        local expected = sub(abi, cursor + 1, cursor + row.size)
-        live_stage(fmt("ABI read %d/%d at FS+0x%x", index,
-            #profile.fsAbi.ranges, row.offset))
-        local observed = read_code(base + row.offset, row.size)
-        check(observed == expected,
-            fmt("live FS function differs at FS+0x%x base=0x%x got=%s",
-                row.offset, base, P.hex(sub(observed or "", 1, 16))))
-        cursor = cursor + row.size
-    end
-    check(cursor == #abi, "ABI range extent changed")
-    for index, row in ipairs(profile.fsAbi.padding) do
-        live_stage(fmt("cave read %d/%d at FS+0x%x", index,
-            #profile.fsAbi.padding, row.offset))
-        local bytes = read_code(base + row.offset, row.size)
-        check(bytes == zero("\0", row.size),
-            "FS gateway or control cave is already occupied")
+    local index, cave_index = 1, 1
+    return function()
+        local row = profile.fsAbi.ranges[index]
+        if row then
+            check(type(row.offset) == "number" and type(row.size) == "number" and
+                row.size > 0 and cursor + row.size <= #abi,
+                "invalid ABI range")
+            local expected = sub(abi, cursor + 1, cursor + row.size)
+            local observed = read_code(base + row.offset, row.size)
+            check(observed == expected,
+                fmt("live FS function differs at FS+0x%x base=0x%x got=%s",
+                    row.offset, base, P.hex(sub(observed or "", 1, 16))))
+            cursor = cursor + row.size
+            if index == 1 or index % 6 == 0 or index == #profile.fsAbi.ranges then
+                live_stage(fmt("FS code verified %d/%d", index,
+                    #profile.fsAbi.ranges))
+            end
+            index = index + 1
+            return false
+        end
+        check(cursor == #abi, "ABI range extent changed")
+        row = profile.fsAbi.padding[cave_index]
+        if row then
+            local bytes = read_code(base + row.offset, row.size)
+            check(bytes == zero("\0", row.size),
+                "FS gateway or control cave is already occupied")
+            cave_index = cave_index + 1
+            if cave_index > #profile.fsAbi.padding then
+                live_stage("FS code and empty caves qualified")
+            end
+            return false
+        end
+        return true
     end
 end
 
@@ -134,7 +150,7 @@ local function relocate(data, rows, baseline, live)
     return data
 end
 
-function M.install(env)
+function M.begin_install(env)
     local rt, fs, ctx, slots = env.rt, env.fs, env.ctx, env.slots
     local read_fs, write_fs, compare_write_fs =
         env.read_fs, env.write_fs, env.compare_write_fs
@@ -225,9 +241,11 @@ function M.install(env)
         base + 0x1201c0 <= code.address + code.size,
         "notifier mapping is not qualified executable code")
     live_stage("FS executable mapping qualified")
-    qualify_code(read_code, profile, abi, base)
+    live_stage("checking 36 live FS code ranges")
+    local qualify_next = qualify_code(read_code, profile, abi, base)
+
+    local function finish_install()
     env.log(fmt("qualified 36 live FS ranges at 0x%x; all caves empty", base))
-    live_stage("all FS code and cave bytes qualified")
 
     local function patch(address, before, after)
         check(#before == 16 and #after == 16 and address % 4 == 0,
@@ -392,9 +410,27 @@ function M.install(env)
          [5] = 0x1050a0, [6] = 0x1053d0, [7] = 0x105410})
     local filesystem = locate(sd, "SD filesystem", 0x28, 0x2b1e20,
         {[0] = 0x4b8c0, [1] = 0x103390})
-    local registry = P.u64(read_fs(base + 0x11e12d0, 8), 0) + 16
-    check(registry >= 0x100000000 and registry < 0x8000000000,
-        "FS program registry is unavailable")
+    -- A live FS global can be briefly empty during RO replacement. Accept
+    -- only two consecutive identical, source-qualified pointer observations.
+    local registry_global, stable, samples = nil, nil, {}
+    for attempt = 1, 6 do
+        local observed = P.u64(read_fs(base + 0x11e12d0, 8), 0)
+        samples[#samples + 1] = fmt("0x%x", observed)
+        if observed >= 0x100000000 and observed + 16 < 0x8000000000 then
+            if observed == stable then
+                registry_global = observed
+                break
+            end
+            stable = observed
+        else
+            stable = nil
+        end
+        if attempt < 6 then rt.wait_ms(25) end
+    end
+    check(registry_global ~= nil,
+        fmt("FS program registry is unavailable: base=0x%x samples=%s",
+            base, table.concat(samples, ",")))
+    local registry = registry_global + 16
 
     local context = call_fs(0x694c0, {profile.contextBytes}, "allocate")
     check(context >= 0x100000000 and context < 0x8000000000,
@@ -513,6 +549,30 @@ function M.install(env)
         #profile.hooks))
     return {fsBase = base, fsPid = pid, context = context,
         runtime = runtime, hooks = #profile.hooks}
+    end
+
+    local phase = "qualify"
+    return {step = function()
+        if phase == "qualify" then
+            if qualify_next() then
+                phase = "install"
+                live_stage("installing Moader FS resident")
+            end
+            return false
+        end
+        check(phase == "install", "installer step repeated after completion")
+        local receipt = finish_install()
+        phase = "done"
+        return true, receipt
+    end}
+end
+
+function M.install(env)
+    local runner = M.begin_install(env)
+    while true do
+        local done, receipt = runner.step()
+        if done then return receipt end
+    end
 end
 
 return M
