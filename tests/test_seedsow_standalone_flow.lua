@@ -176,7 +176,8 @@ local env = {
     end, wait_ms = function(ms)
         assert(ms == 25)
         ro_waits = ro_waits + 1
-    end, wr = function(_, bytes) data_slot = bytes end,
+    end, now_ms = function() return 5000 end,
+    wr = function(_, bytes) data_slot = bytes end,
     rd = function(_, length) return data_slot:sub(1, length) end,
     close_handle = function(handle) handles[handle] = nil end},
     fs = fs, ctx = ctx, slots = {pkt = 1, pkt2 = 2, data = 3},
@@ -250,6 +251,13 @@ assert(read(base + 0x1201b0, 16) == capture:sub(0x1201b1, 0x1201c0))
 for _, row in ipairs(profile.hooks) do
     assert(read(base + row.offset, 16) == P.unhex(row.replacementHex))
 end
-assert(files["/moader/runtime/catalogue.bin"] == string.rep("\0", 64) and
+local catalogue = files["/moader/runtime/catalogue.bin"]
+assert(#catalogue == 64 and catalogue:sub(1, 8) == "MOADER01" and
+       P.u32(catalogue, 8) == 1 and P.u32(catalogue, 12) == 0 and
+       P.u64(catalogue, 16) == 1 and
+       P.u64(catalogue, 24) == ctx.donorRow.vptr and
+       P.u64(catalogue, 32) == ctx.launch.pid * 4294967296 + 5000 and
+       P.u32(catalogue, 40) == 64 and P.u32(catalogue, 44) == 64 and
+       P.u32(catalogue, 48) == 0 and
        files["/moader/runtime/ack.bin"] == string.rep("\0", 64))
 print("Standalone Moader FS install flow simulated from exact capture; device proof pending.")

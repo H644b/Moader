@@ -61,7 +61,7 @@ assert(poll() == false and #status == 1)
 clock = 1000
 operation = 23
 assert(poll() == false)
-assert(status[2] == "bootstrap wait PM worker (23)")
+assert(status[2] == "bootstrap wait PM worker (23) mounts=21 exchange=no gate=0x0 channel=0x0")
 clock = 2000
 operation = 7
 assert(poll() == false)

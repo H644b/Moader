@@ -24,6 +24,23 @@ local function aligned(value, size)
     return value > 0 and value % size == 0
 end
 
+local function empty_catalogue(ctx, rt)
+    -- Match the 64-byte wire header prepared by the PC installer. The
+    -- current boot's randomized FS pointer and clock make a fresh epoch;
+    -- every value stays within Lua's exact-integer range.
+    local low = ctx.donorRow.vptr
+    local high = ctx.launch.pid * 4294967296 + math.floor(rt.now_ms())
+    check(low > 0 and low < 9007199254740992 and
+        high > 0 and high < 9007199254740992,
+        "cannot form a current-boot catalogue epoch")
+    local header = "MOADER01" .. P.u32s(1) .. P.u32s(0) ..
+        P.u64s(1) .. P.u64s(low) .. P.u64s(high) ..
+        P.u32s(64) .. P.u32s(64) .. P.u32s(0) .. P.u32s(0) ..
+        P.u64s(0)
+    check(#header == 64, "initial catalogue header is not 64 bytes")
+    return header
+end
+
 -- Fixed checksums bind every SD input to the independently rebuilt payload.
 -- The host staging tool additionally checks SHA-256 and reads back the SD.
 local INPUTS = {
@@ -391,7 +408,7 @@ function M.begin_install(env)
         check(entry.transport == 0 and entry.result == 0 and entry.type == 0,
             "Moader runtime metadata directory is unavailable: " .. path)
     end
-    reset_file("/moader/runtime/catalogue.bin", zero("\0", 64))
+    reset_file("/moader/runtime/catalogue.bin", empty_catalogue(ctx, rt))
     reset_file("/moader/runtime/ack.bin", zero("\0", 64))
     reset_file("/moader/runtime/log0.bin", zero("\0", 65616))
     reset_file("/moader/runtime/log1.bin", zero("\0", 65616))

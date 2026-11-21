@@ -233,13 +233,20 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         ctx.bootstrapNextPoll = now + 1000
         local out24 = rt.rd(ctx.bootstrapArgsAddress + 408, 24)
         local op, res = P.u32(out24, 0), P.u32(out24, 4)
-        if op ~= ctx.bootstrapLastOperation then
-            ctx.bootstrapLastOperation = op
-            live_stage(str_format("bootstrap %s (%d)", bootstrap_operations[op] or "step", op))
+        local status = str_format("bootstrap %s (%d)", bootstrap_operations[op] or "step", op)
+        if op == 23 then
+            local flags = P.u64(out24, 8)
+            status = status .. str_format(" mounts=%d exchange=%s gate=0x%x channel=0x%x",
+                math.floor(flags / 2), flags % 2 == 1 and "yes" or "no",
+                P.u32(out24, 16), P.u32(out24, 20))
+        end
+        if status ~= ctx.bootstrapLastStatus then
+            ctx.bootstrapLastStatus = status
+            live_stage(status)
         end
         if op ~= 10 and res == 0 then
             assert(now < ctx.bootstrapDeadline,
-                str_format("KH: bootstrap timed out at operation %d", op))
+                str_format("KH: bootstrap timed out at operation %d: %s", op, status))
             return false
         end
         -- The module publishes Complete or its error before exiting. The SDK
