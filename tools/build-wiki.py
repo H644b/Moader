@@ -16,6 +16,7 @@ PAGES = {
     'Changelog': 'CHANGELOG.md',
     'Installation': 'docs/INSTALLATION.md',
     'Seedsow-Demo': 'docs/SEEDSOW.md',
+    'Seedsow-Standalone': 'docs/SEEDSOW_STANDALONE.md',
     'CivSwitch-Entrypoint': 'docs/CIV7.md',
     'Using-Moader': 'docs/USAGE.md',
     'Game-Card-Checks': 'docs/CARTRIDGES.md',
@@ -101,7 +102,8 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | [v0.1.1 release notes](Release-v0.1.1) | Historical cumulative release |
 | [Changelog](Changelog) | Release history and the unpublished dev.5 candidate |
 | [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
-| [Seedsow Lullaby](Seedsow-Demo) | Pinned GUI preparation and one-boot Moader installation |
+| [Seedsow Lullaby](Seedsow-Demo) | Pinned PC-driven GUI preparation and one-boot Moader installation |
+| [Seedsow on-console](Seedsow-Standalone) | Experimental one-time SD/save preparation and later on-console start |
 | [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
 | [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, software errors and setup recovery |
@@ -134,7 +136,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-No. The v0.2.5 backend kit supports direct ns2jb and Seedsow Lullaby Demo or full game from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. Seedsow needs its pinned GUI and host SDK preparation. [Installation](Installation) covers the method choices and host requirements.
+No. The v0.2.5 backend kit supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 

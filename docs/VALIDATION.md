@@ -2,6 +2,10 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
+## Seedsow standalone host preparation
+
+The standalone preparation pins Malev0's console-only save at `ff14e26cb950db5cff0da911d28774404adb5cd1`, including its 14 Lua modules, uploader and console-host helper. On macOS, the source check and upstream `--check` passed; all wire bodies fit the stock launcher's 28,672-byte cap. Moader's pinned 20261114c official release and source-qualified protocol-7 RO/HEN/bootstrap, app and resident assembled into one full bundle. The SD staging command placed and read back all 52 mapped files in a temporary SD-root fixture. The Lua bootstrap builder and Moader's native `BootstrapArgs` both use 432 bytes and the same documented input/output offsets. This is source and host evidence only: no save was uploaded to a console and no standalone Moader/HEN run was observed. The PC-driven Seedsow installation results below do not transfer to this route. [Experimental instructions](SEEDSOW_STANDALONE.md).
+
 ## Hold-R candidate after v0.2.5
 
 A supplied v0.2.5 Seedsow backend archive records verified HEN startup, a game arm waiting for input, complete game-loader/hbmenu staging and clean listener retirement. It has no trace after the user launched a game, so it cannot prove R sampling, first-launch policy capture or hbmenu entry. Read-only FTP inspection of the maintainer's working SD found an existing `main.npdm` dated before the successful installation. That installation therefore does not prove the empty-policy path.

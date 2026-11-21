@@ -32,7 +32,7 @@ If you're using a build older than v0.1.0-dev.3 and it reports `ZIP decompressio
 
 Check the [selected setup method](INSTALLATION.md#start-the-backend-for-this-boot), the local Node version and the current run folder. For mac2jb, paste the whole status command with its quotes. For direct ns2jb in WSL2, check that both terminals use the same distro and that Node reports `linux`. If you see `EADDRNOTAVAIL`, check the [WSL2 LAN address](INSTALLATION.md#wsl2-networking-before-acquisition).
 
-For CivSwitch, **Awaiting payload** is the loader's waiting screen. Review the [CivSwitch states](CIV7.md#recognize-the-three-different-states) and the required profile. For Seedsow, follow the [GUI recovery instructions](SEEDSOW.md#recovery).
+For CivSwitch, **Awaiting payload** is the loader's waiting screen. Review the [CivSwitch states](CIV7.md#recognize-the-three-different-states) and the required profile. For PC-driven Seedsow, follow the [GUI recovery instructions](SEEDSOW.md#recovery). For the experimental on-console route, use its [fresh-boot recovery steps](SEEDSOW_STANDALONE.md#start-moader-on-a-fresh-boot).
 
 ## Backend setup failed or timed out
 

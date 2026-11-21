@@ -142,6 +142,10 @@ jobs:
           node tools/prepare-seedsow-gui.cjs --provision "$RUNNER_TEMP/seedsow-gui"
           node tools/prepare-seedsow-gui.cjs --check "$RUNNER_TEMP/seedsow-gui"
           node tools/test-gui-autodownload.cjs "$RUNNER_TEMP/seedsow-gui"
+      - name: Verify Seedsow on-console source and SD writer
+        run: |
+          python3 tools/seedsow-standalone.py provision --source "$RUNNER_TEMP/seedsow-standalone" --node node
+          python3 tests/test_seedsow_standalone.py "$RUNNER_TEMP/seedsow-standalone"
       - name: Independently verify Civ7 source, materialization and native qualification gates
         run: |
           python3 tools/test-civ7-host.py --node node
