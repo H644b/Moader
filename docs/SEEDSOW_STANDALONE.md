@@ -6,7 +6,13 @@ The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blo
 
 - Seedsow Lullaby Demo or full game with a working HTTP launcher save for that edition, a Switch 2 on firmware supported by the [upstream Seedsow project](https://github.com/Malev0/seedsow-fs-kaihen), and an SD card that can be mounted on the computer. Keep the Demo and full-game saves separate.
 - The matching Moader source checkout or a backend kit **containing this tool**, Python 3.10+, Git and Node.js 20+. The published v0.2.5 backend ZIP predates this standalone tool. macOS host preparation has been checked; Linux and WSL2 use the same Python and Node paths, but their standalone route has not yet been verified end to end.
-- A copy of the launcher save on a **second console profile** before uploading, as the upstream instructions recommend. The uploader writes and commits `save:/` on the selected profile. Keep the original profile for the PC-driven route.
+- A working launcher save on a **second console profile** before uploading, as the upstream instructions recommend. The uploader writes and commits `save:/` on the selected profile. Keep the original profile for the PC-driven route.
+
+### If Checkpoint cannot back up the working Seedsow Demo save
+
+The unofficial [Switch 2 Checkpoint fork](https://github.com/wowilookgood/Checkpoint/releases/tag/v5.3.0-switch2-1) has a [Seedsow Demo report](https://github.com/wowilookgood/Checkpoint/issues/1) where backup error `0x1559` follows an unreadable `NS2_GAP_.../canary` scratch entry. Checkpoint refuses that backup because it would be incomplete. Leave that original profile's save untouched; do not treat the failed backup as a recovery copy.
+
+For the Demo, the reported workaround is to make a normal Seedsow save on a **new profile**, back up that clean save with Checkpoint, then restore [alula's v2 Demo launcher save](https://github.com/alula/switch-artemis-launcher/releases/tag/v2) into that new profile. The official `seedsow_save.zip` asset has SHA-256 `dfd58a4e1151d29e9152b3a528568f95a990aa427914bafc21711e9b7fca691e` and contains nine launcher files. Confirm that **Y** starts its HTTP launcher on the new profile before using `upload-save` below. Checkpoint's Switch 2 release reports backup testing but lists restore as untested; this Moader route has not verified that profile transfer yet. The Demo archive is not a full-game save.
 
 Use the complete kaiHEN archive supplied by this Moader checkout or matching backend kit. The tool verifies the official 20261114c base, Moader's source-qualified protocol-7 RO/HEN/bootstrap, the app and resident, then stages the full release. Do not use upstream **Prepare SD** or **Update kaiHEN** afterward: those buttons stage the regular upstream build over Moader's matched files.
 
