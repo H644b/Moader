@@ -29,6 +29,13 @@ PAGES = {
     'Contributing': 'CONTRIBUTING.md',
     'Security': 'SECURITY.md',
 }
+# Preserve bookmarks and replace older exported copies of the setup guides.
+# Links in new articles take readers directly to the repository version.
+METHOD_GUIDES = {
+    'Seedsow-Demo': 'docs/SEEDSOW.md',
+    'Seedsow-Standalone': 'docs/SEEDSOW_STANDALONE.md',
+    'CivSwitch-Entrypoint': 'docs/CIV7.md',
+}
 LINK = re.compile(r'(!?)\[([^\]\n]*)\]\(([^()\s]+)\)')
 
 
@@ -78,6 +85,11 @@ def build():
     base = 'https://github.com/' + repository
     pages = {name: convert((ROOT / path).read_text(), ROOT / path, repository)
              for name, path in PAGES.items()}
+    for name, path in METHOD_GUIDES.items():
+        title = (ROOT / path).read_text().splitlines()[0]
+        pages[name] = (f'{title}\n\n[Read the current guide in the Moader repository]({base}/blob/main/{path}).\n\n'
+                       '[Compare setup methods](Installation#start-the-backend-for-this-boot) · '
+                       '[Check your installation](Installation#check-your-installation)\n')
     pages['Home'] = f'''# Moader user guide
 
 Manage Switch 2 mods from your controller or a browser. Moader serves its web interface directly from the Switch, with a six-digit pairing code and no cloud account.
