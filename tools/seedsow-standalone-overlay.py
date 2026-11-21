@@ -221,10 +221,11 @@ def build(source: Path, output: Path) -> dict[str, Path]:
 
     local bootstrap_operations = {
         "begin", "park Loader", "launch", "mount package", "exchange",
-        "restore Loader", "join", "start HEN", "connect", "complete",
+        "restore Loader", "PM worker settled", "start HEN", "connect", "complete",
         "prepare package", "game config", "game handles", "game handles",
         "game start", "read policy", "write package", "plugin scan",
-        "plugin package", "plugin lookup", "plugin handoff", "plugin ready"
+        "plugin package", "plugin lookup", "plugin handoff", "plugin ready",
+        "wait PM worker"
     }
     local function poll_bootstrap_nro()
         local now = rt.now_ms()

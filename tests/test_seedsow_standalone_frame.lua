@@ -59,8 +59,16 @@ assert(poll() == false and clock == 0)
 assert(status[1] == "bootstrap park Loader (2)")
 assert(poll() == false and #status == 1)
 clock = 1000
+operation = 23
+assert(poll() == false)
+assert(status[2] == "bootstrap wait PM worker (23)")
+clock = 2000
+operation = 7
+assert(poll() == false)
+assert(status[3] == "bootstrap PM worker settled (7)")
+clock = 3000
 operation = 10
-assert(poll() == nil and clock == 1500)
+assert(poll() == nil and clock == 3500)
 assert(ctx.henStartup.operation == 10 and ctx.henStartup.pid == 42)
 assert(ctx.moaderUncertain == false and _G.__MOADER_FS_UNCERTAIN == false)
 assert(_G.__KH.stages.complete == true)
