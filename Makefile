@@ -42,7 +42,6 @@ $(UI_OBJ): build/native/%.o: native/%.cpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -Wno-unused-function -c $< -o $@
 
 build/native/canvas.o: build/generated/native_font.hpp
-build/native/store.o: build/generated/store_assets.hpp
 
 build/native/catalog_fetch.o: native/catalog_fetch.cpp native/catalog_fetch.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@

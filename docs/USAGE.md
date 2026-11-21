@@ -118,6 +118,8 @@ Press **ZL** in the app or open **Settings → Advanced → Current session** in
 
 ## Community mod repositories
 
-The gray **Store** button is inactive in this build. You can download a mod ZIP from a publisher’s website and import it with **Upload mod** in your paired browser.
+In the v3.0.0 Store test NRO, tap **Store** in the top bar, or press **↑**, **←**, then **A** from the library. The console loads the [community catalog](https://h644b.github.io/moader-mod-repo-template/catalog.json) when you open the Store. Select a release to see the creator, previews and publisher link. **B** goes back.
+
+To try the hosted example, open **Orchard Field Notes → Golden hour palette**. This is a catalog and download example for a fictional game. To import a publisher's ZIP, download it on your phone or computer and choose **Upload mod** in the paired browser.
 
 To publish your own mods, copy the repository template. It builds a static website, a game catalog at `catalog.json` and downloadable ZIPs with their sizes and SHA-256 checksums. The template includes instructions for GitHub Pages and other static hosts. [Moader mod repository template](https://github.com/H644b/moader-mod-repo-template)

@@ -397,6 +397,8 @@ struct Renderer::Impl {
             notice = s.reload_detail;
         else if (s.inventory_unavailable() && library_view)
             notice = "Library refresh pending. Mod changes are paused until the next complete scan.";
+        else if (s.view == View::Store && s.store.catalog_failed && !s.store.games.empty() && notice.empty())
+            notice = "One or more community catalogs could not be loaded.";
         else if (!s.connected && notice.empty())
             notice = "Service disconnected. Press Y to reconnect.";
         if (!notice.empty())
@@ -483,10 +485,8 @@ uint32_t Renderer::tap(State& s, float xx, float yy) {
         case HitType::Key:
             return s.local_input(v, scroll_limit(s, s.view));
         case HitType::Store:
-            if (StoreAvailable) {
-                s.store.start(s.game < s.games.size() ? s.games[s.game].id : 0);
+            if (StoreAvailable)
                 s.view = View::Store;
-            }
             break;
         case HitType::StoreTab:
             s.store.select_tab(v);

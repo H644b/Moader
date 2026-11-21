@@ -1,6 +1,5 @@
 #include "store.hpp"
 #include "ui.hpp"
-#include "store_assets.hpp"
 #include "third_party/picojson.h"
 #include <algorithm>
 #include <cctype>
@@ -155,20 +154,26 @@ bool Store::merge_catalog(const std::string& json) {
     auto current = std::find(now.begin(), now.end(), active);
     if (current != now.end())
         tab = current - now.begin();
+    if (!preferred_title.empty()) {
+        auto preferred = std::find_if(games.begin(), games.end(),
+            [&](const StoreGame& item) { return item.id == preferred_title; });
+        if (preferred != games.end()) {
+            game = unsigned(preferred - games.begin());
+            select_tab(0);
+        }
+    }
     return true;
 }
 void Store::start(uint64_t preferred) {
-    initialized = true;
-    if (games.empty())
-        load_catalog(store_assets::catalog);
-    char id[17];
-    std::snprintf(id, sizeof(id), "%016llX", (unsigned long long)preferred);
-    for (unsigned i = 0; i < games.size(); ++i)
-        if (games[i].id == id) {
-            game = i;
-            break;
-        }
-    select_tab(0);
+    *this = Store{};
+    preview_queue.clear();
+    preview_cache.clear();
+    fetching.clear();
+    if (preferred) {
+        char id[17];
+        std::snprintf(id, sizeof(id), "%016llX", (unsigned long long)preferred);
+        preferred_title = id;
+    }
 }
 std::vector<std::string> Store::tabs() const {
     std::vector<std::string> result{"Discover"};
@@ -203,6 +208,7 @@ std::vector<unsigned> Store::matches() const {
     return result;
 }
 void Store::select_tab(unsigned i) {
+    preferred_title.clear();
     const auto count = tabs().size();
     tab = std::min(i, unsigned(count - 1));
     page = tab == 0 ? Shelf::Discover : tab == count - 1 ? Shelf::Hosts : Shelf::Category;
@@ -233,6 +239,7 @@ bool Store::back() {
 bool Store::input(uint32_t b) {
     if (games.empty())
         return false;
+    preferred_title.clear();
     if (b & DetailInput) {
         if (page != Shelf::Games) {
             picker_origin = page == Shelf::Release ? origin : page;
@@ -305,12 +312,6 @@ Art Store::preview(const std::string& url) {
     for (const auto& p : preview_cache)
         if (p.first == url)
             return p.second;
-    for (const auto& img : store_assets::images)
-        if (img.url == url) {
-            auto result = decode_art(img.bytes, img.length);
-            finish_preview(url, result);
-            return result;
-        }
     if (url != fetching && preview_queue.size() < 16 &&
         std::find(preview_queue.begin(), preview_queue.end(), url) == preview_queue.end())
         preview_queue.push_back(url);

@@ -67,7 +67,12 @@ void store_screen(Canvas& c, const State& s) {
     const auto& store = s.store;
     if (store.games.empty()) {
         c.text(64, 140, "Community store", 49, paper, Display);
-        c.text(64, 254, "No catalogs available.", 22, soft);
+        const char* status = store.catalog_status == CatalogStatus::Loading ? "Loading community catalogs…"
+                           : store.catalog_status == CatalogStatus::Unavailable ? "Could not load the community catalogs."
+                           : "No games have been published in these catalogs yet.";
+        c.text(64, 254, status, 22, soft);
+        if (store.catalog_status == CatalogStatus::Unavailable)
+            c.text(64, 294, "Check your internet connection, then reopen Store to retry.", 19, muted);
         footer(c, "Library", "", false);
         return;
     }

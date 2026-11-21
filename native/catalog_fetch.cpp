@@ -69,7 +69,7 @@ std::string fetch_catalog_asset(const std::string& url, size_t limit, const std:
     curl_easy_setopt(h, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(h, CURLOPT_XFERINFOFUNCTION, progress);
     curl_easy_setopt(h, CURLOPT_XFERINFODATA, &cancel);
-    curl_easy_setopt(h, CURLOPT_USERAGENT, "Moader/0.2.0 catalog");
+    curl_easy_setopt(h, CURLOPT_USERAGENT, "Moader/3.0.0 catalog");
     if (curl_easy_perform(h) != CURLE_OK)
         return {};
     long status = 0;

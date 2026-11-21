@@ -1,6 +1,8 @@
 // Host input checks and captures of the production framebuffer renderer.
 #include "ui.hpp"
 #include "ui_bitmap.hpp"
+#include "store_assets.hpp"
+#include <algorithm>
 #include <cassert>
 #include <filesystem>
 #include <fstream>
@@ -59,6 +61,15 @@ void capture(const fs::path& p, const State& s, int w = 1280, int h = 720) {
     Renderer r;
     std::vector<uint32_t> pixels(w * h);
     r.draw(pixels.data(), w, h, w * 4, s, 1.f / 60);
+    if (s.view == View::Store) {
+        for (auto url = Store::next_preview(); !url.empty(); url = Store::next_preview()) {
+            const auto& images = store_assets::images;
+            auto image = std::find_if(std::begin(images), std::end(images),
+                                      [&](const auto& item) { return item.url == url; });
+            Store::finish_preview(url, image == std::end(images) ? Art{} : decode_art(image->bytes, image->length));
+        }
+        r.draw(pixels.data(), w, h, w * 4, s, 1.f / 60);
+    }
     std::ofstream out(p, std::ios::binary);
     out << "P6\n" << w << " " << h << "\n255\n";
     for (auto px : pixels) {
@@ -151,12 +162,19 @@ void tests(State s) {
     for (int y = 0; y < 720; ++y)
         for (int x = 1280; x < 1320; ++x)
             assert(padded[y * 1320 + x] == 0x12345678);
-    assert(!StoreAvailable);
-    assert(r.tap(s, 1145.f / 1440, 48.f / 810) == 0 && s.view == View::Library && s.store.games.empty());
+    assert(StoreAvailable);
+    assert(r.tap(s, 1145.f / 1440, 48.f / 810) == 0 && s.view == View::Store && s.store.games.empty());
+    s.local_input(BackInput, 0);
+    r.draw(padded.data(), 1280, 720, 1320 * 4, s, 1);
     r.tap(s, .5, .45);
     assert(s.view == View::Mods);
     r.draw(padded.data(), 1280, 720, 1320 * 4, s, 1);
-    assert(r.tap(s, 1145.f / 1440, 48.f / 810) == 0 && s.view == View::Mods);
+    assert(r.tap(s, 1145.f / 1440, 48.f / 810) == 0 && s.view == View::Store);
+    s.local_input(BackInput, 0);
+    s.local_input(UpInput, 0);
+    s.local_input(LeftInput, 0);
+    s.local_input(ActivateInput, 0);
+    assert(s.view == View::Store && s.store.games.empty());
     s.local_input(BackInput, 0);
     s.local_input(UpInput, 0);
     s.local_input(RightInput, 0);
@@ -185,6 +203,8 @@ void tests(State s) {
     Store st;
     assert(!st.load_catalog("{}"));
     st.start(ids[2]);
+    assert(st.games.empty() && st.catalog_status == CatalogStatus::Loading);
+    assert(st.merge_catalog(store_assets::catalog));
     assert(st.games.size() == 5 && st.game == 2);
     st.input(ActivateInput);
     assert(st.page == Shelf::Release && !st.host_url().empty());
@@ -253,6 +273,7 @@ int main(int argc, char** argv) {
     s.summary.last_result = 0;
     s.view = View::Store;
     s.store.start(ids[2]);
+    assert(s.store.merge_catalog(store_assets::catalog));
     capture(dir / "store-720.ppm", s);
     s.store.input(ActivateInput);
     capture(dir / "store-detail-720.ppm", s);
@@ -268,5 +289,5 @@ int main(int argc, char** argv) {
     s.connected = false;
     capture(dir / "disconnected-720.ppm", s);
     std::cout
-        << "Carousel, touch, settings, runtime, package actions, gated Store and framebuffer checks passed.\n";
+        << "Carousel, touch, settings, runtime, package actions, community Store and framebuffer checks passed.\n";
 }

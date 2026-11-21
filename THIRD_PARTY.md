@@ -30,6 +30,6 @@ The CivSwitch entrypoint research also credits [Gezine/CivSwitch](https://github
 
 ZIP decoding uses devkitPro zlib on the Switch and system zlib in host tests. The Moader mark is original project artwork, shared by the app icon, favicon and both interface headers.
 
-The bundled Store catalog credits the individual creators and links each preview to its original community host. [Listing credits and sources](native/store/catalog.json)
+The catalog used for host-side design captures credits the individual creators and links each preview to its original community host. [Listing credits and sources](native/store/catalog.json)
 
 See [validation](docs/VALIDATION.md) for what was tested and [building](docs/BUILDING.md) for the source and tools needed to reproduce a build.
