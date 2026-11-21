@@ -31,7 +31,7 @@ Entry entry(const Mod& mod, const std::string& path, const std::string& root) {
         if (out.name.size() < 5 || folded(out.name.substr(out.name.size()-4)) != ".ips")
             throw std::runtime_error("Executable patches currently require binary IPS files.");
     } else throw std::runtime_error("Unsupported mod payload: " + path);
-    const auto relative = "/library/" + folded(mod.title_id) + '/' + mod.id + '/' + path;
+    const auto relative = install_path("/library/" + folded(mod.title_id) + '/' + mod.id, mod.install_slot) + '/' + path;
     struct stat st{};
     if (lstat((root + relative).c_str(), &st) || !S_ISREG(st.st_mode) || st.st_size < 0 || st.st_size > 64*1024*1024)
         throw std::runtime_error("The mod source is missing, linked, or exceeds 64 MiB: " + path);

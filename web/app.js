@@ -49,10 +49,10 @@ function node(tag, cls, text) {
   if (text !== undefined) el.textContent = text;
   return el;
 }
-function bytes(value) {
+function bytes(value, precision) {
   if (value < 1024) return value + " B";
   const unit = value < 1048576 ? 1024 : 1048576;
-  return (value / unit).toFixed(value / unit < 10 ? 1 : 0) + (unit === 1024 ? " KiB" : " MiB");
+  return (value / unit).toFixed(precision ?? (value / unit < 10 ? 1 : 0)) + (unit === 1024 ? " KiB" : " MiB");
 }
 function kinds(mod) {
   return [mod.romfs && "RomFS", mod.exefs && "ExeFS"].filter(Boolean).join(" + ") || "No payload";
@@ -76,6 +76,7 @@ function updateControls() {
   $("carousel-upload").disabled = !connected || busy || !inventoryAvailable();
   $("show-settings").disabled = busy || settingsSaving;
   $("game-copy").disabled = !connected || busy || settingsSaving || !inventoryAvailable();
+  webStore.updateAction();
   updateSettingsControls();
 }
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
@@ -114,6 +115,8 @@ function showPair(error = "") {
   syncPage();
   clearCovers();
   paired = false;
+  $("store-button").hidden = true;
+  webStore.disconnect();
   $("show-settings").hidden = true;
   $("pair-screen").hidden = false;
   $("workbench").hidden = true;
@@ -126,6 +129,7 @@ async function api(path, options = {}) {
     timer = setTimeout(() => controller.abort(), 45000);
   const abort = () => controller.abort();
   options.signal?.addEventListener("abort", abort, { once: true });
+  if (options.signal?.aborted) abort();
   try {
     const response = await fetch("/api" + path, {
       method: options.method || "GET",
@@ -157,6 +161,17 @@ async function api(path, options = {}) {
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", abort);
+  }
+}
+async function sendUploadChunks(path, file, offset, signal, onProgress) {
+  onProgress(offset);
+  while (offset < file.size) {
+    if (signal.aborted) throw new Error("Upload cancelled.");
+    const chunk = file.slice(offset, offset + 1048576);
+    const result = await api(path + "?offset=" + offset, { method: "PUT", body: chunk, signal });
+    if (result.received !== offset + chunk.size) throw new Error("The Switch could not confirm the upload.");
+    offset = result.received;
+    onProgress(offset);
   }
 }
 function gameName(title) {
@@ -464,9 +479,12 @@ function syncPage() {
     detail: "›   Mods   ›   Mod details",
     settings: "›   Settings",
     upload: "›   Upload mod",
+    store: "›   Store",
   }[page];
+  $("store-pane").hidden = page !== "store";
+  $("store-button").setAttribute("aria-expanded", String(page === "store"));
   $("game-context").hidden = page !== "mods" && page !== "detail";
-  $("runtime-notice").hidden = page === "library" || page === "settings";
+  $("runtime-notice").hidden = page === "library" || page === "settings" || page === "store";
   if (!settingsOpen) $("library-content").hidden = false;
 }
 function showPage(page) {
@@ -829,6 +847,7 @@ async function pair() {
   try {
     await refresh();
     paired = true;
+    $("store-button").hidden = false;
     remember(token);
     $("pair-screen").hidden = true;
     $("workbench").hidden = false;
@@ -1005,20 +1024,14 @@ async function sendUpload(event) {
         throw new Error("The upload session changed. Cancel it and start again.");
     }
     upload.controller = new AbortController();
-    while (upload.offset < upload.file.size) {
-      if (upload.cancelled) throw new Error("Upload cancelled.");
-      const chunk = upload.file.slice(upload.offset, upload.offset + 1048576);
-      const result = await api("/upload/" + upload.key + "?offset=" + upload.offset, {
-        method: "PUT",
-        body: chunk,
-        signal: upload.controller.signal,
-      });
-      upload.offset = result.received;
+    if (upload.cancelled) upload.controller.abort();
+    await sendUploadChunks("/upload/" + upload.key, upload.file, upload.offset, upload.controller.signal, (offset) => {
+      upload.offset = offset;
       const progress = Math.round((upload.offset / upload.file.size) * 100);
       $("progress-bar").value = progress;
       $("progress-text").textContent =
         bytes(upload.offset) + " of " + bytes(upload.file.size) + " · " + progress + "%";
-    }
+    });
     committing = true;
     $("upload-cancel").disabled = true;
     $("progress-text").textContent = "Verifying and importing files on your Switch…";
@@ -1127,6 +1140,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (e.key === "Escape" && libraryPage !== "library") {
     e.preventDefault();
+    if (libraryPage === "store" && webStore.back()) return;
     if (libraryPage === "upload") uploadPane(false);
     else {
       showPage(libraryPage === "detail" ? "mods" : "library");
@@ -1135,6 +1149,10 @@ document.addEventListener("keydown", (e) => {
   }
 });
 $("show-settings").addEventListener("click", () => showSettings(!settingsOpen));
+$("store-button").addEventListener("click", () => {
+  showPage("store");
+  if (libraryPage === "store") webStore.open();
+});
 $("close-settings").addEventListener("click", () => showSettings(false));
 $("settings-back").onclick = () => {
   if (settingsSubpage) settingsSubpageView("");
@@ -1174,6 +1192,7 @@ document.addEventListener("keydown", (event) => {
     else showSettings(false);
   }
 });
+webStore.bind();
 $("pair-address").textContent = location.host;
 $("pair-form").addEventListener("submit", (event) => {
   event.preventDefault();
@@ -1328,6 +1347,7 @@ async function poll() {
   if (paired && token && !busy && !settingsSaving)
     try {
       await refresh();
+      webStore.pollGames();
     } catch {
       if (paired) connection(false, "Connection lost");
     }

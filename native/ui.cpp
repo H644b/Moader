@@ -60,9 +60,9 @@ void header(Canvas& c, const State& s) {
                : s.view == View::Store ? "Store"
                                        : "Mods",
                21, paper, Strong);
-        if (s.view == View::Store && (s.store.page == Shelf::Games || s.store.page == Shelf::Release)) {
+        if (s.view == View::Store && s.store.page == Shelf::Release) {
             c.arrow(476, 48, 1, 6, muted);
-            c.text(492, 37, s.store.page == Shelf::Games ? "Games" : "Mod details", 21, muted);
+            c.text(492, 37, "Mod details", 21, muted);
         }
         if (s.view == View::Details) {
             c.hit(397, 17, 76, 60, HitType::Mods);
@@ -397,6 +397,8 @@ struct Renderer::Impl {
             notice = s.reload_detail;
         else if (s.inventory_unavailable() && library_view)
             notice = "Library refresh pending. Mod changes are paused until the next complete scan.";
+        else if (s.view == View::Store && s.store.catalog_failed && !s.store.games.empty() && notice.empty())
+            notice = "One or more community catalogs could not be loaded.";
         else if (!s.connected && notice.empty())
             notice = "Service disconnected. Press Y to reconnect.";
         if (!notice.empty())
@@ -423,6 +425,8 @@ Renderer::Renderer() : impl(std::make_unique<Impl>()) {}
 Renderer::~Renderer() = default;
 uint64_t Renderer::event_layout_builds() const { return impl->event_builds; }
 unsigned Renderer::scroll_limit(const State& s, View view) {
+    if (view == View::Store)
+        return store_scroll_limit(impl->c, s.store);
     if (view == View::Debug) {
         auto n = impl->events(s).size();
         return n > 4 ? unsigned(n - 4) : 0;
@@ -483,21 +487,19 @@ uint32_t Renderer::tap(State& s, float xx, float yy) {
         case HitType::Key:
             return s.local_input(v, scroll_limit(s, s.view));
         case HitType::Store:
-            if (StoreAvailable) {
-                s.store.start(s.game < s.games.size() ? s.games[s.game].id : 0);
+            if (StoreAvailable)
                 s.view = View::Store;
+            break;
+        case HitType::StoreClear:
+            s.store.set_query({});
+            break;
+        case HitType::StoreItem:
+            if (s.store.page == Shelf::Browse && v < s.store.results.size()) {
+                s.store.focus = StoreFocus::Results;
+                s.store.row = v;
+                return s.local_input(ActivateInput, 0);
             }
             break;
-        case HitType::StoreTab:
-            s.store.select_tab(v);
-            break;
-        case HitType::StoreGame:
-        case HitType::StoreItem:
-            s.store.row = v;
-            return s.local_input(ActivateInput, 0);
-        case HitType::StoreMirror:
-            s.store.mirror = v;
-            return s.local_input(ActivateInput, 0);
         }
         return 0;
     }

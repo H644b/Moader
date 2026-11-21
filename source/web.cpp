@@ -18,6 +18,7 @@
 #include <cstring>
 #include <map>
 #include <mutex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 
@@ -165,7 +166,7 @@ void send_reply(int fd, const Reply& reply) {
     const std::string head = "HTTP/1.1 " + std::to_string(reply.code) + ' ' + reason + "\r\nContent-Type: " + reply.type +
         "\r\nContent-Length: " + std::to_string(reply.body.size()) +
         "\r\nConnection: close\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n"
-        "Content-Security-Policy: default-src 'self'; img-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\r\n\r\n";
+        "Content-Security-Policy: default-src 'self'; connect-src 'self' https://moader.timsfun.com; img-src 'self' blob: https://moader.timsfun.com/files/; object-src 'none'; frame-ancestors 'none'; base-uri 'none'\r\n\r\n";
     const auto bytes = head + reply.body;
     size_t at = 0;
     while (at < bytes.size()) {
@@ -185,6 +186,7 @@ public:
     std::string root, token, error;
     std::vector<WebAsset> assets;
     std::function<std::string(const std::string&)> artwork;
+    GameLookup games;
     struct Upload { std::string file, title, id, name; uint64_t size = 0, received = 0; };
     std::map<std::string, Upload> uploads;
     PairingLimiter pairing_attempts;
@@ -193,7 +195,7 @@ public:
     int client = -1;
     int listener = -1; uint16_t actual_port = 0; unsigned next_upload = 0;
     WebWorker worker;
-    Impl(Library& lib, std::string r, std::string t, std::vector<WebAsset> a, std::function<std::string(const std::string&)> art) : library(lib), root(std::move(r)), token(std::move(t)), assets(std::move(a)), artwork(std::move(art)) {
+    Impl(Library& lib, std::string r, std::string t, std::vector<WebAsset> a, std::function<std::string(const std::string&)> art, GameLookup lookup) : library(lib), root(std::move(r)), token(std::move(t)), assets(std::move(a)), artwork(std::move(art)), games(std::move(lookup)) {
         require(token.size() == 6 && token.find_first_not_of("0123456789") == std::string::npos,
                 "Pairing code must contain six digits.");
         make_directories(root + "/.uploads");
@@ -218,6 +220,26 @@ public:
             return app_screenshot(root);
         }
         if (req.method == "GET" && req.path == "/api/state") return {200, "application/json", library.snapshot_json()};
+        if (req.method == "POST" && req.path == "/api/store/games") {
+            require(!req.body.empty() && req.body.size() <= 64 * 17, "Choose up to 64 game Title IDs.");
+            StorePresence titles;
+            std::istringstream input(req.body);
+            for (std::string id; input >> id;) {
+                require(valid_title_id(id) && titles.size() < 64, "Invalid game Title ID.");
+                titles.emplace_back(lower(id), GamePresence::Unknown);
+            }
+            require(!titles.empty(), "Choose at least one game.");
+            if (games) games(titles);
+            std::set<std::string> library_titles;
+            for (const auto& mod : library.snapshot().mods) library_titles.insert(mod.title_id);
+            std::string body = "{";
+            for (const auto& [id, presence] : titles) {
+                if (body.size() > 1) body += ',';
+                body += json_string(id) + ':' + (library_titles.count(id) || presence == GamePresence::Present ? "true" :
+                                                  presence == GamePresence::Absent ? "false" : "null");
+            }
+            return {200, "application/json", body + '}'};
+        }
         if (req.method == "POST" && req.path == "/api/library/rescan") {
             require(library.rescan(), "An import or another library operation is in progress. Try again when it finishes.");
             return {200, "application/json", library.snapshot_json()};
@@ -364,8 +386,8 @@ public:
         }
     }
 };
-WebServer::WebServer(Library& library, std::string root, std::string token, std::vector<WebAsset> assets, std::function<std::string(const std::string&)> artwork)
-    : impl_(new Impl(library, std::move(root), std::move(token), std::move(assets), std::move(artwork))) {}
+WebServer::WebServer(Library& library, std::string root, std::string token, std::vector<WebAsset> assets, std::function<std::string(const std::string&)> artwork, GameLookup games)
+    : impl_(new Impl(library, std::move(root), std::move(token), std::move(assets), std::move(artwork), std::move(games))) {}
 WebServer::~WebServer() { stop(); }
 bool WebServer::start(const std::string& address, uint16_t port) {
     if (impl_->enabled) return true;

@@ -1,5 +1,6 @@
 #include "ui.hpp"
 #include <algorithm>
+#include <cstdlib>
 #include <limits>
 #include <map>
 
@@ -21,6 +22,13 @@ unsigned tab_for(View v) {
         if (tabs[i] == v)
             return i;
     return 0;
+}
+bool State::has_store_mod(const StoreEntry& entry) const {
+    const auto& g = store.games[entry.game];
+    const auto& m = g.mods[entry.release];
+    const auto id = std::strtoull(g.id.c_str(), nullptr, 16);
+    return std::any_of(mods.begin(), mods.end(),
+                       [&](const Mod& item) { return item.data.title_id == id && item.id == m.id; });
 }
 unsigned State::rows() const {
     switch (view) {
@@ -156,8 +164,19 @@ uint32_t State::local_input(uint32_t b, unsigned limit) {
             show_settings(1);
         return ToggleWeb;
     }
-    if (view == View::Store)
-        return store.input(b) ? uint32_t(OpenStoreHost) : 0u;
+    if (view == View::Store) {
+        if (store.page == Shelf::Release) {
+            if (b & UpInput && store.description_first)
+                --store.description_first;
+            if (b & DownInput && store.description_first < limit)
+                ++store.description_first;
+        }
+        auto action = store.input(b);
+        if (action == InstallStoreMod &&
+            (!connected || inventory_unavailable() || transfer.busy() || has_store_mod(store.detail)))
+            return 0;
+        return action;
+    }
     if (view == View::Library) {
         if (b & UpInput) {
             nav_focus = true;

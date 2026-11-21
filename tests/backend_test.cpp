@@ -17,7 +17,7 @@ static void receipt(const std::string& root,uint64_t generation,uint32_t result 
 }
 int main(int argc,char** argv) {
     try {
-        expect(argc == 3,"Pass ZIP fixture and an empty test directory.");
+        expect(argc == 4,"Pass the original ZIP, an empty test directory and the replacement ZIP.");
         const std::string root = argv[2],title = "04000000000d0001";
         unsigned kicks = 0; moader::RuntimeBackend backend(root,{11,22},[&] { ++kicks; });
         moader::Library library(root,backend);
@@ -62,6 +62,36 @@ int main(int argc,char** argv) {
         MoaderCatalogueHeader gated_header{};
         expect(bool(gated_file.read(reinterpret_cast<char*>(&gated_header),sizeof(gated_header))) && gated_header.rows == 0,
                "An unavailable requested mod must be omitted before source validation or file access.");
+        library.remove(title, "fixture");
+        moader::Library reopened(root, backend);
+        expect(reopened.list().empty(), "A removed legacy installation must stay out of the Library after restart.");
+        const auto fresh = reopened.import_zip(title, "fixture", argv[3], "Reinstalled fixture");
+        expect(!fresh.requested && !fresh.was_activated, "Reinstalling must start with fresh settings.");
+        reopened.set_enabled(title, "fixture", true);
+        std::ifstream routes(root + "/runtime/catalogue.bin", std::ios::binary);
+        MoaderCatalogueRow row{};
+        expect(bool(routes.read(reinterpret_cast<char*>(&header), sizeof(header))) && header.rows == 1 &&
+               bool(routes.read(reinterpret_cast<char*>(&row), sizeof(row))), "Expected one replacement file.");
+        routes.seekg(row.source_offset);
+        std::string source;
+        std::getline(routes, source, '\0');
+        expect(source.rfind("/moader/library/", 0) == 0, "The new route must point into the library.");
+        const auto read_text = [](const std::string& path) {
+            std::ifstream stream(path);
+            return std::string(std::istreambuf_iterator<char>(stream), {});
+        };
+        const auto old_file = root + "/library/" + title + "/fixture/romfs/config.txt";
+        const auto new_file = root + source.substr(7);
+        expect(read_text(old_file) == "configuration" && read_text(new_file) == "replacement",
+               "Earlier mounts and new mounts must each read the payload for their installation.");
+        moader::Library restarted(root, backend);
+        const auto active = restarted.list();
+        expect(active.size() == 1 && active.front().id == "fixture" && active.front().requested,
+               "Restarting must restore the active copy and its enabled setting.");
+        restarted.remove(title, "fixture");
+        const auto again = restarted.import_zip(title, "fixture", argv[1], "Third install");
+        expect(!again.requested && !again.was_activated && restarted.list().size() == 1 &&
+               read_text(new_file) == "replacement", "Repeated reinstalls must preserve the prior copy.");
         std::cout << "PASS: catalogue publication, epoch and CRC receipts, native errors, disable semantics and runtime logs\n";
     } catch (const std::exception& e) { std::cerr << e.what() << '\n'; return 1; }
 }

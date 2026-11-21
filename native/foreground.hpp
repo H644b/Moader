@@ -4,6 +4,7 @@
 #include "game_names.hpp"
 #include "game_art.hpp"
 #include "game_availability.hpp"
+#include "store_games.hpp"
 #include "moader/runtime_backend.hpp"
 #include "web_assets.hpp"
 
@@ -33,7 +34,7 @@ struct Foreground {
             FsStorage storage{};
             if (R_SUCCEEDED(fsOpenDataStorageByCurrentProcess(&storage))) fsStorageClose(&storage);
         }), library("sdmc:/moader",backend,installed_game_name,installed_game_availability), token(pairing_token()),
-        web(library,"sdmc:/moader",token,moader_web_assets(),moader_native::installed_game_art), context{library,web,token} {
+        web(library,"sdmc:/moader",token,moader_web_assets(),moader_native::installed_game_art,web_store_games), context{library,web,token} {
         context.foreground = true;
         network_ready = R_SUCCEEDED(nifmInitialize(NifmServiceType_User));
         try {

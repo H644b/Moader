@@ -2,13 +2,10 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
-#include <cerrno>
 #include <cstdio>
 #include <fstream>
 #include <set>
 #include <stdexcept>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <zlib.h>
 
 namespace moader {
@@ -166,10 +163,9 @@ Mod Library::import_zip(const std::string& title, const std::string& id,
     require(!quiescing(), "The resident service is reloading. Reconnect when it finishes.");
     auto mods = cached_inventory();
     require(mods.size() < 512, "The library supports at most 512 mods.");
-    const auto destination = mod_path(title, id);
-    struct stat st{};
-    require(lstat(destination.c_str(), &st) != 0, "A mod with this ID already exists. Use a new ID for this version.");
-    require(errno == ENOENT, "Cannot inspect the import destination. Check SD access and refresh the library.");
+    const auto base = mod_path(title, id);
+    const auto slot = next_install_slot(base);
+    const auto destination = install_path(base, slot);
     require(!display_name.empty() && display_name.size() <= 120, "Choose a mod name of at most 120 bytes.");
     for (unsigned char c : display_name) require(c >= 32 && c != 127, "Mod name contains a control character.");
     static std::atomic<unsigned> counter{0};
@@ -187,15 +183,15 @@ Mod Library::import_zip(const std::string& title, const std::string& id,
         // Availability may have advanced the cache/generation during extraction.
         // Merge the new entry into that current inventory, never the old copy.
         mods = cached_inventory();
-        require(lstat(destination.c_str(), &st) != 0, "A mod with this ID already exists. Use a new ID for this version.");
-        require(errno == ENOENT, "Cannot inspect the import destination. Check SD access and refresh the library.");
+        require(next_install_slot(base) == slot, "The library changed during import. Refresh and try again.");
         make_directories(destination.substr(0, destination.find_last_of('/')));
+        // Only a complete install becomes visible. Previous slots can still be open in a game.
         require(rename(stage.c_str(), destination.c_str()) == 0, "Cannot publish the imported mod.");
         std::string canonical_title = title;
         for (char& c : canonical_title) if (c >= 'A' && c <= 'F') c += 'a' - 'A';
         size_t count = 0;
         for (const auto& mod : mods) count += mod.files.size();
-        try { mods.push_back(scan_mod(canonical_title, id, count)); }
+        try { mods.push_back(scan_mod(canonical_title, id, slot, count)); }
         catch (const std::exception& e) { scan_failed(e.what()); throw; }
         std::sort(mods.begin(), mods.end(), [](const Mod& a, const Mod& b) {
             return a.title_id < b.title_id || (a.title_id == b.title_id && a.id < b.id);

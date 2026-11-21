@@ -74,7 +74,8 @@ private:
     std::map<std::string, std::string> game_names_;
     std::string game_name_locked(const std::string& title);
     std::vector<Mod> scan();
-    Mod scan_mod(const std::string& title, const std::string& id, size_t& inventory);
+    Mod scan_mod(const std::string& title, const std::string& id, uint64_t slot, size_t& inventory);
+    static uint64_t next_install_slot(const std::string& base);
     GameSource read_game_source(const std::string& title);
     void gate(std::vector<Mod>& mods, bool verified_inventory = true);
     std::vector<Mod> cached_inventory() const;
