@@ -89,6 +89,14 @@ function fs.send_packet(handle, packet)
         assert(pid == 0 or pid == 941)
         local address = P.u64(packet, input + 8)
         if command == 0x524f0010 then return mapping(address) end
+        if command == 0x524f0016 then
+            local length = P.u64(packet, input + 16)
+            assert(length > 0 and length <= 0x4000 and
+                math.floor(P.u32(packet, 0) / 0x1000000) % 16 == 1,
+                "bounded RO process read lost its receive descriptor")
+            data_slot = read(address, length)
+            return reply(56, {[32] = 0, [40] = 0, [48] = length})
+        end
         if command == 0x524f0014 then
             local before = packet:sub(input + 33, input + 48)
             local after = packet:sub(input + 49, input + 64)
@@ -158,6 +166,7 @@ local env = {
         assert(name == "ro:dmnt")
         return 0x44
     end, wr = function(_, bytes) data_slot = bytes end,
+    rd = function(_, length) return data_slot:sub(1, length) end,
     close_handle = function(handle) handles[handle] = nil end},
     fs = fs, ctx = ctx, slots = {pkt = 1, pkt2 = 2, data = 3},
     open_sd_card = function() return 0x47 end,

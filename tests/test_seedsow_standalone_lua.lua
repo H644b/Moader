@@ -16,8 +16,21 @@ local capture = file(capture_path)
 local P = require("s2_prim")
 local installer = assert(loadfile(root .. "/standalone/s2_moader.lua"))()
 local base = 0x4000000000
-local function run(alter_at, ro_active, corrupt_profile, fail_first_query)
-    local writes, services, reads, sends = 0, 0, 0, 0
+local function run(alter_at, ro_active, corrupt_profile, fail_first_query,
+                   fail_first_bulk)
+    local writes, services, reads, sends, bulks = 0, 0, 0, 0, 0
+    local bulk_bytes = ""
+    local function observed(address, length)
+        local offset = address - base
+        assert(offset >= 0 and offset + length <= #capture)
+        local bytes = capture:sub(offset + 1, offset + length)
+        if alter_at and offset <= alter_at and alter_at < offset + length then
+            local index = alter_at - offset + 1
+            bytes = bytes:sub(1, index - 1) ..
+                string.char((bytes:byte(index) + 1) % 256) .. bytes:sub(index + 1)
+        end
+        return bytes
+    end
     local ctx = {layout = {captureStart = base + 0x10000000,
         rootVptr = base + 0x2aabcd0},
         donorRow = {vptr = base + 0x2b1e20},
@@ -27,7 +40,7 @@ local function run(alter_at, ro_active, corrupt_profile, fail_first_query)
         rt = {get_service_sm = function()
             services = services + 1
             return ro_active and 0x44 or 0
-        end},
+        end, rd = function(_, length) return bulk_bytes:sub(1, length) end},
         fs = {send_packet = function(_, packet)
             sends = sends + 1
             local at = P.domain_data_start(packet)
@@ -42,10 +55,25 @@ local function run(alter_at, ro_active, corrupt_profile, fail_first_query)
                 return {transport = 0, result = 0, pid = 218,
                     data = data, copies = {}, moves = {}}
             end
+            if command == 0x524f0016 then
+                bulks = bulks + 1
+                if not fail_first_bulk then
+                    local input = at + 16
+                    local address, length = P.u64(packet, input + 8),
+                        P.u64(packet, input + 16)
+                    assert(length > 0 and length <= 0x4000 and
+                        math.floor(P.u32(packet, 0) / 0x1000000) % 16 == 1)
+                    bulk_bytes = observed(address, length)
+                    local data = string.rep("\0", 56)
+                    data = P.put_u64(data, 48, length)
+                    return {transport = 0, result = 0, pid = 218,
+                        data = data, copies = {}, moves = {}}
+                end
+            end
             return {transport = 0xea01, result = 0, copies = {}, moves = {}}
         end},
         ctx = ctx,
-        slots = {pkt = 0},
+        slots = {pkt = 0, data = 0x50000000},
         track = function() end,
         open_sd_card = function() return 1 end,
         sd_read_file = function(_, path)
@@ -58,15 +86,7 @@ local function run(alter_at, ro_active, corrupt_profile, fail_first_query)
         end,
         read_fs = function(address, length)
             reads = reads + 1
-            local offset = address - base
-            assert(offset >= 0 and offset + length <= #capture)
-            local bytes = capture:sub(offset + 1, offset + length)
-            if alter_at and offset <= alter_at and alter_at < offset + length then
-                local index = alter_at - offset + 1
-                bytes = bytes:sub(1, index - 1) ..
-                    string.char((bytes:byte(index) + 1) % 256) .. bytes:sub(index + 1)
-            end
-            return bytes
+            return observed(address, length)
         end,
         write_fs = function() writes = writes + 1 end,
         compare_write_fs = function() writes = writes + 1 end,
@@ -74,18 +94,21 @@ local function run(alter_at, ro_active, corrupt_profile, fail_first_query)
     }
     local ok, error_text = pcall(installer.install, env)
     assert(not ok and writes == 0 and
-        (reads >= 1 or corrupt_profile or not ro_active or fail_first_query),
+        (bulks >= 1 or corrupt_profile or not ro_active or fail_first_query),
         "preflight failed to stop before a native write")
-    return tostring(error_text), services, reads, sends, ctx
+    return tostring(error_text), services, reads, sends, bulks, ctx
 end
 
-local normal, normal_services, normal_reads, normal_sends = run(nil, true)
+local normal, normal_services, normal_reads, normal_sends,
+    normal_bulks = run(nil, true)
 assert(normal:find("RO process transport/identity uncertain", 1, true) and
-       normal_services == 1 and normal_reads >= 38 and normal_sends == 3,
+       normal_services == 1 and normal_reads == 0 and
+       normal_bulks >= 38 and normal_sends == normal_bulks + 3,
        "exact live FS did not pass all code and cave checks")
-local changed, changed_services, _, changed_sends = run(0x4b8c0, true)
+local changed, changed_services, _, changed_sends,
+    changed_bulks = run(0x4b8c0, true)
 assert(changed:find("live FS function differs", 1, true) and
-       changed_services == 1 and changed_sends == 2,
+       changed_services == 1 and changed_sends == 3 and changed_bulks == 1,
        "changed FS instruction reached a native mutation")
 local occupied, occupied_services = run(0x24d100, true)
 assert(occupied:find("already occupied", 1, true) and
@@ -94,11 +117,17 @@ local unavailable, unavailable_services, unavailable_reads = run(nil, false)
 assert(unavailable:find("replacement ro:dmnt is unavailable", 1, true) and
        unavailable_services == 1 and unavailable_reads == 0,
        "missing RO reached a memory read")
-local uncertain, active_services, _, sends, ctx = run(nil, true, false, true)
+local uncertain, active_services, _, sends, _, ctx =
+    run(nil, true, false, true)
 assert(uncertain:find("RO process transport/identity uncertain", 1, true) and
        active_services == 1 and sends == 1 and
        ctx.moaderUncertain and _G.__MOADER_FS_UNCERTAIN,
        "failed RO transport did not retain the owner before any replay")
+local bulk_uncertain, _, _, bulk_sends, bulk_calls, bulk_ctx =
+    run(nil, true, false, false, true)
+assert(bulk_uncertain:find("RO process transport/identity uncertain", 1, true) and
+       bulk_sends == 3 and bulk_calls == 1 and bulk_ctx.moaderUncertain,
+       "unanswered RO code read was replayed or its owner released")
 local corrupt, corrupt_services, corrupt_reads = run(nil, false, true)
 assert(corrupt:find("profile input differs", 1, true) and
        corrupt_services == 0 and corrupt_reads == 0,

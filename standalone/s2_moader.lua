@@ -85,7 +85,7 @@ local function expected_at(profile, abi, offset, length)
     error("MOADER FS: missing qualified code range at FS+0x" .. fmt("%x", offset))
 end
 
-local function qualify_code(env, profile, abi, base)
+local function qualify_code(read_code, profile, abi, base)
     local cursor = 0
     for index, row in ipairs(profile.fsAbi.ranges) do
         check(type(row.offset) == "number" and type(row.size) == "number" and
@@ -94,7 +94,7 @@ local function qualify_code(env, profile, abi, base)
         local expected = sub(abi, cursor + 1, cursor + row.size)
         live_stage(fmt("ABI read %d/%d at FS+0x%x", index,
             #profile.fsAbi.ranges, row.offset))
-        local observed = env.read_fs(base + row.offset, row.size)
+        local observed = read_code(base + row.offset, row.size)
         check(observed == expected,
             fmt("live FS function differs at FS+0x%x base=0x%x got=%s",
                 row.offset, base, P.hex(sub(observed or "", 1, 16))))
@@ -104,7 +104,7 @@ local function qualify_code(env, profile, abi, base)
     for index, row in ipairs(profile.fsAbi.padding) do
         live_stage(fmt("cave read %d/%d at FS+0x%x", index,
             #profile.fsAbi.padding, row.offset))
-        local bytes = env.read_fs(base + row.offset, row.size)
+        local bytes = read_code(base + row.offset, row.size)
         check(bytes == zero("\0", row.size),
             "FS gateway or control cave is already occupied")
     end
@@ -164,11 +164,17 @@ function M.install(env)
     _G.__MOADER_FS_UNCERTAIN = true
 
     local pid
-    local function request(command, words)
+    local function request(command, words, receive_size)
         local input = {}
         for _, word in ipairs(words) do input[#input + 1] = P.u64s(word) end
+        local options = {pid = true, copies = {process}}
+        if receive_size then
+            check(receive_size > 0 and receive_size <= 0x4000,
+                "RO process read exceeds the bounded scratch buffer")
+            options.b = {{addr = slots.data, size = receive_size, mode = 1}}
+        end
         local rep = fs.send_packet(ro, P.packet(command, table.concat(input),
-            {pid = true, copies = {process}}), slots.pkt)
+            options), slots.pkt)
         check(rep.transport == 0 and rep.pid == ctx.launch.pid and
             #rep.copies == 0 and #rep.moves == 0,
             "RO process transport/identity uncertain")
@@ -192,6 +198,17 @@ function M.install(env)
             kind = P.u32(rep.data, 48), attr = P.u32(rep.data, 52),
             perm = P.u32(rep.data, 56), free = P.u64(rep.data, 88)}
     end
+    local function read_code(address, length)
+        check(length > 0 and length <= 0x4000,
+            "RO process read extent is invalid")
+        local rep = request(0x524f0016, {pid, address, length, 0}, length)
+        check(rep.result == 0 and #rep.data >= 56 and
+            P.u64(rep.data, 32) == 0 and P.u64(rep.data, 40) == 0 and
+            P.u64(rep.data, 48) == length,
+            "RO process code read or alias retirement failed at 0x" ..
+            fmt("%x", address))
+        return rt.rd(slots.data, length)
+    end
     live_stage("checking FS executable mapping through RO")
     local code = info(base + 0x1201b0)
     check((code.kind == 3 or code.kind == 4) and code.attr == 0 and
@@ -200,7 +217,7 @@ function M.install(env)
         base + 0x1201c0 <= code.address + code.size,
         "notifier mapping is not qualified executable code")
     live_stage("FS executable mapping qualified")
-    qualify_code(env, profile, abi, base)
+    qualify_code(read_code, profile, abi, base)
     env.log(fmt("qualified 36 live FS ranges at 0x%x; all caves empty", base))
     live_stage("all FS code and cave bytes qualified")
 
@@ -283,7 +300,7 @@ function M.install(env)
     end
 
     local function call_fs(offset, arguments, variant)
-        check(read_fs(base + offset, 16) == expected_at(profile, abi, offset, 16),
+        check(read_code(base + offset, 16) == expected_at(profile, abi, offset, 16),
             "native call target changed at FS+0x" .. fmt("%x", offset))
         return invoke(base + offset, arguments, variant)
     end
@@ -293,7 +310,7 @@ function M.install(env)
         env.locate_by_clone(handle, function(found)
             local raw = read_fs(found.object, ref_offset + 4)
             local vptr = P.u64(raw, 0)
-            local methods = read_fs(vptr, 80)
+            local methods = read_code(vptr, 80)
             for slot, offset in pairs(slots_expected) do
                 check(P.u64(methods, slot * 8) == base + offset,
                     kind .. " method table differs")
@@ -455,7 +472,7 @@ function M.install(env)
         local original, replacement = P.unhex(hook.originalHex),
             P.unhex(hook.replacementHex)
         check(#original == 16 and #replacement == 16 and
-            read_fs(base + hook.offset, 16) == original,
+            read_code(base + hook.offset, 16) == original,
             "resident hook preimage differs: " .. hook.name)
         patch(base + hook.offset, original, replacement)
     end
