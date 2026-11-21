@@ -43,6 +43,15 @@ class PublicTreeTests(unittest.TestCase):
             self.put(name)
         self.assertEqual(len(checker.scan(self.root)), 6)
 
+    def test_only_shared_design_config_is_public_and_its_contents_are_scanned(self):
+        config = self.put('.impeccable/config.json', '{"detector": {}}')
+        self.put('.impeccable/config.local.json')
+        self.put('.impeccable/hook.cache.json')
+        self.assertEqual([i['path'] for i in checker.scan(self.root)],
+                         ['.impeccable/config.local.json', '.impeccable/hook.cache.json'])
+        config.write_text('ghp_' + 'z' * 36)
+        self.assertIn({'path': '.impeccable/config.json', 'reason': 'credential token'}, checker.scan(self.root))
+
     def test_credentials_never_appear_in_cli_output(self):
         secret = 'ghp_' + 'a' * 36
         self.put('notes.txt', secret)

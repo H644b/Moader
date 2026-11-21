@@ -13,6 +13,7 @@ assets = [
     ("../native/assets/Text.ttf", "font/ttf", "/font/text.ttf"),
     ("../native/assets/Strong.ttf", "font/ttf", "/font/strong.ttf"),
     ("app.js", "application/javascript; charset=utf-8", "/app.js"),
+    ("store.js", "application/javascript; charset=utf-8", "/store.js"),
     ("icon.svg", "image/svg+xml", "/icon.svg"),
 ]
 lines = [

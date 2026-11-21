@@ -144,8 +144,11 @@ def scan(root):
                 continue
             if entry.is_symlink():
                 add(relative, 'symbolic link'); continue
+            if relative == '.impeccable' and entry.is_dir(follow_symlinks=False):
+                walk(path); continue
             lower = relative.lower()
-            if lower.split('/')[0] in PRIVATE_TOP or any(
+            shared_config = relative == '.impeccable/config.json' and entry.is_file(follow_symlinks=False)
+            if (lower.split('/')[0] in PRIVATE_TOP and not shared_config) or any(
                     lower == prefix or lower.startswith(prefix + '/') for prefix in PRIVATE_PREFIXES) or (
                     entry.is_dir(follow_symlinks=False) and entry.name.lower() in {'accounts','credentials','secrets'}):
                 add(relative, 'private or generated tree'); continue

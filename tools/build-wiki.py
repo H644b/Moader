@@ -8,6 +8,7 @@ import re
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
+    'Release-v3.5.0': 'docs/releases/v3.5.0.md',
     'Release-v3.0.0': 'docs/releases/v3.0.0.md',
     'Release-v0.2.5': 'docs/releases/v0.2.5.md',
     'Release-v0.2.0': 'docs/releases/v0.2.0.md',
@@ -96,7 +97,8 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 | Guide | Covers |
 | --- | --- |
-| [v3.0.0 release notes](Release-v3.0.0) | Current downloads, standalone kit and validation scope |
+| [v3.5.0 release notes](Release-v3.5.0) | Community Store, downloads and update steps |
+| [v3.0.0 release notes](Release-v3.0.0) | Standalone backend kit and validation scope |
 | [v0.2.5 release notes](Release-v0.2.5) | Historical BSD session fix |
 | [v0.2.0 release notes](Release-v0.2.0) | Historical carousel and Store release |
 | [v0.1.3 release notes](Release-v0.1.3) | Historical Seedsow backend kit and validation scope |
@@ -195,6 +197,7 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
     pages['_Sidebar'] = '''**Moader**
 
 - [Home](Home)
+- [v3.5.0 release notes](Release-v3.5.0)
 - [v3.0.0 release notes](Release-v3.0.0)
 - [v0.2.5 release notes (historical)](Release-v0.2.5)
 - [v0.2.0 release notes (historical)](Release-v0.2.0)

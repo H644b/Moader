@@ -1,6 +1,7 @@
 #include "moader/library.hpp"
 #include <algorithm>
 #include <cerrno>
+#include <charconv>
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
@@ -56,6 +57,22 @@ bool is_directory(const std::string& path) {
     if (lstat(path.c_str(), &st)) throw io_error("Inspect directory " + path);
     return S_ISDIR(st.st_mode);
 }
+uint64_t latest_install_slot(const std::string& base) {
+    const auto installs = base + '/' + ReinstallDirectory;
+    if (!exists(installs)) return 0;
+    if (!is_directory(installs)) throw std::runtime_error("Cannot read the mod's reinstall directory.");
+    uint64_t latest = 0;
+    for (const auto& name : entries(installs)) {
+        uint64_t slot = 0;
+        const auto end = name.data() + name.size();
+        const auto parsed = std::from_chars(name.data(), end, slot);
+        if (name.front() != '0' && parsed.ec == std::errc{} && parsed.ptr == end)
+            latest = std::max(latest, slot);
+    }
+    if (latest && !is_directory(install_path(base, latest)))
+        throw std::runtime_error("Cannot read the latest installation of this mod.");
+    return latest;
+}
 std::string lowercase(std::string value) {
     for (char& c : value) if (c >= 'A' && c <= 'Z') c += 'a' - 'A';
     return value;
@@ -87,7 +104,7 @@ bool same_inventory(const std::vector<Mod>& a, const std::vector<Mod>& b) {
             x.requested != y.requested || x.was_activated != y.was_activated ||
             x.has_romfs != y.has_romfs || x.has_exefs != y.has_exefs || x.bytes != y.bytes ||
             x.valid_source != y.valid_source || x.files != y.files || x.detail != y.detail ||
-            x.inventory_stamp != y.inventory_stamp || x.load_allowed != y.load_allowed ||
+            x.inventory_stamp != y.inventory_stamp || x.install_slot != y.install_slot || x.load_allowed != y.load_allowed ||
             x.availability_detail != y.availability_detail || x.game_source != y.game_source) return false;
     }
     return true;
@@ -242,6 +259,18 @@ std::string Library::mod_path(const std::string& title, const std::string& id) c
     if (!valid_title_id(title) || !valid_mod_id(id)) throw std::invalid_argument("Invalid game Title ID or mod ID.");
     return root_ + "/library/" + lowercase(title) + '/' + id;
 }
+uint64_t Library::next_install_slot(const std::string& base) {
+    if (!exists(base)) return 0;
+    if (is_directory(base)) {
+        const auto slot = latest_install_slot(base);
+        if (exists(install_path(base, slot) + "/.removed")) {
+            if (slot == std::numeric_limits<uint64_t>::max())
+                throw std::runtime_error("No installation slots remain for this mod.");
+            return slot + 1;
+        }
+    }
+    throw std::runtime_error("This mod is already installed for this game.");
+}
 const char* game_source_name(GameSource source) {
     switch (source) {
     case GameSource::Unspecified: return "unspecified";
@@ -284,9 +313,9 @@ void Library::set_game_source(const std::string& title, GameSource source,
     commit(std::move(mods), true);
     event("Game copy selected: " + lowercase(title) + " / " + game_source_name(source));
 }
-Mod Library::scan_mod(const std::string& title, const std::string& id, size_t& inventory) {
-    const auto path = mod_path(title, id);
-    Mod mod; mod.title_id = lowercase(title); mod.id = id;
+Mod Library::scan_mod(const std::string& title, const std::string& id, uint64_t slot, size_t& inventory) {
+    const auto path = install_path(mod_path(title, id), slot);
+    Mod mod; mod.title_id = lowercase(title); mod.id = id; mod.install_slot = slot;
     mod.game_source = static_cast<uint32_t>(read_game_source(title));
     recover_atomic_file(path + "/.enabled");
     recover_atomic_file(path + "/.activation-history");
@@ -315,9 +344,11 @@ std::vector<Mod> Library::scan() {
         for (const auto& id : entries(root_ + "/library/" + title)) {
             if (!valid_mod_id(id)) continue;
             const auto path = mod_path(title, id);
-            if (!is_directory(path) || exists(path + "/.removed")) continue;
+            if (!is_directory(path)) continue;
+            const auto slot = latest_install_slot(path);
+            if (exists(install_path(path, slot) + "/.removed")) continue;
             if (mods.size() == 512) throw std::runtime_error("The library supports at most 512 mods; the previous inventory was retained.");
-            mods.push_back(scan_mod(title, id, inventory));
+            mods.push_back(scan_mod(title, id, slot, inventory));
         }
     }
     return mods;
@@ -509,10 +540,11 @@ Mod Library::set_enabled(const std::string& title, const std::string& id, bool e
     if (quiescing()) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     if (expected_generation && *expected_generation != generation())
         throw std::runtime_error("The library changed. Refresh before changing this mod.");
-    const auto path = mod_path(title, id);
+    const auto base = mod_path(title, id);
     auto mods = cached_inventory();
     auto it = std::find_if(mods.begin(), mods.end(), [&](const Mod& m) { return m.title_id == lowercase(title) && m.id == id; });
     if (it == mods.end()) throw std::runtime_error("Mod was not found. Refresh the library.");
+    const auto path = install_path(base, it->install_slot);
     if (enabled && !it->valid_source) throw std::runtime_error(it->detail);
     if (it->requested == enabled) {
         gate(mods);
@@ -538,10 +570,12 @@ void Library::remove(const std::string& title, const std::string& id,
     if (quiescing()) throw std::runtime_error("The resident service is reloading. Reconnect when it finishes.");
     if (expected_generation && *expected_generation != generation())
         throw std::runtime_error("The library changed. Refresh before removing this mod.");
-    const auto path = mod_path(title, id);
+    const auto base = mod_path(title, id);
     auto mods = cached_inventory();
     const auto it = std::find_if(mods.begin(), mods.end(), [&](const Mod& m) { return m.title_id == lowercase(title) && m.id == id; });
-    if (it == mods.end() || !is_directory(path) || exists(path + "/.removed")) throw std::runtime_error("Mod was not found.");
+    if (it == mods.end()) throw std::runtime_error("Mod was not found.");
+    const auto path = install_path(base, it->install_slot);
+    if (!is_directory(path) || exists(path + "/.removed")) throw std::runtime_error("Mod was not found.");
     const auto next = generation() + 1;
     if (!next) throw std::runtime_error("Library generation exhausted; inspect the saved state.");
     const auto destination = root_ + "/.trash/" + lowercase(title) + '-' + id + '-' + std::to_string(next) + ".json";

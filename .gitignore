@@ -9,7 +9,8 @@
 /research/
 /docs-site/
 /output/
-/.impeccable/
+/.impeccable/*
+!/.impeccable/config.json
 /.playwright-cli/
 /GOAL.md
 /PRODUCT.md

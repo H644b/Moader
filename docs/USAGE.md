@@ -75,7 +75,7 @@ In a browser, select a cover to open the game, then select a mod name for detail
 
 An existing loose RomFS file can pick up a same-size replacement on a later read. Cached content must be loaded again. Added or resized files and full images can need a fresh mount, so relaunch the game if reopening the content doesn't work. Always relaunch for ExeFS modules and executable patches, including after disabling or removing them.
 
-To remove a mod, choose **Remove from library → Remove mod** or press **X** twice. Moader hides the entry and keeps its files on SD so older open game files can finish reading. [How the runtime applies changes](RUNTIME.md)
+To remove a mod, choose **Remove from library → Remove mod** or press **X** twice. To reinstall it, open its Store page and choose **Download & install**. The fresh copy starts switched off. Moader keeps the previous files on SD for games that still have them open. [How the runtime applies changes](RUNTIME.md)
 
 ## Game copy and cartridges
 
@@ -118,8 +118,10 @@ On the console, **Connection** shows listener status and pairing, **Advanced** c
 
 Press **ZL** in the app or open **Settings → Advanced → Current session** in the browser for the debug log. Library events show what you asked Moader to do. Native events can show what the filesystem accepted or read. Choose **Download debug log** in the browser’s **Advanced** section to save a copy, or press **−** on the console to save an app screenshot. Remove private details before sharing a report. [Reporting a problem](TROUBLESHOOTING.md#reporting-a-problem)
 
-## Community mod repositories
+## Community mods
 
-The gray **Store** button is inactive in this build. You can download a mod ZIP from a publisher’s website and import it with **Upload mod** in your paired browser.
+Open **Store** on the console or in the paired browser. Search for a mod, open it, and choose **Download & install**. It appears switched off in your Library.
 
-To publish your own mods, copy the repository template. It builds a static website, a game catalog at `catalog.json` and downloadable ZIPs with their sizes and SHA-256 checksums. The template includes instructions for GitHub Pages and other static hosts. [Moader mod repository template](https://github.com/H644b/moader-mod-repo-template)
+Turn on **On this Switch** to see games the console recognizes from its HOME menu, game cards, play history, saves, or Moader Library. Moader remembers recognized cards when you swap them. On the console, press **X** to search or **R** to toggle the filter.
+
+Try **Golden hour palette** with the game filter off. **Green Hill Zone** is listed under **Mario Kart 8 Deluxe**. To publish your own releases, create an account on the [Moader Catalog](https://moader.timsfun.com/).

@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.5.0 — Community Store
+
+- Search the community catalog and install mods directly from the console or its paired web browser. Each listing includes the creator, previews and package details.
+- Filter by **On this Switch** using game records, play history, saves and the Moader Library. Recognized physical games stay visible when you swap cartridges.
+- Remove a mod and reinstall it with the same ID. Downloads are verified before import and new installs start switched off. [Release notes](docs/releases/v3.5.0.md)
+
 ## v3.0.0 — Seedsow standalone backend kit
 
 - Ship the pinned on-console Seedsow A/B implementation and the source-built standalone bootstrap in the backend kit. A installs Moader FS and HEN after one-time SD/save preparation; B follows the regular upstream Lua chain with the same staged SD set.

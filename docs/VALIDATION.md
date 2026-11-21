@@ -2,6 +2,10 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
+## v3.5.0 community Store
+
+The Store was exercised against the live catalog using the native host harness and Chromium with a paired test library. Both starter packages installed disabled. The browser reinstalled Green Hill Zone after removal, and all 12 files matched their original bytes. The browser also rejected a package with an incorrect digest. Simulated console records covered cartridge swaps, play history, save data and cached titles. Physical Switch 2 verification for this release is pending. [Release notes](releases/v3.5.0.md)
+
 ## v3.0.0 standalone release scope
 
 The v3.0.0 app (`f39b8d2caf5c70df993b5ce8c795c85eb9564e25e47100530c64b4963aa553dc`) and resident (`e32d7104866033d08a9a35da5e01fc3975d06ef19b9af5e16472112728555deb`) were cross-built with 3.0.0 version text. The standalone bootstrap and FS adapter retain the exact hashes from the successful Profile B Demo A run below. The v3 kit packages that bootstrap and the public A/B preparation code, while omitting the private console-derived FS payload.

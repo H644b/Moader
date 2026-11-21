@@ -4,6 +4,8 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
+**v3.5.0** ships the community Store as an app and resident update. The release contains the SD-layout ZIP, both raw binaries, the manifest and SHA-256 checksums. Set `distribution` to `app` in `config/release.json` to package this layout with `python3 tools/package-release.py`. The setup kit remains at v3.0.0.
+
 **v3.0.0** adds the source-qualified Seedsow standalone implementation and prebuilt bootstrap to the backend kit. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v3.0.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |

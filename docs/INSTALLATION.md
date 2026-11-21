@@ -4,10 +4,12 @@ Choose a download based on what is already running on your Switch. Use the app a
 
 | What you need | Download |
 | --- | --- |
-| Install or update Moader on an existing compatible backend | [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip) |
+| Install or update the app and resident plugin | [Moader-v3.5.0.zip](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-v3.5.0.zip) |
 | Set up the backend for this boot | [Moader-backend-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
 
 ## Copy or update the console app
+
+If this is your first setup, complete your backend setup first. Then install the v3.5.0 app and plugin together.
 
 Close Moader if it is open. Extract the app ZIP on your computer and copy both files to the SD card. The archive already uses these paths:
 

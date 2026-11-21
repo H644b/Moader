@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "cramped-padding",
+        "value": "*",
+        "files": [
+          "web/index.html"
+        ],
+        "createdAt": "2026-11-21T19:31:28.601Z",
+        "reason": "Verified in Chromium at eight widths from 320px to 1440px. The Store results heading has 16px to 28.8px of inset beside its 1px divider. The single-column layout removes the divider and retains a 20px outer gutter on phones."
+      }
+    ]
+  }
+}

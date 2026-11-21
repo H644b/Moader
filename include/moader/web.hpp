@@ -1,5 +1,6 @@
 #pragma once
 #include "library.hpp"
+#include "store_presence.hpp"
 #include <atomic>
 #include <memory>
 
@@ -8,8 +9,9 @@ struct WebAsset { std::string path, type, contents; };
 // No listener exists until start() succeeds. The console owns that switch.
 class WebServer {
 public:
+    using GameLookup = std::function<void(StorePresence&)>;
     WebServer(Library& library, std::string root, std::string pairing_token,
-              std::vector<WebAsset> assets, std::function<std::string(const std::string&)> artwork = {});
+              std::vector<WebAsset> assets, std::function<std::string(const std::string&)> artwork = {}, GameLookup games = {});
     ~WebServer();
     WebServer(const WebServer&) = delete;
     WebServer& operator=(const WebServer&) = delete;

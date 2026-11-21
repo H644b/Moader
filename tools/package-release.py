@@ -99,7 +99,8 @@ def public_source(root):
         name = name.decode('utf8')
         path = PurePosixPath(name)
         require(kind == 'blob' and mode in {'100644', '100755'}, 'Unsupported source tree entry: ' + name)
-        require(not path.is_absolute() and '..' not in path.parts and path.parts[0] not in PRIVATE_TOP,
+        require(not path.is_absolute() and '..' not in path.parts and
+                (path.parts[0] not in PRIVATE_TOP or name == '.impeccable/config.json'),
                 'Private/generated path in committed tree: ' + name)
         require(name not in {'GOAL.md', 'PRODUCT.md'} and not name.startswith('native/review/'),
                 'Internal development record in committed tree: ' + name)
@@ -138,6 +139,34 @@ def write_zip(target, entries, timestamp):
         require(set(archive.namelist()) == set(entries), 'Release ZIP file list differs')
         for name, (data, _) in entries.items():
             require(archive.read(name) == data, 'Release ZIP bytes differ: ' + name)
+
+
+def write_app_zip(root, target, timestamp):
+    subprocess.run([sys.executable, str(root / 'tools/package-homebrew.py')], cwd=root, check=True)
+    with zipfile.ZipFile(root / 'dist/Moader-homebrew.zip') as packaged:
+        files = {name: (packaged.read(name), 0o100644) for name in packaged.namelist()}
+    write_zip(target, files, timestamp)
+
+
+def finish_release(output, spec, commit, app, service, zip_names, details):
+    (output / 'Moader.nro').write_bytes(app)
+    (output / 'moader.nso').write_bytes(service)
+    assets = [*zip_names, 'Moader.nro', 'moader.nso']
+    records = {name: {'bytes': (output / name).stat().st_size,
+                      'sha256': sha((output / name).read_bytes())} for name in assets}
+    manifest = {
+        'schema': 1, 'version': spec['version'], 'tag': spec['tag'], 'prerelease': spec['prerelease'],
+        'repository': spec['repository'], 'sourceCommit': commit,
+        'appAndResidentMatchRecordedManifest': True,
+        'appAndResidentMatchTestedManifest': spec['appAndResidentHardwareTested'],
+        'appAndResidentHardwareTested': spec['appAndResidentHardwareTested'],
+        **details, 'assets': records, 'validation': spec['validation'],
+    }
+    (output / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (output / 'SHA256SUMS.txt').write_text(''.join(
+        sha((output / name).read_bytes()) + '  ' + name + '\n' for name in [*assets, 'release-manifest.json']))
+    print('Packaged and verified ' + spec['tag'] + ' from source commit ' + commit)
+    print('Release assets: ' + str(output))
 
 
 def full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp):
@@ -206,24 +235,27 @@ def main():
     spec = json.loads((root / 'config/release.json').read_text())
     tag = spec['tag']
     require(re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?', tag), 'Invalid release tag')
+    require(tag == 'v' + spec['version'], 'Release version and tag differ')
+    distribution = spec.get('distribution', 'full')
+    require(distribution in ('app', 'full'), 'Unknown release distribution')
     app = binary(root, spec['binaries']['Moader.nro'], b'NRO0', 16)
     service = binary(root, spec['binaries']['moader.nso'], b'NSO0')
-    hen, bootstrap, proof = native_pair(root, spec)
-    ro = binary(root, spec['patched_ro'], b'NSO0') if proof.get('schema') == 3 else None
     commit, source = public_source(root)
-    qualify_exported_native_source(source, proof)
-    standalone = standalone_prebuilt(root, spec, source)
     timestamp = datetime.datetime.fromtimestamp(int(git(root, 'show', '-s', '--format=%ct', 'HEAD')), datetime.timezone.utc).timetuple()[:6]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    names = [f'Moader-{tag}.zip', f'Moader-backend-{tag}.zip', 'Moader.nro', 'moader.nso',
-             'release-manifest.json', 'SHA256SUMS.txt']
-    require(not any((output / name).exists() for name in names), 'Use an empty release output directory')
-    # The existing app packager supplies its user instructions and notices.
-    subprocess.run([sys.executable, str(root / 'tools/package-homebrew.py')], cwd=root, check=True)
-    with zipfile.ZipFile(root / 'dist/Moader-homebrew.zip') as packaged:
-        app_files = {name: (packaged.read(name), 0o100644) for name in packaged.namelist()}
-    write_zip(output / names[0], app_files, timestamp)
+    app_name, backend_name = f'Moader-{tag}.zip', f'Moader-backend-{tag}.zip'
+    for name in (app_name, backend_name, 'Moader.nro', 'moader.nso', 'release-manifest.json', 'SHA256SUMS.txt'):
+        require(not (output / name).exists(), 'Use an empty release output directory')
+    if distribution == 'app':
+        write_app_zip(root, output / app_name, timestamp)
+        finish_release(output, spec, commit, app, service, [app_name], {'distribution': 'app'})
+        return
+    hen, bootstrap, proof = native_pair(root, spec)
+    ro = binary(root, spec['patched_ro'], b'NSO0') if proof.get('schema') == 3 else None
+    qualify_exported_native_source(source, proof)
+    standalone = standalone_prebuilt(root, spec, source)
+    write_app_zip(root, output / app_name, timestamp)
     prefix = f'Moader-backend-{tag}/'
     host = {prefix + name: value for name, value in source.items()}
     host[prefix + 'vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
@@ -276,17 +308,8 @@ Test results: docs/VALIDATION.md
 Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''
     host[prefix + 'START_HERE.txt'] = (start_here.encode(), 0o100644)
-    write_zip(output / names[1], host, timestamp)
-    (output / 'Moader.nro').write_bytes(app)
-    (output / 'moader.nso').write_bytes(service)
-    records = {name: {'bytes': (output / name).stat().st_size,
-                      'sha256': sha((output / name).read_bytes())} for name in names[:4]}
-    (output / 'release-manifest.json').write_text(json.dumps({
-        'schema': 1, 'version': spec['version'], 'tag': tag, 'prerelease': spec['prerelease'],
-        'repository': spec['repository'], 'sourceCommit': commit,
-        'appAndResidentMatchRecordedManifest': True,
-        'appAndResidentMatchTestedManifest': spec['appAndResidentHardwareTested'],
-        'appAndResidentHardwareTested': spec['appAndResidentHardwareTested'],
+    write_zip(output / backend_name, host, timestamp)
+    finish_release(output, spec, commit, app, service, [app_name, backend_name], {
         'patchedHenSha256': sha(hen),
         **({'patchedBootstrapSha256': sha(bootstrap), 'kaihenProtocolVersion': proof['protocol_version']} if bootstrap is not None else {}),
         **({'patchedRoSha256': sha(ro)} if ro is not None else {}),
@@ -300,12 +323,7 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         **({'standaloneBootstrapSha256': sha(standalone[0]),
             'standaloneAdapterSha256': spec['standalone']['adapterSha256']}
            if standalone is not None else {}),
-        'assets': records, 'validation': 'docs/VALIDATION.md',
-    }, indent=2) + '\n')
-    (output / 'SHA256SUMS.txt').write_text(''.join(
-        sha((output / name).read_bytes()) + '  ' + name + '\n' for name in names[:5]))
-    print('Packaged and verified ' + tag + ' from source commit ' + commit)
-    print('Release assets: ' + str(output))
+    })
 
 
 if __name__ == '__main__':

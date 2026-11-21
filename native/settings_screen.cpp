@@ -303,7 +303,7 @@ void settings_screen(Canvas& c, const State& s, const std::vector<std::string>& 
                                "DM Sans  /  Bricolage Grotesque  /  Noto Sans",
                                "stb  /  picojson"};
         const char* info[] = {
-            "Nintendo Switch mod manager · 3.0.0",
+            "Nintendo Switch mod manager · 3.5.0",
             "Homebrew environment, console libraries and system services.",
             "Filesystem mod-loader foundation and project research.",
             "Compiler, platform libraries and ZIP decoding.",
