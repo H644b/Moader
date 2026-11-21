@@ -1,12 +1,6 @@
 # Use Moader
 
-After installing Moader, open its game library on the Switch. Each cover represents a game with mods on your SD card. To check the runtime connection, open **Settings → Advanced → Runtime details** on the console or **Settings → Advanced → Current session** in a paired browser. [Installation guide](INSTALLATION.md)
-
-## Browse the game library
-
-Press **L** or **R** to center a game, or swipe across the covers. The caption gives the game’s name, its mod count and how many mods you have requested. Moader reads the installed game’s icon automatically. It tries the compact icon first, then the full-size icon for the same game and edition if needed. The cartridge mark appears while artwork is unavailable.
-
-Press **A** to open the centered game. Its cover stays beside **Installed mods**. Use **↑** or **↓** to select a mod, then press **A** to open its details. **B** returns to the same row and then to the game. In a browser, use the arrows or swipe to browse, select a cover to open it and select a mod name for details.
+Open **Moader** from hbmenu. If **Game library** is empty, pair a browser and upload a mod. To play with mods, first [check the runtime connection](INSTALLATION.md#check-your-setup).
 
 ## Connect a browser
 
@@ -21,7 +15,7 @@ The browser stays available when you leave the app with **+** if the resident se
 
 1. Open **Upload mod** in the browser and select a ZIP.
 2. Enter the game's 16-character hexadecimal **Title ID** and a name for the mod. Use a mod made for that game and version.
-3. Upload the ZIP. The mod starts disabled. Select the game, then [choose your game copy](#game-copy-and-cartridges) and enable the mod.
+3. Select **Upload to Switch**. The mod starts disabled. Open the game in Moader, [choose your game copy](#game-copy-and-cartridges), and enable the mod.
 
 The ZIP should contain the mod files at its top level or inside one enclosing folder. Keep the game's original folder and file names inside `romfs/`.
 
@@ -39,7 +33,7 @@ my-mod.zip
 | `exefs/` or `exefs.nsp` | Executable files and modules, including compatible additional subSDKs, as loose files or an ExeFS image |
 | `exefs_patches/` | Binary `.ips` patches |
 
-Use binary IPS files for patches. Moader can't compile text IPSwitch scripts. The ZIP limit is **128 MiB**, with up to **64 MiB** per expanded file and **256 MiB** expanded in total. Use regular files with unique SD paths and leave out unrelated extras. [ZIP troubleshooting](TROUBLESHOOTING.md#my-zip-is-rejected)
+For patches, use binary IPS files. The ZIP can be up to **128 MiB**. After extraction, each file can be up to **64 MiB** and the total can be up to **256 MiB**. Include only mod files and use a unique path for each file. [ZIP troubleshooting](TROUBLESHOOTING.md#my-zip-is-rejected)
 
 ## SD card layout
 
@@ -55,9 +49,17 @@ A browser upload creates the folders for you. To install a mod by hand, put it u
 
 Name the mod folder with up to 48 lowercase letters, digits, hyphens or underscores. Put other supported payloads alongside `romfs/` inside that folder. After copying, choose **Refresh** in the browser, then enable the mod. Leave the payload files in place while a game is using them.
 
+## Browse the game library
+
+Press **L** or **R** to browse games. Press **A** to open the centered game. In **Installed mods**, use **↑** and **↓** to choose a mod and **A** to open its details. Press **B** to go back.
+
+In a browser, select a cover to open the game, then select a mod name for details. Each cover represents a game with mods on SD. Moader uses the installed game's artwork when it is available.
+
 ## Enable, disable and remove
 
-On the console, open **Mod details** and press **A** to enable or disable the mod. In the browser, use the **Requested** switch in the mod list or the enable/disable button in its details. For the first check, enable the mod with the game closed and then start the game. **Requested** shows your saved choice. **Runtime** reports what the filesystem has acknowledged and what the game may need to reload.
+1. On the console, open **Mod details** and press **A** to enable or disable the mod. In the browser, use its **Requested** switch.
+2. Check the **Runtime** column in the browser or the apply state in mod details. **Requested** shows your saved choice. **Runtime** reports whether the filesystem has acknowledged it.
+3. For the first check, enable the mod before starting the game. If the game is already open, follow the action shown in the apply state.
 
 | State | What to do |
 | --- | --- |

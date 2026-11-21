@@ -1,29 +1,40 @@
 # Install Moader
 
+Choose a download based on what is already running on your Switch. Use the app and resident plugin from the same release.
+
+| What you need | Download |
+| --- | --- |
+| Install or update Moader on an existing compatible backend | [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip) |
+| Set up the backend for this boot | [Moader-backend-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+
 ## Copy or update the console app
 
-1. Download and extract [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip).
-2. Close Moader if it's open.
-3. Copy `switch/Moader.nro` to the SD card's `switch/` folder.
-4. Open **Moader** from hbmenu.
+Close Moader if it is open. Extract the app ZIP on your computer and copy both files to the SD card. The archive already uses these paths:
 
-If the matching resident service is already running, the app connects to it. Otherwise you can manage the library and use the browser while the app stays open. [Use Moader](USAGE.md)
+| File | Location on the SD card |
+| --- | --- |
+| Console app | `/switch/Moader.nro` |
+| Resident plugin | `/kaihen/plugins/moader.nso` |
 
-The ZIP also contains `kaihen/plugins/moader.nso`. Copying it puts the plugin on SD. To replace a running plugin, follow [Updating](#updating).
+Open **Moader** from **hbmenu**, the homebrew launcher. Moader connects to a matching resident service when one is running. You can also manage your library with the app open in foreground mode. The browser stays available after you close the app when the resident service is running.
+
+Copying the plugin puts the new file on SD. If Moader is already running in the background, [reload the service](PLUGIN_RELOAD.md#use-it) to start the replacement.
 
 ## Start the backend for this boot
 
-The backend has two parts. The resident service keeps managing the library after you close the app. The filesystem runtime (FS) applies mod files in games. Setup starts both for the current boot. Your mod files and preferences stay on SD after a reboot.
+Choose the method you use to start homebrew. Use the v3.0.0 backend ZIP from the download table.
 
-| Method | Computer | Download |
+| Method | Computer | Guide |
 | --- | --- | --- |
-| [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
-| [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
-| [Seedsow Lullaby Demo or full game](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
-| [Seedsow on-console, experimental](SEEDSOW_STANDALONE.md) | One-time SD and save preparation on a computer; later runs on the Switch | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip). Includes the standalone bootstrap; A also needs a locally qualified FS capture ([requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries)) |
-| [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+| SmileBASIC with mac2jb | macOS | [mac2jb setup](#route-b-macos-with-mac2jb) |
+| SmileBASIC with direct ns2jb | macOS, Linux, or Windows with WSL2 | [Direct ns2jb setup](#route-a-linuxwsl-or-macos-with-ns2jb) |
+| Seedsow Lullaby, PC-driven | Apple Silicon macOS, Linux x86_64, or WSL2 x86_64 | [PC-driven Seedsow](SEEDSOW.md) |
+| Seedsow Lullaby, on-console | Computer for initial setup | [On-console Seedsow requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries) |
+| CivSwitch (experimental) | macOS or Linux | [CivSwitch setup](CIV7.md#experimental-setup) |
 
-The PC-driven Seedsow method uses the included matched RO/HEN/bootstrap set and its guide covers additional SDK and GUI preparation. The on-console route uses the kit's pinned standalone bootstrap and prepares an A/B save; one Profile B Demo A installation reached HEN and a current FS acknowledgement on the same boot. After publication, the owner reported another A boot with the exact v3 app and resident connected. Its FS payload still requires a qualified local capture. The v0.2.5 resident was previously reloaded into a Demo-installed backend and Minecraft for Switch 2 ran in a world after an earlier v0.2.0 crash. A fresh preparation from the complete public v3.0.0 kit and the full-game route remain to be checked on hardware. [Validation scope](VALIDATION.md#v300-standalone-release-scope)
+The on-console Seedsow kit includes a standalone bootstrap. The Moader route has a separate requirement for a qualified local filesystem capture. See the [v3.0.0 release notes](https://github.com/H644b/Moader/releases/tag/v3.0.0) and [validation results](VALIDATION.md#v300-standalone-release-scope).
+
+After a full reboot, the files and settings stay on SD. Start your backend again for the new boot.
 
 ### Before either SmileBASIC method
 
@@ -113,7 +124,7 @@ If the command fails, times out or reports an uncertain result, keep the report 
 
 1. Press **HOME**, highlight SmileBASIC and press **X** to close it. Keep the Switch on.
 2. Hold **R** while starting a native Switch 2 game. Let it load, close it, then hold **R** while starting it again to enter hbmenu.
-3. Open **Moader**. In **Settings → Advanced**, check that the filesystem runtime is connected. Then [connect your browser](USAGE.md#connect-a-browser) or start using the app.
+3. Open **Moader** and [check the runtime connection](#check-your-setup).
 
 <a name="wsl2-networking-before-acquisition"></a>
 
@@ -140,10 +151,15 @@ The [pinned runner](https://gitlab.com/kurumuz/ns2jb/-/blob/28f03b5895e5569d8fbc
 
 **Never forward the separate loopback RPC bridge.**
 
+## Check your setup
+
+Open **Moader**. The **Game library** can be empty until you add a mod. For in-game mods, press the left stick and open **Settings → Advanced → Runtime details**. Look for **Connected** on the runtime connection row. Then [pair a browser and add a mod](USAGE.md#connect-a-browser).
+
+If you can open the app but its runtime is disconnected, check whether setup completed for this boot. [Troubleshoot the connection](TROUBLESHOOTING.md#browser-or-app-connection)
+
 ## Updating
 
-Close Moader before replacing the app file. Keep the app and resident from the same release.
+Finish any uploads and close Moader. Copy the new app and resident plugin together. Leave the `moader/` folder on SD because it holds your mods and preferences.
 
-- **App only.** Copy the new NRO to SD and reopen the app.
-- **Compatible resident service.** Copy the replacement NSO to `kaihen/plugins/moader.nso`. Use [Reload Moader service](PLUGIN_RELOAD.md) with the matching protocol-7 HEN and bootstrap already running.
-- **New HEN or bootstrap, or a full reboot.** Use the matching backend kit and follow the [setup method for this boot](#start-the-backend-for-this-boot).
+- **Compatible resident already running.** Use [Reload Moader service](PLUGIN_RELOAD.md#use-it) to activate the new plugin.
+- **After a full reboot or a HEN/bootstrap update.** Follow [the setup method for this boot](#start-the-backend-for-this-boot) with the matching backend kit.
