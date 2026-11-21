@@ -1,6 +1,6 @@
 # Building and preparing the backend
 
-Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v0.2.5 Seedsow backend ZIP already supplies the matched binaries. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v3.0.0 backend ZIP supplies the matched binaries and standalone bootstrap. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
@@ -14,7 +14,7 @@ python3 tools/setup-backend.py --check --node /absolute/path/to/node24
 
 On a kit that still needs its upstream inputs, run `python3 tools/setup-backend.py --node /absolute/path/to/node24` first. The fetched official archive is kept locally at `research/artifacts/kaiHEN-20261114c.zip` for installer qualification; only the pinned engine is retained from the ns2jb source archive. No existing research checkout or copied private state is needed. Setup refuses to replace changed existing inputs. Use a fresh kit directory to change versions.
 
-Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnostics if supplied there, are preserved and appear as `bundledPrograms` in check output. The installer includes them. The v0.2.5 backend kit includes the complete regular kaiHEN bundle, so its Seedsow setup also extracts and checks OunceShell.
+Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnostics if supplied there, are preserved and appear as `bundledPrograms` in check output. The installer includes them. The v3.0.0 backend kit includes the complete regular kaiHEN bundle, so its Seedsow setup also extracts and checks OunceShell.
 
 ## Build from a clean source checkout
 
@@ -24,7 +24,7 @@ If devkitPro's official endpoint returns HTTP 403 for the architecture-independe
 
 The [Seedsow prebuilt workflow](SEEDSOW.md) selects `--host-profile seedsow-malev0` and requires Node 24 for its GUI and live attempt. Its matched RO/HEN/bootstrap, app and resident reproduced in a temporary clean source copy after pinned SDK setup. The source build and the device installation have separate [validation scopes](VALIDATION.md#seedsow-lullaby-demo-source-workflow).
 
-For a v0.2.5 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.5/release-manifest.json). The commands below select the Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
+For a v3.0.0 Seedsow source rebuild, use a clean checkout of the exact `sourceCommit` in the [release manifest](https://github.com/H644b/Moader/releases/download/v3.0.0/release-manifest.json). The commands below select the PC-driven Seedsow profile. For historical v0.1.2 reproduction, use its [tagged source](https://github.com/H644b/Moader/tree/v0.1.2) and that release's component proof instead.
 
 ```sh
 python3 tools/setup-devkit.py

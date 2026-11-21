@@ -4,19 +4,19 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v0.2.5** has prebuilt downloads for the app and resident with the reduced BSD session budget. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v0.2.5/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
+**v3.0.0** adds the source-qualified Seedsow standalone implementation and prebuilt bootstrap to the backend kit. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v3.0.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v0.2.5.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v0.2.5.zip` | Public host source, the five matched Moader/kaiHEN binaries, the pinned official kaiHEN archive and `bundles/kaiHEN-Moader-20261114c.zip`, which preserves the full regular release with matched RO/HEN/bootstrap and Moader additions; outer `Moader-backend-v0.2.5` folder includes `START_HERE.txt` |
+| `Moader-v3.0.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v3.0.0.zip` | Public host source, the matched Moader/kaiHEN binaries, pinned official kaiHEN archive, complete regular bundle, and `prebuilt/standalone-bootstrap/{bootstrap.bin,proof.json}`; outer folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
 **Omit the ns2jb, Civ7 and Seedsow upstream source dependencies from public source and host kits unless explicit redistribution terms are located and reviewed.** The setup helper fetches the exact upstream revision directly for each user. The default profile selects the kurumuz engine; `civ7-s8n` selects its engine, Civ7 target tables and acquisition bridge, as pinned by [config/civ7-provider.json](../config/civ7-provider.json). `seedsow-malev0` fetches its reviewed source closure; the GUI helper obtains the pinned upstream GUI checkout. The user-authorized kaiHEN release binaries are included with the upstream archive's license files and the patched kaiHEN source and patch already in this repository. Preserve upstream attribution separately from license claims.
 
-The host kit contains `research/artifacts/kaiHEN-20261114c.zip` and the full patched kaiHEN bundle. First-run setup validates that pinned base and extracts `game/main`, `hbmenu.nro` and `programs/ounceshell.nro`, while retaining the kit's patched `ro/main`, `hen/main` and `bootstrap.bin`. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private captures, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
+The host kit contains `research/artifacts/kaiHEN-20261114c.zip` and the full patched kaiHEN bundle. First-run setup validates that pinned base and extracts `game/main`, `hbmenu.nro` and `programs/ounceshell.nro`, while retaining the kit's patched `ro/main`, `hen/main` and regular `bootstrap.bin`. The separate standalone bootstrap and receipt are source-built and hash-pinned. Include the complete corresponding patched HEN source, patch and license notices in the public source and kit. Do not include private FS captures or derived payloads, complete research source trees, `.git`, session files or runtime state. Keep all other third-party notices required by the selected source/assets.
 
 `tools/setup-backend.py` hard-pins the official archive and engine tree, and verifies the reviewed RO/HEN/bootstrap proof. An optional `release/backend-inputs.json` may provide checksum-qualified app ZIP and raw patched component download URLs for provisioning a source checkout without compiling:
 
@@ -24,7 +24,7 @@ The host kit contains `research/artifacts/kaiHEN-20261114c.zip` and the full pat
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-v0.2.5.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {

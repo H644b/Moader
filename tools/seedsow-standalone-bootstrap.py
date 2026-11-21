@@ -133,7 +133,7 @@ def build(output: Path, sdk: Path) -> dict:
                  'adapterSha256': ADAPTER_SHA256,
                  'bytes': len(candidate),
                  'patch': 'wait for PM completion and publish Loader restoration state',
-                 'scope': 'host build; device acceptance pending'}
+                 'scope': 'source-qualified build; one Profile B Demo same-boot FS/HEN result recorded'}
         (output / 'proof.json').write_text(json.dumps(proof, indent=2) + '\n')
         return proof
 

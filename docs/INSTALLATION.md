@@ -2,7 +2,7 @@
 
 ## Copy or update the console app
 
-1. Download and extract [Moader-v0.2.5.zip](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-v0.2.5.zip).
+1. Download and extract [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip).
 2. Close Moader if it's open.
 3. Copy `switch/Moader.nro` to the SD card's `switch/` folder.
 4. Open **Moader** from hbmenu.
@@ -17,17 +17,17 @@ The backend has two parts. The resident service keeps managing the library after
 
 | Method | Computer | Download |
 | --- | --- | --- |
-| [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | [v0.2.5 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip) |
-| [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | [v0.2.5 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip) |
-| [Seedsow Lullaby Demo or full game](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v0.2.5 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip) |
-| [Seedsow on-console, experimental](SEEDSOW_STANDALONE.md) | One-time SD and save preparation on a computer; later runs on the Switch | Unreleased; one Profile B Demo A boot reached connected Moader. Requires exact binaries, a qualified FS capture and a source-built standalone bootstrap ([requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries)) |
-| [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | [v0.2.5 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip) |
+| [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+| [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+| [Seedsow Lullaby Demo or full game](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+| [Seedsow on-console, experimental](SEEDSOW_STANDALONE.md) | One-time SD and save preparation on a computer; later runs on the Switch | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip). Includes the standalone bootstrap; A also needs a locally qualified FS capture ([requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries)) |
+| [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
 
-The PC-driven Seedsow method uses the included matched RO/HEN/bootstrap set and its guide covers additional SDK and GUI preparation. The on-console route prepares a pinned standalone save and source-built bootstrap; one exact Profile B Demo A installation reached HEN and a current FS acknowledgement on the same boot. It is not in the published v0.2.5 kit. The v0.2.5 resident was reloaded into a Demo-installed backend and Minecraft for Switch 2 ran in a world after an earlier v0.2.0 crash. A fresh installation of the complete v0.2.5 kit and the full-game route remain to be checked on hardware. [Validation scope](VALIDATION.md#v025-resident-bsd-session-budget)
+The PC-driven Seedsow method uses the included matched RO/HEN/bootstrap set and its guide covers additional SDK and GUI preparation. The on-console route uses the kit's pinned standalone bootstrap and prepares an A/B save; one exact Profile B Demo A installation reached HEN and a current FS acknowledgement on the same boot. Its FS payload still requires a qualified local capture. The v0.2.5 resident was previously reloaded into a Demo-installed backend and Minecraft for Switch 2 ran in a world after an earlier v0.2.0 crash. A fresh installation of the complete v3.0.0 kit and the full-game route remain to be checked on hardware. [Validation scope](VALIDATION.md#seedsow-standalone-host-preparation)
 
 ### Before either SmileBASIC method
 
-Download and extract [Moader-backend-v0.2.5.zip](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip). Open the outer folder with `START_HERE.txt` and `tools/`. Install **Python 3.10+**. First-time preparation needs internet access and uses the prebuilt files in the kit, so you can skip installing an SDK. Close the Moader app if it's open.
+Download and extract [Moader-backend-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip). Open the outer folder with `START_HERE.txt` and `tools/`. Install **Python 3.10+**. First-time preparation needs internet access and uses the prebuilt files in the kit, so you can skip installing an SDK. Close the Moader app if it's open.
 
 Use the requirements in the upstream guide for your chosen method. Moader needs a fresh, verified filesystem session from the current boot. Keep the session's host and SmileBASIC open until the Moader installer finishes.
 

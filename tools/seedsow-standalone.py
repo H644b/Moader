@@ -24,7 +24,9 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 PROFILE = ROOT / 'config/seedsow-standalone.json'
 DEFAULT_SOURCE = ROOT / 'build/seedsow-standalone-upstream'
-DEFAULT_BOOTSTRAP = ROOT / 'build/standalone-bootstrap'
+PREBUILT_BOOTSTRAP = ROOT / 'prebuilt/standalone-bootstrap'
+DEFAULT_BOOTSTRAP = (PREBUILT_BOOTSTRAP if PREBUILT_BOOTSTRAP.is_dir()
+                     else ROOT / 'build/standalone-bootstrap')
 PAYLOAD_FILES = {
     'context.bin': '44690bcfc77b3550ea87e38d00161cc5311b190285e7759f96278f2b236881a9',
     'fs-abi.bin': '1b7e348fd08186640c2c554e97d0b04141bf2c333dc2d584b17b9ec912f42b4f',
@@ -376,7 +378,7 @@ def main(argv=None):
     parser.add_argument('--payload-dir', type=Path,
                         help='exact source-qualified Moader FS payload directory')
     parser.add_argument('--bootstrap-output', type=Path, default=DEFAULT_BOOTSTRAP,
-                        help='source-built standalone bootstrap output (default: build/standalone-bootstrap)')
+                        help='verified standalone bootstrap (default: kit prebuilt, otherwise build/standalone-bootstrap)')
     options = parser.parse_args(argv)
     spec = profile()
     if options.action == 'provision':

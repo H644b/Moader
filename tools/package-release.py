@@ -172,6 +172,32 @@ def full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp):
     return output.getvalue(), len(patched)
 
 
+def standalone_prebuilt(root, spec, source):
+    """Include only the source-built bootstrap and its public build receipt."""
+    selected = spec.get('standalone')
+    if selected is None:
+        return None
+    require(selected.get('bootstrap') == {
+        'source': 'build/standalone-bootstrap/bootstrap.bin',
+        'bytes': 30080,
+        'sha256': 'f3f4305d53d5e3da9dac4b054acdcdc3c2addb436d813b2e08c2a9f32f1733ea',
+    }, 'Standalone bootstrap descriptor differs from the qualified candidate')
+    require(selected.get('adapterSha256') == sha(source['standalone/s2_moader.lua'][0]),
+            'Committed standalone adapter differs from the release descriptor')
+    image = binary(root, selected['bootstrap'], b'')
+    proof_path = root / 'build/standalone-bootstrap/proof.json'
+    require(proof_path.is_file() and not proof_path.is_symlink(),
+            'Missing regular standalone bootstrap build receipt')
+    receipt = proof_path.read_bytes()
+    details = json.loads(receipt)
+    require(details.get('releaseBootstrapSha256') == spec['patched_bootstrap']['sha256'] and
+            details.get('standaloneBootstrapSha256') == sha(image) and
+            details.get('adapterSha256') == selected['adapterSha256'] and
+            details.get('bytes') == len(image),
+            'Standalone bootstrap build receipt differs from the matched release')
+    return image, receipt
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'dist/releases')
@@ -186,6 +212,7 @@ def main():
     ro = binary(root, spec['patched_ro'], b'NSO0') if proof.get('schema') == 3 else None
     commit, source = public_source(root)
     qualify_exported_native_source(source, proof)
+    standalone = standalone_prebuilt(root, spec, source)
     timestamp = datetime.datetime.fromtimestamp(int(git(root, 'show', '-s', '--format=%ct', 'HEAD')), datetime.timezone.utc).timetuple()[:6]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -210,6 +237,9 @@ def main():
     host[prefix + 'research/artifacts/kaiHEN-20261114c.zip'] = (
         (root / 'research/artifacts/kaiHEN-20261114c.zip').read_bytes(), 0o100644)
     host[prefix + 'bundles/kaiHEN-Moader-20261114c.zip'] = (full_kaihen, 0o100644)
+    if standalone is not None:
+        host[prefix + 'prebuilt/standalone-bootstrap/bootstrap.bin'] = (standalone[0], 0o100644)
+        host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
 Use this kit to set up the backend for the current Switch boot. Start by
@@ -218,9 +248,11 @@ opening docs/INSTALLATION.md and choosing a method:
 - SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
 - SmileBASIC with direct ns2jb: macOS, Linux or WSL2 and native Node 24.
 - Seedsow Lullaby Demo or full game: macOS, Linux or WSL2. See docs/SEEDSOW.md.
-- Seedsow on-console: experimental kaiHEN staging only. The observed Moader
-  backend remained disconnected because FS hook installation is not yet wired.
-  Use the PC-driven Seedsow route for Moader; see docs/SEEDSOW_STANDALONE.md.
+- Seedsow on-console: experimental Moader A route or regular B route after
+  one-time SD/save preparation. The kit includes the source-built standalone
+  bootstrap and adapter. A requires an exact qualified FS capture to generate
+  its local payload; no console capture is bundled. See
+  docs/SEEDSOW_STANDALONE.md before using either route.
 - CivSwitch: experimental. See docs/CIV7.md for the required profile.
 
 The kit includes the Moader app, resident service and matching backend
@@ -263,6 +295,11 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         'upstreamHostSourceBundled': False, 'officialHenArchiveBundled': True,
         'patchedFullKaihenSha256': sha(full_kaihen),
         'patchedFullKaihenEntries': full_count,
+        'standaloneBootstrapBundled': standalone is not None,
+        'standaloneFsPayloadBundled': False,
+        **({'standaloneBootstrapSha256': sha(standalone[0]),
+            'standaloneAdapterSha256': spec['standalone']['adapterSha256']}
+           if standalone is not None else {}),
         'assets': records, 'validation': 'docs/VALIDATION.md',
     }, indent=2) + '\n')
     (output / 'SHA256SUMS.txt').write_text(''.join(
