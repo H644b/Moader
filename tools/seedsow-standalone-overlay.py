@@ -29,7 +29,10 @@ FRAME_RO_RUNNER = '''    -- Each completed native stage returns to the launcher 
             if not done then return false end
             ctx.moaderFs = receipt
         end},
-        {"starting kaiHEN bootstrap", finish_bootstrap_nro},
+        {"opening kaiHEN Loader", finish_bootstrap_nro},
+        {"mapping kaiHEN bootstrap", launch_bootstrap_nro},
+        {"starting kaiHEN worker", start_bootstrap_worker},
+        {"waiting for kaiHEN startup", poll_bootstrap_nro},
     }
     local index, announced, failed, completed = 1, false, nil, false
     local function retire()
@@ -185,10 +188,81 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         live_stage("Moader FS adapter verified")
 ''', 'Moader FS stage')
     kh = replace_once(kh,
-        '        run_bootstrap_nro()\n',
-        '        run_bootstrap_nro()\n'
-        '        ctx.moaderUncertain = false\n'
-        '        _G.__MOADER_FS_UNCERTAIN = false\n', 'HEN handoff completion')
+        '        local sdh = open_sd_card()\n'
+        '        local bs_file = sd_read_file(sdh, M.SD_MANIFEST.bootstrap.path, 0x100000)\n',
+        '    end\n'
+        '    local bootstrap_image\n'
+        '    local function launch_bootstrap_nro()\n'
+        '        local sdh = open_sd_card()\n'
+        '        local bs_file = sd_read_file(sdh, M.SD_MANIFEST.bootstrap.path, 0x100000)\n',
+        'bootstrap service and image frame boundary')
+    kh = replace_once(kh,
+        '        local mapped_entry = mapped_base + 0x80\n\n'
+        '        local args_str = M.build_bootstrap_args({\n',
+        '''        local mapped_entry = mapped_base + 0x80
+        bootstrap_image = {entry=mapped_entry, offset=adapter_off, row=lrow,
+            readiness=bs_readiness, domain=loader_dom}
+    end
+    local function start_bootstrap_worker()
+        local mapped_entry, adapter_off = bootstrap_image.entry, bootstrap_image.offset
+        local lrow, bs_readiness = bootstrap_image.row, bootstrap_image.readiness
+        local loader_dom = bootstrap_image.domain
+        local args_str = M.build_bootstrap_args({
+''', 'bootstrap image and worker frame boundary')
+    bootstrap_wait_start = '        local bs_thread = rt.rd_u64(th_slot)\n'
+    bootstrap_wait_end = '        ctx.henStartup = rec\n        _G.__KH.stages.complete = true\n    end\n'
+    if kh.count(bootstrap_wait_start) != 1 or kh.count(bootstrap_wait_end) != 1:
+        raise ValueError('Pinned upstream Lua anchor differs: bootstrap wait')
+    kh = (kh[:kh.index(bootstrap_wait_start)] + '''        -- The host's proven startup route polls the output record and never joins.
+        -- Reading the thread pointer or joining can block while the worker drives FS.
+        ctx.bootstrapArgsAddress = args_addr
+        ctx.bootstrapDeadline = rt.now_ms() + 120000
+    end
+
+    local bootstrap_operations = {
+        "begin", "park Loader", "launch", "mount package", "exchange",
+        "restore Loader", "join", "start HEN", "connect", "complete",
+        "prepare package", "game config", "game handles", "game handles",
+        "game start", "read policy", "write package", "plugin scan",
+        "plugin package", "plugin lookup", "plugin handoff", "plugin ready"
+    }
+    local function poll_bootstrap_nro()
+        local now = rt.now_ms()
+        if now < (ctx.bootstrapNextPoll or 0) then return false end
+        ctx.bootstrapNextPoll = now + 1000
+        local out24 = rt.rd(ctx.bootstrapArgsAddress + 408, 24)
+        local op, res = P.u32(out24, 0), P.u32(out24, 4)
+        if op ~= ctx.bootstrapLastOperation then
+            ctx.bootstrapLastOperation = op
+            live_stage(str_format("bootstrap %s (%d)", bootstrap_operations[op] or "step", op))
+        end
+        if op ~= 10 and res == 0 then
+            assert(now < ctx.bootstrapDeadline,
+                str_format("KH: bootstrap timed out at operation %d", op))
+            return false
+        end
+        -- The module publishes Complete or its error before exiting. The SDK
+        -- join remains unsafe even after that publication on this build.
+        rt.wait_ms(500)
+        out24 = rt.rd(ctx.bootstrapArgsAddress + 408, 24)
+        local rec = {
+            operation            = P.u32(out24, 0),
+            result               = P.u32(out24, 4),
+            pid                  = P.u64(out24, 8),
+            gateRestoreResult    = P.u32(out24, 16),
+            channelRestoreResult = P.u32(out24, 20),
+        }
+        kh_log(str_format("bootstrap record: op=%d result=0x%x pid=%d gateRestore=0x%x chanRestore=0x%x",
+            rec.operation, rec.result, rec.pid, rec.gateRestoreResult, rec.channelRestoreResult))
+        assert(rec.operation == 10 and rec.result == 0 and
+            (rec.gateRestoreResult == 0 or rec.gateRestoreResult == 0xea01) and rec.channelRestoreResult == 0,
+            str_format("KH: bootstrap failed op=%d rc=0x%x", rec.operation, rec.result))
+        ctx.henStartup = rec
+        _G.__KH.stages.complete = true
+        ctx.moaderUncertain = false
+        _G.__MOADER_FS_UNCERTAIN = false
+    end
+''' + kh[kh.index(bootstrap_wait_end) + len(bootstrap_wait_end):])
     start = '    -- Execute Stage C pipeline with Stage D post-HEN alias retirement in `finally`\n'
     end = '\nend\n\nreturn R\n'
     if kh.count(start) != 1 or kh.count(end) != 1:

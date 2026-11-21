@@ -25,4 +25,50 @@ assert(not runner.step() and calls[1] == "sd")
 assert(not runner.step() and #calls == 1)
 assert(screen[2] == "MOADER KH: arming FS endpoint")
 assert(not runner.step() and calls[2] == "endpoint")
+
+-- Exercise the real generated bootstrap poll with a published operation record.
+-- The PC route deliberately never joins this worker after Complete.
+local file = assert(io.open(overlay .. "/s2_kh_ro.lua", "rb"))
+local source = assert(file:read("*a"))
+file:close()
+local first = assert(source:find("    local bootstrap_operations = {", 1, true))
+local last = assert(source:find("    local stages = {", first, true))
+local poll_source = source:sub(first, last - 1)
+local poll_chunk = assert((loadstring or load)("local ctx,rt,kh_log,live_stage,P,str_format = ...\n" ..
+    poll_source .. "\nreturn poll_bootstrap_nro"))
+local P = require("s2_prim")
+local clock, operation, result = 0, 2, 0
+local ctx = {bootstrapArgsAddress = 0x2000, bootstrapDeadline = 120000,
+    moaderUncertain = true}
+local rt = {
+    rd = function(address, bytes)
+        assert(address == 0x2000 + 408 and bytes == 24)
+        return P.u32s(operation) .. P.u32s(result) .. P.u64s(42) ..
+            P.u32s(0) .. P.u32s(0)
+    end,
+    now_ms = function() return clock end,
+    wait_ms = function(ms) clock = clock + ms end,
+    N = {call_deep = function() error("bootstrap worker must not be joined") end},
+}
+local status = {}
+local poll = poll_chunk(ctx, rt, function() end,
+    function(line) status[#status + 1] = line end, P, string.format)
+_G.__KH = {stages = {}}
+_G.__MOADER_FS_UNCERTAIN = true
+assert(poll() == false and clock == 0)
+assert(status[1] == "bootstrap park Loader (2)")
+assert(poll() == false and #status == 1)
+clock = 1000
+operation = 10
+assert(poll() == nil and clock == 1500)
+assert(ctx.henStartup.operation == 10 and ctx.henStartup.pid == 42)
+assert(ctx.moaderUncertain == false and _G.__MOADER_FS_UNCERTAIN == false)
+assert(_G.__KH.stages.complete == true)
+
+clock, operation, result = 120001, 9, 0
+ctx.moaderUncertain = true
+poll = poll_chunk(ctx, rt, function() end, function() end, P, string.format)
+local ok, failure = pcall(poll)
+assert(not ok and failure:find("bootstrap timed out at operation 9", 1, true))
+assert(ctx.moaderUncertain == true)
 print("Standalone Stage C redraw boundaries verified on host.")
