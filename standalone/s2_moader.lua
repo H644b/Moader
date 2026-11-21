@@ -11,6 +11,12 @@ local function check(ok, message)
     assert(ok, "MOADER FS: " .. message)
 end
 
+local function live_stage(message)
+    if _G.n2h and type(_G.n2h.log) == "function" then
+        _G.n2h.log("MOADER FS: " .. message)
+    end
+end
+
 local function aligned(value, size)
     return value > 0 and value % size == 0
 end
@@ -81,11 +87,13 @@ end
 
 local function qualify_code(env, profile, abi, base)
     local cursor = 0
-    for _, row in ipairs(profile.fsAbi.ranges) do
+    for index, row in ipairs(profile.fsAbi.ranges) do
         check(type(row.offset) == "number" and type(row.size) == "number" and
             row.size > 0 and cursor + row.size <= #abi,
             "invalid ABI range")
         local expected = sub(abi, cursor + 1, cursor + row.size)
+        live_stage(fmt("ABI read %d/%d at FS+0x%x", index,
+            #profile.fsAbi.ranges, row.offset))
         local observed = env.read_fs(base + row.offset, row.size)
         check(observed == expected,
             fmt("live FS function differs at FS+0x%x base=0x%x got=%s",
@@ -93,7 +101,9 @@ local function qualify_code(env, profile, abi, base)
         cursor = cursor + row.size
     end
     check(cursor == #abi, "ABI range extent changed")
-    for _, row in ipairs(profile.fsAbi.padding) do
+    for index, row in ipairs(profile.fsAbi.padding) do
+        live_stage(fmt("cave read %d/%d at FS+0x%x", index,
+            #profile.fsAbi.padding, row.offset))
         local bytes = env.read_fs(base + row.offset, row.size)
         check(bytes == zero("\0", row.size),
             "FS gateway or control cave is already occupied")
@@ -128,8 +138,10 @@ function M.install(env)
     local rt, fs, ctx, slots = env.rt, env.fs, env.ctx, env.slots
     local read_fs, write_fs, compare_write_fs =
         env.read_fs, env.write_fs, env.compare_write_fs
+    live_stage("reading pinned SD payload")
     local profile, abi, context_bytes, runtime_bytes, gateway_bytes,
         report_template = read_profile(env)
+    live_stage("pinned SD payload qualified")
     -- The upstream capture window and domain-root vtable are not the text
     -- base. The live CodeFS donor vtable is a candidate anchor: two device
     -- receipts put it at the same offset used by twelve independently
@@ -140,8 +152,7 @@ function M.install(env)
     check(aligned(base, 0x1000) and base < 0x8000000000,
         fmt("current FS base is not qualified: donor=0x%x base=0x%x",
             ctx.donorRow.vptr, base))
-    qualify_code(env, profile, abi, base)
-    env.log(fmt("qualified 36 live FS ranges at 0x%x; all caves empty", base))
+    live_stage(fmt("donor proposes FS base 0x%x", base))
 
     local ro = rt.get_service_sm("ro:dmnt")
     check(ro and ro ~= 0, "replacement ro:dmnt is unavailable")
@@ -181,12 +192,17 @@ function M.install(env)
             kind = P.u32(rep.data, 48), attr = P.u32(rep.data, 52),
             perm = P.u32(rep.data, 56), free = P.u64(rep.data, 88)}
     end
+    live_stage("checking FS executable mapping through RO")
     local code = info(base + 0x1201b0)
     check((code.kind == 3 or code.kind == 4) and code.attr == 0 and
         (code.perm == 4 or code.perm == 5) and
         base + 0x1201b0 >= code.address and
         base + 0x1201c0 <= code.address + code.size,
         "notifier mapping is not qualified executable code")
+    live_stage("FS executable mapping qualified")
+    qualify_code(env, profile, abi, base)
+    env.log(fmt("qualified 36 live FS ranges at 0x%x; all caves empty", base))
+    live_stage("all FS code and cave bytes qualified")
 
     local function patch(address, before, after)
         check(#before == 16 and #after == 16 and address % 4 == 0,

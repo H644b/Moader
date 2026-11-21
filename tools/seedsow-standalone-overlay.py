@@ -53,6 +53,14 @@ def build(source: Path, output: Path) -> dict[str, Path]:
     original = source / 'console-only/lua'
     kh = (original / 's2_kh_ro.lua').read_text()
     kh = replace_once(kh,
+        '    local copy_loader_and_open_codefs = env.copy_loader_and_open_codefs\n',
+        '    local copy_loader_and_open_codefs = env.copy_loader_and_open_codefs\n'
+        '    local function live_stage(label)\n'
+        '        if _G.n2h and type(_G.n2h.log) == "function" then\n'
+        '            _G.n2h.log("MOADER KH: " .. label)\n'
+        '        end\n'
+        '    end\n', 'live KH stage marker')
+    kh = replace_once(kh,
         '    local read_fs               = env.read_fs\n',
         '    local read_fs               = env.read_fs\n'
         '    local write_fs              = env.write_fs\n'
@@ -60,6 +68,7 @@ def build(source: Path, output: Path) -> dict[str, Path]:
     kh = replace_once(kh,
         '        ctx.fsProcess = export_handle(0xFFFF8001, "fs-process")\n',
         '''        ctx.fsProcess = export_handle(0xFFFF8001, "fs-process")
+        live_stage("loading Moader FS adapter")
         local moader_source = sd_read_file(open_sd_card(),
             "/kaihen/moader-fs/s2_moader.lua", 0x40000).str
         local moader_chunk, moader_syntax = loadstring(moader_source,
@@ -74,6 +83,7 @@ def build(source: Path, output: Path) -> dict[str, Path]:
             compare_write_fs=compare_write_fs, locate_by_clone=locate_by_clone,
             log=kh_log})
         assert(ctx.moaderFsVerified, "KH: Moader FS runtime was not verified")
+        live_stage("Moader FS adapter verified")
 ''', 'Moader FS stage')
     kh = replace_once(kh,
         '        run_bootstrap_nro()\n',
@@ -88,6 +98,39 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         '    if not ctx.henStartup then\n',
         '    if not ctx.henStartup and not ctx.moaderUncertain then\n',
         'uncertain handle cleanup')
+    kh = replace_once(kh,
+        '''        verify_and_relocate_sd()
+        arm_endpoint()
+        derive_layout_and_loader()
+        open_notifier()
+        open_pm_sessions()
+        copy_loader_and_open_codefs()
+        prepare_workers_and_donor()
+        bind_sessions_and_gate_event()
+        launch_and_activate_ro()
+        run_bootstrap_nro()
+''',
+        '''        live_stage("verifying matched SD package")
+        verify_and_relocate_sd()
+        live_stage("arming retained FS endpoint")
+        arm_endpoint()
+        live_stage("deriving FS and Loader layout")
+        derive_layout_and_loader()
+        live_stage("opening FS notifier")
+        open_notifier()
+        live_stage("opening PM sessions")
+        open_pm_sessions()
+        live_stage("opening CodeFS donor")
+        copy_loader_and_open_codefs()
+        live_stage("preparing donor workers")
+        prepare_workers_and_donor()
+        live_stage("binding server sessions")
+        bind_sessions_and_gate_event()
+        live_stage("launching replacement RO")
+        launch_and_activate_ro()
+        live_stage("starting bootstrap and Moader FS")
+        run_bootstrap_nro()
+''', 'live A path stage boundaries')
 
     stage = (original / 's2_kaihen.lua').read_text()
     stage = replace_once(stage,
@@ -101,6 +144,16 @@ def build(source: Path, output: Path) -> dict[str, Path]:
         'owned source locator handoff')
 
     main = (original / 's2_main.lua').read_text()
+    main = replace_once(main,
+        '            elseif phase == "kaihen" then\n'
+        '                local t_ro0 = rt.now_ms()\n'
+        '                local kaihen_mod = load_kaihen_module(rt, fs, buf_log)\n',
+        '            elseif phase == "kaihen" then\n'
+        '                local t_ro0 = rt.now_ms()\n'
+        '                default_log("MOADER KH: entering Stage C")\n'
+        '                local kaihen_mod = load_kaihen_module(rt, fs, buf_log)\n'
+        '                default_log("MOADER KH: Stage C module loaded")\n',
+        'live A path entry')
     main = replace_once(main,
         '        if opts.sdLog ~= false and rt and fs then\n',
         '        if opts.sdLog ~= false and rt and fs and not _G.__MOADER_FS_UNCERTAIN then\n',

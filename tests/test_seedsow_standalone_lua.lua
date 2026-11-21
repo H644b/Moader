@@ -13,9 +13,10 @@ local function file(path)
 end
 
 local capture = file(capture_path)
+local P = require("s2_prim")
 local installer = assert(loadfile(root .. "/standalone/s2_moader.lua"))()
 local base = 0x4000000000
-local function run(alter_at, ro_active, corrupt_profile)
+local function run(alter_at, ro_active, corrupt_profile, fail_first_query)
     local writes, services, reads, sends = 0, 0, 0, 0
     local ctx = {layout = {captureStart = base + 0x10000000,
         rootVptr = base + 0x2aabcd0},
@@ -27,8 +28,20 @@ local function run(alter_at, ro_active, corrupt_profile)
             services = services + 1
             return ro_active and 0x44 or 0
         end},
-        fs = {send_packet = function()
+        fs = {send_packet = function(_, packet)
             sends = sends + 1
+            local at = P.domain_data_start(packet)
+            local command = P.u32(packet, at + 8)
+            if command == 0x524f0010 and not fail_first_query then
+                local data = string.rep("\0", 104)
+                for offset, value in pairs({[0] = 941,
+                    [8] = 0x0400000000000000, [32] = base,
+                    [40] = #capture, [48] = 3, [56] = 5}) do
+                    data = P.put_u64(data, offset, value)
+                end
+                return {transport = 0, result = 0, pid = 218,
+                    data = data, copies = {}, moves = {}}
+            end
             return {transport = 0xea01, result = 0, copies = {}, moves = {}}
         end},
         ctx = ctx,
@@ -60,22 +73,28 @@ local function run(alter_at, ro_active, corrupt_profile)
         log = function() end,
     }
     local ok, error_text = pcall(installer.install, env)
-    assert(not ok and writes == 0 and (reads >= 1 or corrupt_profile),
+    assert(not ok and writes == 0 and
+        (reads >= 1 or corrupt_profile or not ro_active or fail_first_query),
         "preflight failed to stop before a native write")
     return tostring(error_text), services, reads, sends, ctx
 end
 
-local normal, normal_services, normal_reads = run()
-assert(normal:find("replacement ro:dmnt is unavailable", 1, true) and
-       normal_services == 1 and normal_reads >= 38,
+local normal, normal_services, normal_reads, normal_sends = run(nil, true)
+assert(normal:find("RO process transport/identity uncertain", 1, true) and
+       normal_services == 1 and normal_reads >= 38 and normal_sends == 3,
        "exact live FS did not pass all code and cave checks")
-local changed, changed_services = run(0x4b8c0)
+local changed, changed_services, _, changed_sends = run(0x4b8c0, true)
 assert(changed:find("live FS function differs", 1, true) and
-       changed_services == 0, "changed FS instruction reached a service")
-local occupied, occupied_services = run(0x24d100)
+       changed_services == 1 and changed_sends == 2,
+       "changed FS instruction reached a native mutation")
+local occupied, occupied_services = run(0x24d100, true)
 assert(occupied:find("already occupied", 1, true) and
-       occupied_services == 0, "occupied code cave reached a service")
-local uncertain, active_services, _, sends, ctx = run(nil, true)
+       occupied_services == 1, "occupied code cave reached a native mutation")
+local unavailable, unavailable_services, unavailable_reads = run(nil, false)
+assert(unavailable:find("replacement ro:dmnt is unavailable", 1, true) and
+       unavailable_services == 1 and unavailable_reads == 0,
+       "missing RO reached a memory read")
+local uncertain, active_services, _, sends, ctx = run(nil, true, false, true)
 assert(uncertain:find("RO process transport/identity uncertain", 1, true) and
        active_services == 1 and sends == 1 and
        ctx.moaderUncertain and _G.__MOADER_FS_UNCERTAIN,
