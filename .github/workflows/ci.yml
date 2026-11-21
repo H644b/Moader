@@ -144,6 +144,7 @@ jobs:
           node tools/test-gui-autodownload.cjs "$RUNNER_TEMP/seedsow-gui"
       - name: Verify Seedsow on-console source and SD writer
         run: |
+          sudo apt-get update && sudo apt-get install --no-install-recommends -y lua5.4
           python3 tools/seedsow-standalone.py provision --source "$RUNNER_TEMP/seedsow-standalone" --node node
           python3 tests/test_seedsow_standalone.py "$RUNNER_TEMP/seedsow-standalone"
       - name: Independently verify Civ7 source, materialization and native qualification gates

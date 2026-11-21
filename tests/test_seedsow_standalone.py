@@ -11,6 +11,10 @@ loader = importlib.util.spec_from_file_location(
     'moader_seedsow_standalone', ROOT / 'tools/seedsow-standalone.py')
 standalone = importlib.util.module_from_spec(loader)
 loader.loader.exec_module(standalone)
+overlay_loader = importlib.util.spec_from_file_location(
+    'moader_seedsow_standalone_overlay', ROOT / 'tools/seedsow-standalone-overlay.py')
+standalone_overlay = importlib.util.module_from_spec(overlay_loader)
+overlay_loader.loader.exec_module(standalone_overlay)
 
 
 def refused(operation):
@@ -38,6 +42,21 @@ def main():
         finally:
             lua.write_bytes(original)
         standalone.qualify_source(source, spec)
+        with tempfile.TemporaryDirectory(prefix='moader-overlay-test-') as overlay_dir:
+            uploader = standalone.prepare_upload_tree(source, Path(overlay_dir), 'node')
+            assert uploader.is_file()
+            prepared = uploader.parent / 'lua'
+            for name in ('s2_kh_ro.lua', 's2_kaihen.lua', 's2_main.lua'):
+                assert (prepared / name).read_bytes() != (source / 'console-only/lua' / name).read_bytes()
+            for original, stock in (('s2_kh_ro.lua', 's2_b_kh_ro.lua'),
+                                    ('s2_kaihen.lua', 's2_b_kaihen.lua'),
+                                    ('s2_main.lua', 's2_b_main.lua')):
+                assert (prepared / stock).read_bytes() == standalone_overlay.wire_bytes(
+                    (source / 'console-only/lua' / original).read_text(), stock)
+            b_entry = (prepared / 'exploitb2.lua').read_text()
+            assert 'package.loaded["s2_kaihen"] = dofile("save:/s2_b_kaihen.lua")' in b_entry
+            assert 'dofile("save:/s2_b_main.lua")' in b_entry
+            assert "['exploitb2.lua', 'exploitb.lua']" in uploader.read_text()
 
     with tempfile.TemporaryDirectory(prefix='moader-standalone-test-') as temp:
         sd = Path(temp).resolve() / 'sd'
