@@ -154,17 +154,17 @@ function M.install(env)
             ctx.donorRow.vptr, base))
     live_stage(fmt("donor proposes FS base 0x%x", base))
 
-    live_stage("opening app-space RO endpoint")
+    live_stage("opening app-space ldr:ro")
     local ro, ro_rc
     for attempt = 1, 20 do
-        ro, ro_rc = rt.get_service_sm("mfs:ro")
+        ro, ro_rc = rt.get_service_sm("ldr:ro")
         if ro and ro ~= 0 then break end
         if attempt < 20 then rt.wait_ms(25) end
     end
     check(ro and ro ~= 0,
-        fmt("replacement mfs:ro is unavailable (rc=0x%x)", ro_rc or 0))
-    live_stage("app-space RO endpoint opened")
-    env.track(ro, "moader-mfs-ro")
+        fmt("replacement app-space ldr:ro is unavailable (rc=0x%x)", ro_rc or 0))
+    live_stage("app-space ldr:ro opened")
+    env.track(ro, "moader-ldr-ro")
     local process = ctx.fsProcess and ctx.fsProcess.handle
     check(process and process ~= 0 and ctx.launch and ctx.launch.pid > 1,
         "same-boot FS process or RO launch proof is missing")

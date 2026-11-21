@@ -4569,10 +4569,10 @@ index d8fdcf9..0b8d22d 100644
  /// Sends the plugin copies of the SM session and the FS root. The reply has
  /// the release event (writable), the ready event (readable) and the client
 diff --git a/ro/README.md b/ro/README.md
-index 7c11d6c..19c1ed0 100644
+index 7c11d6c..d2f7e78 100644
 --- a/ro/README.md
 +++ b/ro/README.md
-@@ -47,8 +47,15 @@ console. The AArch64 NSO build passes with warnings treated as errors.
+@@ -47,8 +47,16 @@ console. The AArch64 NSO build passes with warnings treated as errors.
  - `mapping.cpp`: NRO address search, mapping, permissions, cache
    publication, and teardown.
  - `image.cpp`: the existing supported NRO layout.
@@ -4580,18 +4580,19 @@ index 7c11d6c..19c1ed0 100644
 -  writes for kaiHEN (`../include/ro_dmnt.h`), and RO's diagnostics.
 +- `fs_memory.cpp`: the private system-space `ro:dmnt` endpoint keeps FS code
 +  reads and writes for kaiHEN (`../include/ro_dmnt.h`) and RO diagnostics.
-+  The app-space `mfs:ro` endpoint gives the standalone Seedsow adapter only
-+  its bounded, PID-bearing FS process commands. Each request must carry a
-+  copied handle whose program ID is FS; the adapter also binds the reply to
-+  the current replacement RO PID and verifies the transferred FS PID before
-+  any code write. The system-space endpoint retains its existing behavior.
-+  If stock RO left a stale `ro:dmnt` registration, the replacement releases
-+  that entry and retries; it does not unregister an app-space service.
++  The standalone Seedsow adapter sends its reserved, PID-bearing FS process
++  commands through the existing app-space `ldr:ro` service, which the upstream
++  Seedsow chain already opens. Each such request must carry a copied handle
++  whose program ID is FS; the adapter also binds the reply to the current
++  replacement RO PID and verifies the transferred FS PID before any code
++  write. Ordinary `ldr:ro` commands and system-space `ro:dmnt` retain their
++  existing behavior. If stock RO left a stale `ro:dmnt` registration, the
++  replacement releases that entry and retries.
  
  Mapping cleanup remains explicit because unmapping can fail. As in the
  source implementation, a failed partial cleanup retains its ownership
 diff --git a/ro/source/fs_memory.cpp b/ro/source/fs_memory.cpp
-index 712ee94..2bbfc60 100644
+index 712ee94..001979c 100644
 --- a/ro/source/fs_memory.cpp
 +++ b/ro/source/fs_memory.cpp
 @@ -131,6 +131,243 @@ bool hasShape(const HipcParsedRequest& request, u32 copy_handles, u32 send_buffe
@@ -4838,11 +4839,22 @@ index 712ee94..2bbfc60 100644
  /// Answers RoDiagnosticsCommand, if that is the request.
  bool serveDiagnostics(void* message, const HipcParsedRequest& request) {
      const CmifInHeader* header = getHeader(message, request, 0);
-@@ -188,14 +425,45 @@ void closeRequestHandles(const HipcParsedRequest& request) {
+@@ -188,14 +425,53 @@ void closeRequestHandles(const HipcParsedRequest& request) {
  
  } // namespace
  
 -void roFsMemoryDispatch(void* message) {
++bool roIsStandaloneFsCommand(void* message) {
++    const HipcParsedRequest request = hipcParseRequest(message);
++    const CmifInHeader* header = getHeader(message, request, 0);
++    if (!header || header->magic != CMIF_IN_HEADER_MAGIC)
++        return false;
++    const u32 command = header->command_id;
++    return command == 0x524f0010 || command == 0x524f0012 ||
++           command == 0x524f0014 || command == 0x524f0015 ||
++           command == RoProcessReadCommand;
++}
++
 +void roFsMemoryDispatch(void* message, bool fs_only) {
      if (roReplyQueryPointerBufferSize(message))
          return;
@@ -4850,13 +4862,10 @@ index 712ee94..2bbfc60 100644
      const HipcParsedRequest request = hipcParseRequest(message);
 +    if (fs_only) {
 +        const CmifInHeader* header = getHeader(message, request, 0);
-+        const u32 command = header ? header->command_id : 0;
 +        const Handle process = request.meta.num_copy_handles == 1 ?
 +            request.data.copy_handles[0] : INVALID_HANDLE;
 +        u64 program = 0;
-+        const bool standalone_command = command == 0x524f0010 ||
-+            command == 0x524f0012 || command == 0x524f0014 ||
-+            command == 0x524f0015 || command == RoProcessReadCommand;
++        const bool standalone_command = roIsStandaloneFsCommand(message);
 +        if (!header || header->magic != CMIF_IN_HEADER_MAGIC ||
 +            !standalone_command ||
 +            !request.meta.send_pid || process == INVALID_HANDLE ||
@@ -4886,53 +4895,42 @@ index 712ee94..2bbfc60 100644
      closeRequestHandles(request);
      roWriteReply(message, rc, 0, false);
 diff --git a/ro/source/fs_memory.h b/ro/source/fs_memory.h
-index 52ede32..0a92d93 100644
+index 52ede32..69c7f59 100644
 --- a/ro/source/fs_memory.h
 +++ b/ro/source/fs_memory.h
-@@ -1,7 +1,8 @@
+@@ -1,7 +1,11 @@
  // SPDX-License-Identifier: GPL-2.0-only
 -// RO's private ro:dmnt endpoint (../../common/ro_dmnt.h): reads and writes
 -// of the FS process's code memory for kaiHEN, and RO's diagnostics.
-+// RO's private ro:dmnt endpoint (../../common/ro_dmnt.h) and app-space
-+// mfs:ro endpoint: FS process memory access for HEN and Seedsow.
++// RO's private ro:dmnt endpoint (../../common/ro_dmnt.h) and bounded
++// standalone FS commands on the existing app-space ldr:ro session.
  #pragma once
  
 -/// Answers one request on an ro:dmnt session. The reply is left in @p message.
 -void roFsMemoryDispatch(void* message);
-+/// Answers one request on an FS memory session. In app space, only a
-+/// PID-bearing probe carrying the current FS process handle is accepted.
++/// True only for the standalone adapter's reserved command IDs.
++bool roIsStandaloneFsCommand(void* message);
++
++/// Answers one request on an FS memory session. On app-space ldr:ro, only a
++/// PID-bearing probe carrying a copied FS process handle is accepted.
 +void roFsMemoryDispatch(void* message, bool fs_only);
 diff --git a/ro/source/main.cpp b/ro/source/main.cpp
-index 818c497..b9517ca 100644
+index 818c497..48ab6c6 100644
 --- a/ro/source/main.cpp
 +++ b/ro/source/main.cpp
-@@ -8,20 +8,21 @@
- namespace {
- 
- constexpr u32 MaxSessions = 16;
--constexpr u32 PortCount = 3;
-+constexpr u32 PortCount = 4;
+@@ -11,8 +11,9 @@ constexpr u32 MaxSessions = 16;
+ constexpr u32 PortCount = 3;
  constexpr u64 RegistrationRetryNs = 50000000;
  
 -// Native RO registers ldr:ro in service space sets 1 and 2. Its private
 -// ro:dmnt endpoint belongs to set 1.
 +// Native RO registers ldr:ro in service space sets 1 and 2. HEN keeps its
-+// private ro:dmnt endpoint in set 1; Seedsow's FS adapter uses mfs:ro in set 2.
++// private ro:dmnt endpoint in set 1; Seedsow uses qualified commands on the
++// already accessible app-space ldr:ro session.
  struct RoPort {
      const char* name;
      u32 space;
--    bool fs_memory; ///< ro:dmnt: FS memory access and diagnostics.
-+    bool fs_memory; ///< FS memory commands, with an FS-only gate in app space.
- };
- constexpr RoPort ServicePorts[PortCount] = {
-     {"ldr:ro", 1, false},
-     {"ldr:ro", 2, false},
-     {"ro:dmnt", 1, true},
-+    {"mfs:ro", 2, true},
- };
- 
- class RoServer {
-@@ -41,11 +42,25 @@ class RoServer {
+@@ -41,11 +42,24 @@ class RoServer {
              }
  
              Handle port = INVALID_HANDLE;
@@ -4942,8 +4940,7 @@ index 818c497..b9517ca 100644
 +            const SmServiceName name = smEncodeName(ServicePorts[i].name);
 +            Result rc = smRegisterServiceInSpace(
 +                &port, ServicePorts[i].space, name, false, 4);
-+            if (R_FAILED(rc) && ServicePorts[i].space == 1 &&
-+                ServicePorts[i].fs_memory && !dmnt_stale_released_) {
++            if (R_FAILED(rc) && ServicePorts[i].fs_memory && !dmnt_stale_released_) {
 +                // Stock RO's name may survive its process as a dead SM entry.
 +                // A fresh boot can also have no stale entry, so a failed
 +                // Unregister must never suppress a successful Register.
@@ -4956,41 +4953,28 @@ index 818c497..b9517ca 100644
 +            }
              if (R_SUCCEEDED(rc)) {
                  ports_[i].reset(port);
-+                if (ServicePorts[i].space == 1 && ServicePorts[i].fs_memory)
++                if (ServicePorts[i].fs_memory)
 +                    dmnt_stale_released_ = true;
              }
          }
      }
-@@ -61,6 +76,7 @@ class RoServer {
-             if (sessions_[i].get() == INVALID_HANDLE) {
-                 sessions_[i].reset(session);
-                 fs_memory_[i] = ServicePorts[port].fs_memory;
-+                fs_only_[i] = ServicePorts[port].fs_memory && ServicePorts[port].space == 2;
-                 clients_[i].port_index = port;
-                 roRecordAcceptedSession(port);
-                 return;
-@@ -76,6 +92,7 @@ class RoServer {
-             roSessionClose(&clients_[slot]);
-         }
-         fs_memory_[slot] = false;
-+        fs_only_[slot] = false;
-         sessions_[slot].reset();
-     }
- 
-@@ -131,7 +148,7 @@ class RoServer {
+@@ -131,7 +145,11 @@ class RoServer {
  
          Handle copied_client = INVALID_HANDLE;
          if (fs_memory_[client]) {
 -            roFsMemoryDispatch(message);
-+            roFsMemoryDispatch(message, fs_only_[client]);
++            roFsMemoryDispatch(message, false);
++        } else if (clients_[client].port_index == 1 && roIsStandaloneFsCommand(message)) {
++            // The app can already open set-2 ldr:ro during upstream Stage C.
++            // Only the dedicated high commands may enter this FS-only path.
++            roFsMemoryDispatch(message, true);
          } else {
              copied_client = roDispatch(clients_, MaxSessions, client, message);
          }
-@@ -148,6 +165,8 @@ class RoServer {
+@@ -148,6 +166,7 @@ class RoServer {
      ounce::HandleOwner sessions_[MaxSessions];
      RoSession clients_[MaxSessions] = {};
      bool fs_memory_[MaxSessions] = {};
-+    bool fs_only_[MaxSessions] = {};
 +    bool dmnt_stale_released_ = false;
  };
  

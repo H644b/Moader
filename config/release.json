@@ -30,7 +30,7 @@
   },
   "patched_ro": {
     "source": "vendor/kaihen-mo/ro/main",
-    "bytes": 28164,
-    "sha256": "6af2779d061a8eb55a80b581cf8f6bb291829720f3a9f8b07ea5470a6451e0be"
+    "bytes": 28378,
+    "sha256": "bb3122c7870d3d13e541d604e7f0ff530e6fdb186c31bde48d0d53395a8d5c5f"
   }
 }

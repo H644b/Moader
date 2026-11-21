@@ -38,7 +38,7 @@ local function run(alter_at, ro_active, corrupt_profile, fail_first_query,
     _G.__MOADER_FS_UNCERTAIN = false
     local env = {
         rt = {get_service_sm = function(name)
-            assert(name == "mfs:ro")
+            assert(name == "ldr:ro")
             services = services + 1
             return ro_active and 0x44 or 0
         end, wait_ms = function(ms) assert(ms == 25) end,
@@ -116,7 +116,7 @@ local occupied, occupied_services = run(0x24d100, true)
 assert(occupied:find("already occupied", 1, true) and
        occupied_services == 1, "occupied code cave reached a native mutation")
 local unavailable, unavailable_services, unavailable_reads = run(nil, false)
-assert(unavailable:find("replacement mfs:ro is unavailable", 1, true) and
+assert(unavailable:find("replacement app-space ldr:ro is unavailable", 1, true) and
        unavailable_services == 20 and unavailable_reads == 0,
        "missing RO reached a memory read")
 local uncertain, active_services, _, sends, _, ctx =

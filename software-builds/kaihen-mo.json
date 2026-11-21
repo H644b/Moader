@@ -4,9 +4,9 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "133bd8e3ffa0e18497d036dfbbb3c136fee43138847d3b77293437ae8c63c369",
+  "patch_sha256": "3de387d0ba59da9712e38f151ace76b5708af7898e14c8c76ddb2ce5b722bbb3",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "f8197f20069a48a6f26f47b88c11b1ea5001c0b55f6ed61c8b11072f9bed1f6d",
+  "source_tree_sha256": "9fcb9f95090e34848e8b3ae2ffc6d1c1b609973dd47abbc2c46bde7108c51bce",
   "protocol_version": 7,
   "hen_sha256": "092fd1987a018944975dfa02a14e348d02c576595a4c697a6d217d407b41b607",
   "components": {
@@ -19,12 +19,12 @@
       "sha256": "4f18cb99ac810855de180bc6d4f5ec8d32fc40e9e2512e6cd23a33e2c79c8d57"
     },
     "ro/main": {
-      "bytes": 28164,
-      "sha256": "6af2779d061a8eb55a80b581cf8f6bb291829720f3a9f8b07ea5470a6451e0be"
+      "bytes": 28378,
+      "sha256": "bb3122c7870d3d13e541d604e7f0ff530e6fdb186c31bde48d0d53395a8d5c5f"
     }
   },
   "native_build_passed": true,
   "console_retest_passed": false,
-  "reason": "The previous RO/HEN/bootstrap pair passed a bounded clean-card Demo installation and game-entry check. This candidate adds an app-space FS-only RO port for the standalone Seedsow adapter; the new RO bytes and complete pair have not yet been retested on a console.",
+  "reason": "The previous RO/HEN/bootstrap pair passed a bounded clean-card Demo installation and game-entry check. This candidate handles standalone Seedsow FS-only commands on the existing app-space ldr:ro service; the new RO bytes and complete pair have not yet been retested on a console.",
   "validation_scope": "The new RO compiles with the pinned AArch64 toolchain and its host RO suite passes. The full source patch replays to the committed native tree. The HEN and bootstrap binaries are unchanged from the earlier clean-card device-verified pair, but the new RO has only host validation. A fresh-boot standalone Profile B installation must verify Moader FS and resident startup before console_retest_passed can be true for this pair."
 }

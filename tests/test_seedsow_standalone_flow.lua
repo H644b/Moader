@@ -164,7 +164,7 @@ local ctx = {layout = {captureStart = base + 0x10000000,
 local ro_lookups, ro_waits = 0, 0
 local env = {
     rt = {get_service_sm = function(name)
-        assert(name == "mfs:ro")
+        assert(name == "ldr:ro")
         ro_lookups = ro_lookups + 1
         if ro_lookups < 3 then return 0, 0x202 end
         return 0x44

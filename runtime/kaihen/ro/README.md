@@ -49,13 +49,14 @@ console. The AArch64 NSO build passes with warnings treated as errors.
 - `image.cpp`: the existing supported NRO layout.
 - `fs_memory.cpp`: the private system-space `ro:dmnt` endpoint keeps FS code
   reads and writes for kaiHEN (`../include/ro_dmnt.h`) and RO diagnostics.
-  The app-space `mfs:ro` endpoint gives the standalone Seedsow adapter only
-  its bounded, PID-bearing FS process commands. Each request must carry a
-  copied handle whose program ID is FS; the adapter also binds the reply to
-  the current replacement RO PID and verifies the transferred FS PID before
-  any code write. The system-space endpoint retains its existing behavior.
-  If stock RO left a stale `ro:dmnt` registration, the replacement releases
-  that entry and retries; it does not unregister an app-space service.
+  The standalone Seedsow adapter sends its reserved, PID-bearing FS process
+  commands through the existing app-space `ldr:ro` service, which the upstream
+  Seedsow chain already opens. Each such request must carry a copied handle
+  whose program ID is FS; the adapter also binds the reply to the current
+  replacement RO PID and verifies the transferred FS PID before any code
+  write. Ordinary `ldr:ro` commands and system-space `ro:dmnt` retain their
+  existing behavior. If stock RO left a stale `ro:dmnt` registration, the
+  replacement releases that entry and retries.
 
 Mapping cleanup remains explicit because unmapping can fail. As in the
 source implementation, a failed partial cleanup retains its ownership
