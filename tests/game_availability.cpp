@@ -2,7 +2,7 @@
 #include <cstdint>
 typedef uint32_t _LOCK_T;
 typedef struct { uint32_t lock, counter; } _LOCK_RECURSIVE_T;
-#include "native/game_availability.hpp"
+#include "native/store_games.hpp"
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -147,6 +147,43 @@ extern "C" Result ncmContentStorageHas(NcmContentStorage*, bool* out, const NcmC
 }
 
 int main() {
+    using moader_ui::Presence;
+    auto store_check = [] {
+        moader_native::StorePresence games{{"010000000000F00D", Presence::Unknown},
+                                           {"0100123456780000", Presence::Unknown}};
+        const std::atomic<bool> cancel{false};
+        moader_native::read_store_games(games, cancel);
+        return games;
+    };
+    reset();
+    fake.records.clear();
+    auto store = store_check();
+    assert(store[0].second == Presence::Absent &&
+           store[1].second == Presence::Present); // Inserted card without a Home record.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    assert(store_check()[1].second ==
+           Presence::Present); // Installed digital game, zero mod folders involved.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    fake.rows[0].meta_type = NcmContentMetaType_Patch;
+    assert(store_check()[1].second == Presence::Absent);
+    reset();
+    fake.insertion = {false};
+    noncard();
+    fake.program = false;
+    assert(store_check()[1].second == Presence::Absent); // Archived tile.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    fake.fail = "has";
+    assert(store_check()[1].second == Presence::Unknown);
+    reset();
+    noncard();
+    fake.fail = "inserted";
+    assert(store_check()[1].second == Presence::Present); // Digital discovery remains independent.
     reset(); assert(lookup().load_allowed);
     assert(fake.ns_init == 1 && fake.ns_exit == 1 && fake.card_reads == 2);
     no_content_queries();

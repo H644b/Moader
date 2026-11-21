@@ -57,7 +57,7 @@ class StoreClient {
     void poll(moader_ui::State& s) {
         const bool open = s.view == moader_ui::View::Store;
         if (open && !was_open) {
-            s.store.start(s.game < s.games.size() ? s.games[s.game].id : 0);
+            s.store.start();
             configure();
             received_catalog = false;
         } else if (!open && was_open) {

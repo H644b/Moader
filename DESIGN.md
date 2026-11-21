@@ -113,7 +113,7 @@ Open the clickable PDF to browse the library, mod details and settings. Its book
 
 Mint identifies focus, the current page indicator and primary actions. Paper carries names, headings and values. Soft green-gray carries descriptions and adjacent game names. Muted green-gray carries column labels, file counts and secondary controls.
 
-Ink is the canvas. Fine rules divide controls and facts. A deep green selection fill identifies the current row or settings section. In the native palette, disabled gray belongs to unavailable controls, including Store. The browser uses its disabled button styling for the same state. The browser names the paper foreground `--ink` and the dark background `--canvas`. [Native palette](native/canvas.hpp) · [Browser palette](web/style.css)
+Ink is the canvas. Fine rules divide controls and facts. A deep green selection fill identifies the current row or settings section. In the native palette, disabled gray belongs to unavailable controls, including unavailable downloads. The browser uses its disabled button styling for the same state. The browser names the paper foreground `--ink` and the dark background `--canvas`. [Native palette](native/canvas.hpp) · [Browser palette](web/style.css)
 
 Runtime states have a colored dot and a text label. Green identifies **Accepted** on console or **Routing active** in the browser. Amber identifies **Pending**, **Reopen content** or **Relaunch game**. Coral identifies **Error** and **Game unavailable**. **Disabled** uses muted text. **Requested** shows the player’s choice separately. [Runtime state guide](docs/USAGE.md#enable-disable-and-remove)
 
@@ -151,7 +151,7 @@ Preserve the square crop of game artwork and its rounded corners. The native foc
 
 **Settings.** The console has General, Connection, Advanced, Controls and Credits. The left stick opens Settings, ZR opens Connection and ZL opens the debug log. The browser has General, Advanced and Credits, with Game copy under General and Current session under Advanced. Connection status and Disconnect sit in its Settings sidebar. Preferences save immediately on console and explicitly through **Save settings** in the browser. Per-game copy selection saves immediately on both. [Console settings](native/settings_screen.cpp) · [Browser settings](web/index.html)
 
-**Store.** Keep the bag icon and label visible in gray and outside the focus order while the entry is inactive. The preview screens have a per-game catalog, creator previews and labeled community hosts. Players can use a publisher’s website to download a ZIP for browser upload. [Store presentation](native/store_screen.cpp) · [Community repository template](https://github.com/H644b/moader-mod-repo-template)
+**Store.** A search field and the **On this Switch** filter sit above the creator preview and results list. Each row names its game. Mod details show the creator, gallery, license, package size and the **Download & install** action. Download progress stays visible while browsing. The Library receives verified packages with the mod switched off. [Store presentation](native/store_screen.cpp) · [Community catalog](https://h644b.github.io/moader-mod-repo-template/)
 
 ## Do's and Don'ts
 

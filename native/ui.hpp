@@ -62,7 +62,8 @@ enum LocalAction : uint32_t {
     GetPairing = 512,
     GetGameSource = 1024,
     Reconnect = 2048,
-    OpenStoreHost = 4096
+    SearchStore = 4096,
+    InstallStoreMod = 8192
 };
 bool settings_view(View);
 unsigned tab_for(View);
@@ -87,6 +88,8 @@ struct State {
     uint64_t game_source_title = 0;
     bool game_source_available = false;
     Store store;
+    StoreTransfer transfer;
+    bool has_store_mod(const StoreEntry&) const;
     bool inventory_unavailable() const {
         return inventory_refresh_pending || (summary.flags & moader::ipc::InventoryUnavailable);
     }

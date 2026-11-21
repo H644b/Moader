@@ -7,6 +7,8 @@
 #include "ui.hpp"
 #include "cover_loader.hpp"
 #include "store_client.hpp"
+#include "store_games.hpp"
+#include "store_installer.hpp"
 #include <cmath>
 #include "ui_bitmap.hpp"
 #include <arpa/inet.h>
@@ -226,6 +228,76 @@ void pairing(){char raw[64]{};const auto rc=sendOut(moader::ipc::PairingCode,raw
     for(char c:ui.pairing)if(c<'0'||c>'9')valid=false;
     if(!valid){ui.pairing="Unavailable";message("The service did not return a six-digit pairing code.",true);}
 }
+void search_store() {
+    SwkbdConfig keyboard{};
+    if (R_FAILED(swkbdCreate(&keyboard, 0))) {
+        message("The search keyboard could not be opened.", true);
+        return;
+    }
+    swkbdConfigMakePresetDefault(&keyboard);
+    swkbdConfigSetHeaderText(&keyboard, "Search mods");
+    swkbdConfigSetGuideText(&keyboard, "Mod, game, creator or category");
+    swkbdConfigSetInitialText(&keyboard, ui.store.query.c_str());
+    swkbdConfigSetOkButtonText(&keyboard, "Search");
+    swkbdConfigSetStringLenMax(&keyboard, 80);
+    swkbdConfigSetStringLenMin(&keyboard, 0);
+    swkbdConfigSetReturnButtonFlag(&keyboard, false);
+    char text[321]{};
+    const auto rc = swkbdShow(&keyboard, text, sizeof(text));
+    swkbdClose(&keyboard);
+    if (R_SUCCEEDED(rc))
+        ui.store.set_query(text);
+    else if (rc != MAKERESULT(Module_Libnx, LibnxError_LibAppletBadExit))
+        message("The search keyboard is unavailable.", true);
+}
+void restore_store_listener(moader_native::StoreInstaller& install) {
+    if (install.temporary_listener) {
+        const u32 off = 0;
+        const auto rc = sendIn(moader::ipc::WebEnabled, off);
+        if (R_FAILED(rc))
+            message("Could not restore the listener. Check Connection in Settings.", true);
+        else
+            install.temporary_listener = false;
+    }
+}
+void begin_store_install(moader_native::StoreInstaller& install) {
+    using namespace moader_ui;
+    if (install.active() || ui.store.page != Shelf::Release || ui.has_store_mod(ui.store.detail))
+        return;
+    const auto& g = ui.store.games[ui.store.detail.game];
+    const auto& mod = g.mods[ui.store.detail.release];
+    if (ui.transfer.phase == InstallPhase::Installed && ui.transfer.game == g.id && ui.transfer.id == mod.id)
+        return;
+    auto fail = [&](const char* msg) {
+        ui.transfer = {InstallPhase::Failed, g.id, mod.id, msg, 0, mod.package.bytes};
+        restore_store_listener(install);
+    };
+    moader::ipc::SummaryReply status{};
+    if (!ui.connected || ui.inventory_unavailable() || R_FAILED(sendOut(moader::ipc::Summary, status)) ||
+        status.flags & moader::ipc::InventoryUnavailable) {
+        fail("Reconnect to your library and try again.");
+        return;
+    }
+    char code[64]{};
+    if (R_FAILED(sendOut(moader::ipc::PairingCode, code)) || strnlen(code, sizeof(code)) != 6) {
+        fail("Could not authorize the local import.");
+        return;
+    }
+    if (!(status.flags & moader::ipc::WebRunning)) {
+        const u32 on = 1;
+        if (R_FAILED(sendIn(moader::ipc::WebEnabled, on))) {
+            fail("Could not start the local import service.");
+            return;
+        }
+        install.temporary_listener = true;
+        if (R_FAILED(sendOut(moader::ipc::Summary, status)) || !(status.flags & moader::ipc::WebRunning)) {
+            fail("The local import service did not start.");
+            return;
+        }
+    }
+    if (!install.start(ui.transfer, g.id, mod, status.port, code))
+        restore_store_listener(install);
+}
 void refresh_preferences(){
     moader::ipc::PreferencesReply p{};
     ui.preferences_available=R_SUCCEEDED(sendOut(moader::ipc::GetPreferences,p))&&!(p.flags&~15u)&&p.port>=1024&&p.port<=65535&&p.port!=7713;
@@ -381,6 +453,8 @@ int main(){
     struct Touch {bool down=false, cancel=false; u32 id=0; float x=0,y=0,last_x=0,last_y=0;} touch;
     moader_native::CoverLoader covers;
     moader_native::StoreClient store_client;
+    moader_native::StoreInstaller store_installer;
+    moader_native::StoreInventory store_inventory(moader_native::read_store_games);
     moader_ui::Renderer renderer;Result connection=establish();if(R_SUCCEEDED(connection))connection=refresh();
     if(R_FAILED(connection)){ui.connected=false;if(modern_hen)message(reload.detail,true);else error(connection);}
     u64 next_refresh=0,last_tick=armGetSystemTick(),repeat_at=0;u64 previous_direction=0;
@@ -446,6 +520,10 @@ int main(){
                 touch={};
             }
         }
+        if (store_installer.active() && (actions & (ToggleWeb | ReloadService))) {
+            actions &= ~(ToggleWeb | ReloadService);
+            message("Wait for the Store installation to finish.", true);
+        }
         if(actions&RefreshEvents)refresh_debug();
         if(actions&SaveReport)save_debug(covers);
         if(actions&SavePreferences)save_preferences();
@@ -474,15 +552,25 @@ int main(){
             if(R_FAILED(result))error(result);else message(remove?"Mod removed. Files are in recovery storage.":"Request saved. The runtime state shows its acknowledgement.");
             update(connection);
         }
-        if(StoreAvailable&&(actions&OpenStoreHost)&&ui.view==View::Store){
-            const auto url=ui.store.host_url();WebCommonConfig config{};
-            Result result=webPageCreate(&config,url.c_str());
-            if(R_SUCCEEDED(result))result=webConfigShow(&config,nullptr);
-            if(R_FAILED(result))message("The community host page could not be opened.",true);
+        if (ui.view == View::Store && (actions & SearchStore)) search_store();
+        if (ui.view == View::Store && (actions & InstallStoreMod)) begin_store_install(store_installer);
+        if (store_installer.poll(ui.transfer)) {
+            restore_store_listener(store_installer);
+            update(connection);
+            if (ui.view != View::Store)
+                message(ui.transfer.phase == InstallPhase::Installed ? "Store mod added to your Library." : ui.transfer.message,
+                        ui.transfer.phase == InstallPhase::Failed);
         }
         if(ui.connected&&now>=next_refresh){next_refresh=now+armNsToTicks(2000000000);update(connection);}
+        if (ui.transfer.phase == InstallPhase::Installed && !ui.inventory_unavailable()) {
+            const u64 id = std::strtoull(ui.transfer.game.c_str(), nullptr, 16);
+            for (const auto& mod : ui.mods) if (mod.data.title_id == id && mod.id == ui.transfer.id) {
+                ui.transfer = {}; break;
+            }
+        }
         covers.poll(ui,monotonic_ms());
         store_client.poll(ui);
+        store_inventory.poll(ui);
         u32 stride=0;auto* pixels=static_cast<uint32_t*>(framebufferBegin(&framebuffer,&stride));
         if(!pixels){
             if(reload.can_exit()&&allow_hbmenu_return())break;
@@ -495,5 +583,7 @@ int main(){
         if((down&HidNpadButton_Minus)||(actions&moader_ui::SaveScreenshot))save_screenshot(pixels,stride);
         framebufferEnd(&framebuffer);
     }
+    store_installer.stop();
+    restore_store_listener(store_installer);
     foreground.reset();if(serviceIsActive(&service))serviceClose(&service);if(serviceIsActive(&hen))serviceClose(&hen);framebufferClose(&framebuffer);return 0;
 }
