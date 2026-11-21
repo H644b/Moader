@@ -43,17 +43,17 @@ local function q(address, value) write(address, P.u64s(value)) end
 local function d(address, value) write(address, P.u32s(value)) end
 q(base + 0x11e12d0, registry - 16)
 q(notifier + 8, backend)
-q(filesystem, 0x6100010000)
-q(report, 0x6100011000)
+q(filesystem, base + 0x2b1e20)
+q(report, base + 0x2b2080)
 d(filesystem + 0x28, 2)
 d(report + 0x20, 1)
 for slot, offset in pairs({[0] = 0x4b8c0, [1] = 0x103390}) do
-    q(0x6100010000 + slot * 8, base + offset)
+    q(base + 0x2b1e20 + slot * 8, base + offset)
 end
 for slot, offset in pairs({[0] = 0x1036f0, [1] = 0x104e10,
     [4] = 0x104ef0, [5] = 0x1050a0, [6] = 0x1053d0,
     [7] = 0x105410}) do
-    q(0x6100011000 + slot * 8, base + offset)
+    q(base + 0x2b2080 + slot * 8, base + offset)
 end
 local function reply(length, values)
     local bytes = string.rep("\0", length)
@@ -94,6 +94,8 @@ function fs.send_packet(handle, packet)
             assert(length > 0 and length <= 0x4000 and
                 math.floor(P.u32(packet, 0) / 0x1000000) % 16 == 1,
                 "bounded RO process read lost its receive descriptor")
+            assert(address >= base and address + length <= base + #capture,
+                "RO process reader used outside the captured executable range")
             data_slot = read(address, length)
             return reply(56, {[32] = 0, [40] = 0, [48] = length})
         end

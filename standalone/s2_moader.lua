@@ -313,12 +313,18 @@ function M.install(env)
         return invoke(base + offset, arguments, variant)
     end
 
-    local function locate(handle, kind, ref_offset, slots_expected)
+    local function locate(handle, kind, ref_offset, vtable_offset, slots_expected)
         local record
         env.locate_by_clone(handle, function(found)
             local raw = read_fs(found.object, ref_offset + 4)
             local vptr = P.u64(raw, 0)
-            local methods = read_code(vptr, 80)
+            check(vptr == base + vtable_offset,
+                kind .. " vtable is not at the qualified FS image offset")
+            -- The method table is read-only image data, not executable code.
+            -- The RO bulk reader is reserved for exact instructions and caves.
+            local methods = read_fs(vptr, 80)
+            check(#methods == 80 and methods == read_fs(vptr, 80),
+                kind .. " method table changed between reads")
             for slot, offset in pairs(slots_expected) do
                 check(P.u64(methods, slot * 8) == base + offset,
                     kind .. " method table differs")
@@ -381,10 +387,10 @@ function M.install(env)
         "required Moader runtime.log is absent: " .. tostring(file_error))
     check(fs.ipc_file_get_size(report_file) == profile.reportBytes,
         "required Moader runtime.log size changed")
-    local log = locate(report_file, "runtime report", 0x20,
+    local log = locate(report_file, "runtime report", 0x20, 0x2b2080,
         {[0] = 0x1036f0, [1] = 0x104e10, [4] = 0x104ef0,
          [5] = 0x1050a0, [6] = 0x1053d0, [7] = 0x105410})
-    local filesystem = locate(sd, "SD filesystem", 0x28,
+    local filesystem = locate(sd, "SD filesystem", 0x28, 0x2b1e20,
         {[0] = 0x4b8c0, [1] = 0x103390})
     local registry = P.u64(read_fs(base + 0x11e12d0, 8), 0) + 16
     check(registry >= 0x100000000 and registry < 0x8000000000,
