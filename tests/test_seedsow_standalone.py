@@ -30,6 +30,17 @@ def main():
     refused(lambda: standalone.qualify_upload_receipt('Upload complete.\n', 0))
     refused(lambda: standalone.qualify_upload_receipt('commit_rc=0x203\n', 0))
     refused(lambda: standalone.qualify_upload_receipt('commit_rc=0x0\n', 1))
+    expected_save = {'inject2.lua': 4122, 'exploitb2.lua': 866}
+    probe = ('status: ok\noutput:\n'
+             'MOADER_SAVE\tinject2.lua\tvisible\t4122\n'
+             'MOADER_SAVE\texploitb2.lua\tvisible\t866\n')
+    assert standalone.qualify_save_probe(probe, expected_save) == {
+        'inject2.lua': ('visible', 4122),
+        'exploitb2.lua': ('visible', 866)}
+    refused(lambda: standalone.qualify_save_probe(
+        probe.replace('visible\t866', 'missing\t-1'), expected_save))
+    refused(lambda: standalone.qualify_save_probe(
+        probe.replace('MOADER_SAVE\texploitb2.lua\tvisible\t866\n', ''), expected_save))
     if len(sys.argv) == 2:
         source = Path(sys.argv[1])
         spec = standalone.profile()

@@ -2,14 +2,14 @@
 
 The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blob/ff14e26cb950db5cff0da911d28774404adb5cd1/console-only/README.md), adapted from [rushinz's on-console Lua port](https://gitlab.com/rushinz/seedsow-semi-untethered), runs FS acquisition and kaiHEN from Seedsow after a one-time save upload. Moader's preparation tool pins that upstream revision and stages the complete matched Moader kaiHEN set on SD. The computer is needed to prepare the SD and upload the save; later runs of this *kaiHEN chain* do not need it.
 
-**Moader installation remains unverified on this route.** One Profile B Demo run reached FS promotion, kaiHEN READY, hbmenu and the Moader app, but the app reported its native filesystem runtime disconnected. Two on-console adapter checks stopped during read-only code/base qualification before any Moader hook or HEN start. The corrected donor-based address rule passes host checks; its first device retest froze with `STAGE B COMPLETE` as the last flushed line, leaving the kaiHEN substep unknown. A READY line alone would prove kaiHEN startup, not a working Moader backend. Use the [PC-driven Seedsow route](SEEDSOW.md) for a verified Moader installation. The steps below are for the experimental candidate and its device check. [Device evidence](VALIDATION.md#seedsow-standalone-host-preparation).
+**Moader installation remains unverified on this route.** One Profile B Demo run reached FS promotion, kaiHEN READY, hbmenu and the Moader app, but the app reported its native filesystem runtime disconnected. Two on-console adapter checks stopped during read-only code/base qualification before any Moader hook or HEN start. The corrected donor-based address rule passes host checks; its first device retest froze with `STAGE B COMPLETE` as the last flushed line, leaving the kaiHEN substep unknown. On a separate full reboot with the same SD files, the isolated upstream **B** Lua route reached `KH READY` and hbmenu, which verifies the shared SD set and upstream chain on this console, but does not install Moader FS. A READY line alone would prove kaiHEN startup, not a working Moader backend. Use the [PC-driven Seedsow route](SEEDSOW.md) for a verified Moader installation. The steps below are for the experimental candidate and its device check. [Device evidence](VALIDATION.md#seedsow-standalone-host-preparation).
 
 ## Requirements and boundaries
 
 - Seedsow Lullaby Demo or full game with a working HTTP launcher save for that edition, a Switch 2 on firmware supported by the [upstream Seedsow project](https://github.com/Malev0/seedsow-fs-kaihen), and an SD card that can be mounted on the computer. Keep the Demo and full-game saves separate.
 - The matching Moader source checkout, Python 3.10+, Git, Node.js 20+ and `luac` for the source-checked save overlay. The published v0.2.5 backend ZIP predates this standalone tool. macOS host preparation has been checked; Linux and WSL2 use the same Python and Node paths, but their standalone route has not yet been verified end to end.
 - For this development candidate, the exact previously qualified sparse FS capture with SHA-256 `0f58beb0a35ca2dadaf6300a8bbf4432974edfeac405aba4b3a3aa01af7d9271`. The generator refuses any other capture. This private capture and generated adapter payload are not in the public checkout or a release yet. A future tested kit can carry the generated files so its users do not need to capture FS themselves.
-- A working launcher save on a **second console profile** before uploading, as the upstream instructions recommend. The uploader writes and commits `save:/` on the selected profile. Keep the original profile for the PC-driven route.
+- A working launcher save on a **second console profile** before uploading, as the upstream instructions recommend. The uploader writes and commits `save:/` for the profile that is actually running Seedsow. Confirm the profile at game launch; the HTTP uploader cannot identify it from the console address. Back up any profile whose save you need to preserve.
 
 ### If Checkpoint cannot back up the working Seedsow Demo save
 
@@ -39,15 +39,23 @@ Safely eject the card and put it in the Switch before continuing.
 
 ## Upload the standalone save once
 
-On the prepared **Profile B** launcher save, start Seedsow and press **Y** to enable its HTTP launcher. Leave the original Profile A save as the backup. From the same Moader folder run:
+Launch Seedsow explicitly with the prepared **Profile B** launcher save and press **Y** to enable its HTTP launcher. From the same Moader folder run:
 
 ```sh
 python3 tools/seedsow-standalone.py upload-save --host SWITCH_LAN_IPV4 --payload-dir build/standalone-fs-payload --node "$(command -v node)"
 ```
 
-The tool rechecks all 14 pinned upstream Lua modules and the uploader, then makes a temporary copy with the three Moader overlay modules for **A**, plus an isolated copy of the original upstream main/kaiHEN/RO modules for **B**. The uploader writes 18 modules and the launcher aliases to this profile's Seedsow save and commits the save. Wait for its `commit_rc=0x0` result. Do not use this command against an unrelated or unbacked-up save. This upload is preparation only; it does not acquire FS or start HEN.
+The tool rechecks all 14 pinned upstream Lua modules and the uploader, then makes a temporary copy with the three Moader overlay modules for **A**, plus an isolated copy of the original upstream main/kaiHEN/RO modules for **B**. The uploader writes 18 modules and the launcher aliases to the currently running profile's Seedsow save and commits it. Wait for its `commit_rc=0x0` result. That receipt confirms a save commit, but does not identify the console profile. Do not use this command against an unrelated or unbacked-up save. This upload is preparation only; it does not acquire FS or start HEN.
 
-On later fresh boots, **A** runs the Moader FS candidate and **B** runs the original upstream Seedsow Lua chain without the Moader FS adapter. Both buttons read the **same staged SD kaiHEN files**; B is a regular upstream Lua route, not a separate unpatched native kaiHEN build. Choose one button per full reboot. Profile A's save remains untouched by this Profile B upload. B's on-console behavior has not yet been retested with this two-slot save.
+Fully reboot, launch Seedsow explicitly with Profile B and press Y. Check that the required A/B save files persisted on **that running profile** before a native run:
+
+```sh
+python3 tools/seedsow-standalone.py verify-save --host SWITCH_LAN_IPV4 --node "$(command -v node)"
+```
+
+This makes a read-only request for five file presences and sizes; it does not identify the profile by itself or compare full file contents. After Y, close Seedsow and relaunch it with Profile B before pressing A or B, because the launcher accepts one choice per process.
+
+On later fresh boots, **A** runs the Moader FS candidate and **B** runs the original upstream Seedsow Lua chain without the Moader FS adapter. Both buttons read the **same staged SD kaiHEN files**; B is a regular upstream Lua route, not a separate unpatched native kaiHEN build. Choose one button per full reboot. The profile selected when Seedsow starts determines which save these entries use. On a separate full reboot, B reached `KH READY` and hbmenu with the shared SD files; B does not install Moader's FS runtime.
 
 ## Experimental Moader installation check on a fresh boot
 

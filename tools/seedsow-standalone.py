@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from urllib.request import Request, urlopen
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -32,6 +33,8 @@ PAYLOAD_FILES = {
     'runtime.bin': 'a0b1fbedd1e3c35f17349f05b19b20b16ced737eb26c768aaf0040dd5ad86c8c',
     'runtime.log': 'dd9b476246581edb636a10ad8caaad58e7ceb2024c87d58333c80550aaeed55f',
 }
+SAVE_PROBE_FILES = ('inject2.lua', 'exploitb2.lua', 's2_b_main.lua',
+                    's2_b_kaihen.lua', 's2_b_kh_ro.lua')
 
 
 def require(ok, message):
@@ -149,6 +152,50 @@ def qualify_upload_receipt(transcript, result):
     receipt = re.findall(r'commit_rc=0x([0-9a-fA-F]+)', transcript)
     require(receipt and all(int(value, 16) == 0 for value in receipt),
             'Standalone save commit was not verified; do not start FS/HEN')
+
+
+def qualify_save_probe(response, expected):
+    require(response.startswith('status: ok\noutput:\n'),
+            'Seedsow save read-only probe failed')
+    observed = {}
+    for name, state, size in re.findall(
+            r'^MOADER_SAVE\t([A-Za-z0-9_.]+)\t(visible|missing)\t(-?\d+)$',
+            response, re.MULTILINE):
+        require(name in expected and name not in observed,
+                'Seedsow save probe returned an unexpected file')
+        observed[name] = (state, int(size))
+    require(set(observed) == set(expected),
+            'Seedsow save probe omitted a required file')
+    mismatched = [name for name, size in expected.items()
+                  if observed[name] != ('visible', size)]
+    require(not mismatched,
+            'Seedsow save is missing or differs on the running profile: ' +
+            ', '.join(mismatched))
+    return observed
+
+
+def verify_save(host, expected):
+    """Read only the selected running profile's save file presence and sizes."""
+    base = 'http://' + str(host) + ':8080'
+    with urlopen(base + '/status', timeout=8) as response:
+        require(response.status == 200 and
+                b'n2h HTTP server (seedsow)' in response.read(4096),
+                'Switch is not serving the qualified Seedsow HTTP launcher')
+    names = '{' + ','.join(json.dumps(name) for name in expected) + '}'
+    script = ('for _,name in ipairs(' + names + ') do '
+              'local path="save:/"..name; '
+              'local visible=e and e:isFileExists(path) or false; '
+              'local file=io.open(path,"rb"); local size=-1; '
+              'if file then size=file:seek("end") or -1; file:close() end; '
+              'print("MOADER_SAVE",name,visible and "visible" or "missing",size) '
+              'end')
+    request = Request(base + '/eval', data=script.encode(), method='POST',
+                      headers={'Content-Type': 'text/plain'})
+    with urlopen(request, timeout=8) as response:
+        require(response.status == 200,
+                'Seedsow save read-only probe returned a non-200 status')
+        result = response.read(16384).decode('utf-8', 'replace')
+    return qualify_save_probe(result, expected)
 
 
 def moader_sd_files():
@@ -284,7 +331,7 @@ def stage_sd(root, files):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('action', choices=('provision', 'check', 'stage-sd',
-                                           'verify-sd', 'upload-save'))
+                                           'verify-sd', 'upload-save', 'verify-save'))
     parser.add_argument('--source', type=Path, default=DEFAULT_SOURCE,
                         help='pinned upstream checkout (default: build/seedsow-standalone-upstream)')
     parser.add_argument('--sd-root', type=Path, help='mounted SD card root')
@@ -300,7 +347,7 @@ def main(argv=None):
         source = qualify_source(options.source, spec)
     if options.action in ('check', 'provision'):
         qualify_uploader(source, options.node)
-    if options.action in ('check', 'upload-save'):
+    if options.action == 'check':
         with tempfile.TemporaryDirectory(prefix='moader-standalone-upload-') as temporary:
             prepare_upload_tree(source, Path(temporary), options.node)
     payload = None
@@ -321,29 +368,40 @@ def main(argv=None):
                 verify_sd(root, files)
     else:
         bundle = None
-    if options.action == 'upload-save':
-        require(payload is not None, '--payload-dir is required before uploading the Moader save')
+    if options.action in ('upload-save', 'verify-save'):
+        if options.action == 'upload-save':
+            require(payload is not None,
+                    '--payload-dir is required before uploading the Moader save')
         require(options.host is not None, '--host is required')
         address = ipaddress.IPv4Address(options.host)
         require(address.is_private and not address.is_loopback and
                 not address.is_multicast and not address.is_unspecified,
                 'Switch address must be a private LAN IPv4')
-        qualify_uploader(source, options.node)
+        if options.action == 'upload-save':
+            qualify_uploader(source, options.node)
         with tempfile.TemporaryDirectory(prefix='moader-standalone-upload-') as temporary:
             uploader = prepare_upload_tree(source, Path(temporary), options.node)
-            with subprocess.Popen([options.node, str(uploader), '--host', str(address)],
-                                  cwd=temporary, stdout=subprocess.PIPE,
-                                  stderr=subprocess.STDOUT, text=True, bufsize=1) as process:
-                transcript = []
-                for line in process.stdout:
-                    print(line, end='', flush=True)
-                    transcript.append(line)
-                result = process.wait()
-        qualify_upload_receipt(''.join(transcript), result)
+            if options.action == 'upload-save':
+                with subprocess.Popen([options.node, str(uploader), '--host', str(address)],
+                                      cwd=temporary, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT, text=True, bufsize=1) as process:
+                    transcript = []
+                    for line in process.stdout:
+                        print(line, end='', flush=True)
+                        transcript.append(line)
+                    result = process.wait()
+                qualify_upload_receipt(''.join(transcript), result)
+            else:
+                expected = {name: (uploader.parent / 'lua' / name).stat().st_size
+                            for name in SAVE_PROBE_FILES}
+                observed = verify_save(address, expected)
     print(json.dumps({'action': options.action, 'upstreamRevision': spec['revision'],
-                      'scope': 'host and SD only' if options.action != 'upload-save'
-                      else 'Seedsow save upload; no FS/HEN run',
+                      'scope': 'Seedsow save upload; no FS/HEN run'
+                      if options.action == 'upload-save' else
+                      'read-only selected-profile save check; no FS/HEN run'
+                      if options.action == 'verify-save' else 'host and SD only',
                       'moaderBackend': 'experimental on-console FS installer; same-boot device result pending',
+                      **({'saveFiles': observed} if options.action == 'verify-save' else {}),
                       **({'fsPayload': payload_info} if payload_info else {}),
                       **({'matchedBundle': bundle} if bundle else {})}, indent=2))
 
