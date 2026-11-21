@@ -247,6 +247,7 @@ def main(argv=None):
     print(json.dumps({'action': options.action, 'upstreamRevision': spec['revision'],
                       'scope': 'host and SD only' if options.action != 'upload-save'
                       else 'Seedsow save upload; no FS/HEN run',
+                      'moaderBackend': 'experimental: FS hook installation is not implemented by the on-console chain',
                       **({'matchedBundle': bundle} if bundle else {})}, indent=2))
 
 

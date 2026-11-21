@@ -1,6 +1,8 @@
 # Seedsow on-console Moader route (experimental)
 
-The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blob/ff14e26cb950db5cff0da911d28774404adb5cd1/console-only/README.md), adapted from [rushinz's on-console Lua port](https://gitlab.com/rushinz/seedsow-semi-untethered), runs FS acquisition and kaiHEN from Seedsow after a one-time save upload. Moader's preparation tool pins that upstream revision and stages the complete matched Moader kaiHEN set on SD. The computer is needed to prepare the SD and upload the save, but not for subsequent on-console runs. This integration has passed host source and SD readback checks; a Moader installation through the console-only chain has **not yet been verified on a Switch**. The existing [PC-driven Seedsow route](SEEDSOW.md) remains separate.
+The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blob/ff14e26cb950db5cff0da911d28774404adb5cd1/console-only/README.md), adapted from [rushinz's on-console Lua port](https://gitlab.com/rushinz/seedsow-semi-untethered), runs FS acquisition and kaiHEN from Seedsow after a one-time save upload. Moader's preparation tool pins that upstream revision and stages the complete matched Moader kaiHEN set on SD. The computer is needed to prepare the SD and upload the save; later runs of this *kaiHEN chain* do not need it.
+
+**Moader installation is incomplete on this route.** One Profile B Demo run reached FS promotion, kaiHEN READY, hbmenu and the Moader app, but the app reported its native filesystem runtime disconnected. The standalone chain does not yet install Moader's separate FS hook. Its READY line proves kaiHEN startup, not a working Moader backend. Use the [PC-driven Seedsow route](SEEDSOW.md) for a complete Moader installation. The steps below record the experimental preparation and diagnostic run; do not present them as a working Moader installer. [Device evidence](VALIDATION.md#seedsow-standalone-host-preparation).
 
 ## Requirements and boundaries
 
@@ -43,13 +45,13 @@ python3 tools/seedsow-standalone.py upload-save --host SWITCH_LAN_IPV4 --node "$
 
 The tool rechecks all 14 pinned Lua modules and the upstream uploader before calling it. The uploader writes the standalone modules to this profile's Seedsow save and commits the save. Wait for its `commit_rc=0x0` result. Do not use this command against an unrelated or unbacked-up save. This upload is preparation only; it does not acquire FS or start HEN.
 
-## Start Moader on a fresh boot
+## Experimental kaiHEN and Moader diagnostic on a fresh boot
 
 1. Fully reboot the Switch. Leave other FS and kaiHEN methods unrun on this boot. Open Seedsow using the profile with the standalone save and press **A** at its launcher. The on-console chain now runs without the computer.
 2. Wait for `KH: === READY! Close Seedsow Lullaby and hold R while launching a game ===`. That line reports the standalone HEN chain's completion; it does not by itself prove the Moader resident or game entry.
 3. Close Seedsow from HOME. Launch a native Switch 2 game normally once and let it run briefly, then close it completely. Hold **R** from before selecting the same game through its next launch to enter hbmenu. The first launch records the game policy when none exists; the second launch is the takeover attempt.
-4. Open Moader. Under **Settings → Advanced**, check that runtime and FS are connected. Check the web listener and a mod only after this same-boot status succeeds. Keep pairing codes private.
+4. Open Moader. Under **Settings → Advanced**, check that runtime and FS are connected. The first device run reported both disconnected because this route has no Moader FS hook installation step. A working web listener or hbmenu does not change that result. Do not treat the route as a completed Moader install or test mods until a same-boot runtime and FS acknowledgement is verified. Keep pairing codes private.
 
-The HEN and Moader resident last only until reboot. The save and staged SD files remain, so later fresh boots start again at step 1. Do not start the PC-driven Seedsow installer on a boot where the standalone chain has already run.
+The HEN and any started Moader resident last only until reboot. The save and staged SD files remain, but repeating the same chain will not add the missing Moader FS hook. Do not start the PC-driven Seedsow installer on a boot where the standalone chain has already run.
 
 If the chain stops, freezes, or reports an uncertain result, keep its on-screen log or `/kaihen/seedsow_run.log` and fully reboot before another Moader attempt. If the chain reports ready but R does not open hbmenu, record the game and whether `/kaihen/bin/game/main.npdm` appears after the first launch; do not delete that policy file. [Validation scope](VALIDATION.md#seedsow-standalone-host-preparation).

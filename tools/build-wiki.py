@@ -103,7 +103,7 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | [Changelog](Changelog) | Release history and the unpublished dev.5 candidate |
 | [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
 | [Seedsow Lullaby](Seedsow-Demo) | Pinned PC-driven GUI preparation and one-boot Moader installation |
-| [Seedsow on-console](Seedsow-Standalone) | Experimental one-time SD/save preparation and later on-console start |
+| [Seedsow on-console](Seedsow-Standalone) | Experimental kaiHEN start; Moader FS hook installation is pending |
 | [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
 | [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
 | [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, software errors and setup recovery |
@@ -136,7 +136,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-No. The v0.2.5 backend kit supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer. [Installation](Installation) covers the method choices and host requirements.
+No. The v0.2.5 backend kit supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer, but has not yet installed Moader's FS hook; use the PC-driven route for Moader. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 
