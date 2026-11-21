@@ -10,7 +10,7 @@ The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blo
 
 Use the complete kaiHEN archive supplied by this Moader checkout or matching backend kit. The tool verifies the official 20261114c base, Moader's source-qualified protocol-7 RO/HEN/bootstrap, the app and resident, then stages the full release. Do not use upstream **Prepare SD** or **Update kaiHEN** afterward: those buttons stage the regular upstream build over Moader's matched files.
 
-A clean source checkout does not contain the ignored prebuilt files. Before the commands below, follow [Build from a clean source checkout](BUILDING.md#build-from-a-clean-source-checkout) with `--build --host-profile seedsow-malev0`, then run its `--check`. A backend kit packaged from this work will contain those exact files already. Do not copy binaries from a different Moader version into this checkout.
+A clean source checkout does not contain the ignored prebuilt files. Use a matching backend kit containing this tool, or provide the **exact** app, resident and RO/HEN/bootstrap bytes recorded in `config/release.json`. A local `--build` can produce different app/resident bytes on another host and does not by itself satisfy this release-identity check. Do not copy binaries from a different Moader version into this checkout.
 
 ## Prepare the SD card on the computer
 

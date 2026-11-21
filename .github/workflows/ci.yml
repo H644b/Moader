@@ -196,10 +196,3 @@ jobs:
           python3 tools/setup-devkit.py
           python3 tools/setup-backend.py --build --host-profile seedsow-malev0 --node node
           python3 tools/setup-backend.py --check --host-profile seedsow-malev0 --node node
-      - name: Stage matched standalone SD files from the Linux build
-        run: |
-          python3 tools/seedsow-standalone.py provision --source "$RUNNER_TEMP/standalone-source" --node node
-          python3 tools/seedsow-standalone.py check --source "$RUNNER_TEMP/standalone-source" --node node
-          mkdir -p "$RUNNER_TEMP/standalone-sd"
-          python3 tools/seedsow-standalone.py stage-sd --source "$RUNNER_TEMP/standalone-source" --sd-root "$RUNNER_TEMP/standalone-sd"
-          python3 tools/seedsow-standalone.py verify-sd --source "$RUNNER_TEMP/standalone-source" --sd-root "$RUNNER_TEMP/standalone-sd"
