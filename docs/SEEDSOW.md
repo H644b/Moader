@@ -2,7 +2,7 @@
 
 This guide covers the PC-driven GUI installer. The separate [experimental on-console Seedsow route](SEEDSOW_STANDALONE.md) prepares SD and a standalone save once, then runs from Seedsow without a PC on later boots.
 
-Download the [v0.2.5 backend ZIP](https://github.com/H644b/Moader/releases/download/v0.2.5/Moader-backend-v0.2.5.zip) for Seedsow Lullaby Demo or the full game.
+Download the [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) for Seedsow Lullaby Demo or the full game.
 
 ## Before you begin
 

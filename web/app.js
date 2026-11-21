@@ -361,7 +361,7 @@ async function saveSettings(event) {
 function downloadLog() {
   const runtime = state.runtime || {};
   const content = [
-    "Moader 0.2.0 debug log",
+    "Moader 3.0.0 debug log",
     new Date().toISOString(),
     "Listener: " + location.host,
     "Library generation: " + state.generation,
