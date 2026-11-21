@@ -7,6 +7,7 @@
         <title>Moader</title>
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="stylesheet" href="/style.css" />
+        <script src="/store.js" defer></script>
         <script src="/app.js" defer></script>
     </head>
     <body>
@@ -77,15 +78,16 @@
             <div class="header-actions">
                 <span id="companion-label" hidden
                     ><svg aria-hidden="true"><use href="#i-display" /></svg>Browser companion</span
-                ><button id="store-button" type="button" disabled aria-label="Store, unavailable">
+                ><button id="store-button" type="button" hidden aria-controls="store-pane" aria-expanded="false">
                     <svg aria-hidden="true"><use href="#i-bag" /></svg>Store</button
                 ><button
                     id="show-settings"
+                    aria-label="Settings"
                     aria-controls="settings-pane"
                     aria-expanded="false"
                     hidden
                 >
-                    <svg aria-hidden="true"><use href="#i-gear" /></svg>Settings
+                    <svg aria-hidden="true"><use href="#i-gear" /></svg><span>Settings</span>
                 </button>
             </div>
         </header>
@@ -152,6 +154,71 @@
                 </footer>
             </section>
 
+            <section id="store-pane" class="store-pane" aria-label="Mod store" hidden>
+                <div id="store-browse">
+                    <div class="store-toolbar">
+                        <h1>Mod store</h1>
+                        <label class="store-search">
+                            <svg aria-hidden="true"><use href="#i-search" /></svg>
+                            <input id="store-search" type="search" aria-label="Search mods" placeholder="Search mods" maxlength="120" />
+                        </label>
+                        <button id="store-owned" type="button" role="switch" aria-checked="false">
+                            <svg aria-hidden="true"><use href="#i-stack" /></svg>On this Switch<span class="store-switch" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                    <div id="store-shelf" class="store-columns" hidden>
+                        <div class="store-feature">
+                            <button id="store-feature-art" class="store-art" type="button" aria-label="View selected mod"></button>
+                            <p id="store-feature-game" class="store-game"></p>
+                            <h2 id="store-feature-title"></h2>
+                            <p id="store-feature-summary" class="store-summary"></p>
+                        </div>
+                        <div class="store-results">
+                            <div class="store-list-heading"><h2 id="store-results-title">All mods</h2><span id="store-count"></span></div>
+                            <ul id="store-list" aria-labelledby="store-results-title"></ul>
+                        </div>
+                    </div>
+                    <div id="store-empty" class="store-empty" hidden>
+                        <svg aria-hidden="true"><use href="#i-bag" /></svg>
+                        <h2 id="store-empty-title"></h2><p id="store-empty-hint"></p>
+                        <button id="store-retry" type="button" hidden>Try again</button>
+                    </div>
+                    <p id="store-check" class="store-check" role="status"></p>
+                </div>
+                <div id="store-detail" hidden>
+                    <button type="button" class="quiet" id="store-back"><span class="store-chevron previous" aria-hidden="true"></span>Back to Store</button>
+                    <div class="store-release-heading">
+                        <p id="store-detail-game" class="store-game"></p>
+                        <span id="store-category"></span>
+                    </div>
+                    <div class="store-columns">
+                        <div>
+                            <div id="store-detail-art" class="store-art"></div>
+                            <div id="store-gallery" class="store-gallery" hidden>
+                                <button type="button" id="store-prev" aria-label="Previous preview"><span class="store-chevron previous" aria-hidden="true"></span></button>
+                                <span id="store-frame"></span>
+                                <button type="button" id="store-next" aria-label="Next preview"><span class="store-chevron" aria-hidden="true"></span></button>
+                            </div>
+                            <div class="store-credit"><span id="store-host"></span><time id="store-date"></time></div>
+                        </div>
+                        <div class="store-description">
+                            <h1 tabindex="-1" id="store-detail-title"></h1>
+                            <p id="store-author"></p><p id="store-description"></p>
+                            <dl class="store-facts">
+                                <div><dt>Version</dt><dd id="store-version"></dd></div>
+                                <div><dt>Download</dt><dd id="store-size"></dd></div>
+                                <div><dt>License</dt><dd id="store-license"></dd></div>
+                            </dl>
+                            <button type="button" class="primary" id="store-install">Download &amp; install</button>
+                            <p id="store-install-hint" class="store-hint"></p>
+                        </div>
+                    </div>
+                </div>
+                <div id="store-transfer" class="store-transfer" hidden>
+                    <p id="store-transfer-label" role="status"></p>
+                    <progress id="store-progress" max="100" aria-label="Installation progress" hidden></progress>
+                </div>
+            </section>
             <div id="runtime-notice" class="runtime-notice">
                 <span class="notice-mark"></span>
                 <p id="runtime-detail"></p>

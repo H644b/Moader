@@ -32,10 +32,8 @@ enum class HitType {
     Mods,
     Settings,
     Store,
-    StoreTab,
-    StoreItem,
-    StoreGame,
-    StoreMirror
+    StoreClear,
+    StoreItem
 };
 struct Hit {
     float x, y, w, h;
@@ -89,4 +87,5 @@ struct Canvas {
 };
 void settings_screen(Canvas&, const State&, const std::vector<std::string>&);
 void store_screen(Canvas&, const State&);
+unsigned store_scroll_limit(Canvas&, const Store&);
 } // namespace moader_ui

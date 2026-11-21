@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.5.0 — community Store
+
+- Enable the Store in the console app and paired browser, with hosted catalog browsing, search, previews and an On this Switch game filter.
+- Verify published package size and SHA-256 before import. New Store mods start disabled; removal permits later reinstallation under the same mod ID.
+- Keep the pinned Seedsow standalone A/B and matched kaiHEN backend kit. The Store has host validation; physical Switch 2 Store installation with the exact v3.5.0 app and resident remains unverified. [Release notes](docs/releases/v3.5.0.md).
+
 ## v3.0.0 — Seedsow standalone backend kit
 
 - Ship the pinned on-console Seedsow A/B implementation and the source-built standalone bootstrap in the backend kit. A installs Moader FS and HEN after one-time SD/save preparation; B follows the regular upstream Lua chain with the same staged SD set.

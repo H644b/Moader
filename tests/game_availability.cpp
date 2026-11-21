@@ -2,9 +2,10 @@
 #include <cstdint>
 typedef uint32_t _LOCK_T;
 typedef struct { uint32_t lock, counter; } _LOCK_RECURSIVE_T;
-#include "native/game_availability.hpp"
+#include "native/store_games.hpp"
 #include <cassert>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 
 namespace {
@@ -15,6 +16,8 @@ struct Fake {
     const char* fail = "";
     u64 id = Id;
     std::vector<u64> records{Id};
+    std::vector<u64> saves, played;
+    size_t next_save = 0;
     std::vector<NsApplicationContentMetaStatus> rows{{NcmContentMetaType_Application, NcmStorageId_GameCard, 0, 0, 7, Id}};
     std::vector<u64> card_ids{Id}, later_card_ids;
     std::vector<bool> insertion;
@@ -52,6 +55,27 @@ void no_content_queries() {
 
 extern "C" Result nsInitialize(void) { ++fake.ns_init; return result("ns_init"); }
 extern "C" void nsExit(void) { ++fake.ns_exit; }
+extern "C" Result pdmqryInitialize() { return result("history"); }
+extern "C" void pdmqryExit() {}
+extern "C" Result pdmqryQueryPlayStatisticsByApplicationId(u64 id, bool, PdmPlayStatistics* stats) {
+    if (std::find(fake.played.begin(), fake.played.end(), id) != fake.played.end()) {
+        stats->program_id = id; stats->total_launches = 1;
+    }
+    return 0;
+}
+extern "C" Result fsOpenSaveDataInfoReader(FsSaveDataInfoReader* reader, FsSaveDataSpaceId space) {
+    reader->s.session = space; fake.next_save = 0; return result("saves");
+}
+extern "C" Result fsSaveDataInfoReaderRead(FsSaveDataInfoReader* reader, FsSaveDataInfo* rows, size_t size, s64* count) {
+    *count = 0;
+    while (reader->s.session == FsSaveDataSpaceId_User && size_t(*count) < size && fake.next_save < fake.saves.size()) {
+        auto& row = rows[(*count)++];
+        row.save_data_type = FsSaveDataType_Account;
+        row.application_id = fake.saves[fake.next_save++];
+    }
+    return 0;
+}
+extern "C" void fsSaveDataInfoReaderClose(FsSaveDataInfoReader*) {}
 extern "C" Result nsGetApplicationControlData2(NsApplicationControlSource source, u64 id,
         NsApplicationControlData* buffer, size_t size, u8 flag, u8 index, u64* actual, u32* auxiliary) {
     ++fake.control_reads;
@@ -147,6 +171,67 @@ extern "C" Result ncmContentStorageHas(NcmContentStorage*, bool* out, const NcmC
 }
 
 int main() {
+    using Presence = moader::GamePresence;
+    auto store_check = [] {
+        moader_native::StorePresence games{{"010000000000F00D", Presence::Unknown},
+                                           {"0100123456780000", Presence::Unknown}};
+        const std::atomic<bool> cancel{false};
+        moader_native::store_games_detail::scan(games, cancel, {});
+        return games;
+    };
+    reset();
+    fake.records.clear();
+    auto store = store_check();
+    assert(store[0].second == Presence::Absent &&
+           store[1].second == Presence::Present); // Inserted card without a Home record.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    assert(store_check()[1].second ==
+           Presence::Present); // Installed digital game, zero mod folders involved.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    fake.rows[0].meta_type = NcmContentMetaType_Patch;
+    assert(store_check()[1].second == Presence::Present); // Registered HOME title with update data.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    fake.program = false;
+    assert(store_check()[1].second == Presence::Present); // Archived HOME tile.
+    reset();
+    fake.insertion = {false};
+    noncard();
+    fake.fail = "has";
+    assert(store_check()[1].second == Presence::Present); // Discovery needs no active base program.
+    reset();
+    noncard();
+    fake.fail = "inserted";
+    assert(store_check()[1].second == Presence::Present); // Digital discovery remains independent.
+    // Swap physical cards, with a shared base save for the Z-A Edition and
+    // play history for Mario Kart even when its HOME record is unavailable.
+    reset();
+    constexpr u64 za = 0x0100F43008C44000ull, kart = 0x0100152000022000ull;
+    fake.id = za; fake.records.clear(); fake.card_ids = {kart}; fake.saves = {za};
+    char temporary[] = "/tmp/moader-store-games-XXXXXX";
+    assert(mkdtemp(temporary));
+    moader::StorePresence pair{{"0400F43008C44001", Presence::Unchecked}, {"0100152000022000", Presence::Unchecked}};
+    const std::atomic<bool> running{false};
+    moader_native::store_games_detail::scan(pair, running, temporary);
+    assert(pair[0].second == Presence::Present && pair[1].second == Presence::Present && fake.control_reads == 1);
+    fake.saves.clear(); fake.card_ids = {za}; fake.played = {kart};
+    moader_native::store_games_detail::scan(pair, running, {});
+    assert(pair[0].second == Presence::Present && pair[1].second == Presence::Present);
+    fake.acd_index = 0;
+    moader_native::store_games_detail::scan(pair, running, {});
+    assert(pair[0].second != Presence::Present && pair[1].second == Presence::Present);
+    fake.card_ids.clear(); fake.insertion = {false}; fake.played.clear(); fake.fail = "ns_init";
+    moader_native::store_games_detail::scan(pair, running, temporary);
+    assert(pair[0].second == Presence::Present && pair[1].second == Presence::Present);
+    fake.saves = {kart};
+    moader_native::store_games_detail::scan(pair, running, {});
+    assert(pair[0].second == Presence::Unknown && pair[1].second == Presence::Present);
+    std::filesystem::remove_all(temporary);
     reset(); assert(lookup().load_allowed);
     assert(fake.ns_init == 1 && fake.ns_exit == 1 && fake.card_reads == 2);
     no_content_queries();

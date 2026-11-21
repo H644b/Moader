@@ -4,8 +4,8 @@ Choose a download based on what is already running on your Switch. Use the app a
 
 | What you need | Download |
 | --- | --- |
-| Install or update Moader on an existing compatible backend | [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip) |
-| Set up the backend for this boot | [Moader-backend-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+| Install or update Moader on an existing compatible backend | [Moader-v3.5.0.zip](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-v3.5.0.zip) |
+| Set up the backend for this boot | [Moader-backend-v3.5.0.zip](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-backend-v3.5.0.zip) |
 
 ## Copy or update the console app
 
@@ -22,7 +22,7 @@ Copying the plugin puts the new file on SD. If Moader is already running in the 
 
 ## Start the backend for this boot
 
-Choose the method you use to start homebrew. Use the v3.0.0 backend ZIP from the download table.
+Choose the method you use to start homebrew. Use the v3.5.0 backend ZIP from the download table.
 
 | Method | Computer | Guide |
 | --- | --- | --- |
@@ -32,13 +32,13 @@ Choose the method you use to start homebrew. Use the v3.0.0 backend ZIP from the
 | Seedsow Lullaby, on-console | Computer for initial setup | [On-console Seedsow requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries) |
 | CivSwitch (experimental) | macOS or Linux | [CivSwitch setup](CIV7.md#experimental-setup) |
 
-The on-console Seedsow kit includes a standalone bootstrap. The Moader route has a separate requirement for a qualified local filesystem capture. See the [v3.0.0 release notes](https://github.com/H644b/Moader/releases/tag/v3.0.0) and [validation results](VALIDATION.md#v300-standalone-release-scope).
+The on-console Seedsow kit includes a standalone bootstrap. The Moader route has a separate requirement for a qualified local filesystem capture. See the [v3.5.0 release notes](https://github.com/H644b/Moader/releases/tag/v3.5.0) and [validation results](VALIDATION.md#v300-standalone-release-scope).
 
 After a full reboot, the files and settings stay on SD. Start your backend again for the new boot.
 
 ### Before either SmileBASIC method
 
-Download and extract [Moader-backend-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip). Open the outer folder with `START_HERE.txt` and `tools/`. Install **Python 3.10+**. First-time preparation needs internet access and uses the prebuilt files in the kit, so you can skip installing an SDK. Close the Moader app if it's open.
+Download and extract [Moader-backend-v3.5.0.zip](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-backend-v3.5.0.zip). Open the outer folder with `START_HERE.txt` and `tools/`. Install **Python 3.10+**. First-time preparation needs internet access and uses the prebuilt files in the kit, so you can skip installing an SDK. Close the Moader app if it's open.
 
 Use the requirements in the upstream guide for your chosen method. Moader needs a fresh, verified filesystem session from the current boot. Keep the session's host and SmileBASIC open until the Moader installer finishes.
 

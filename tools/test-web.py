@@ -33,6 +33,12 @@ with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
         status, body = request('/api/state')
         assert status == 200 and not json.loads(body)['runtime']['connected']
         assert request('/api/settings', auth=False)[0] == 401
+        store_games = '/api/store/games'
+        game = b'0400F43008C44001'
+        assert request(store_games, 'POST', game, auth=False)[0] == 401
+        assert request(store_games, 'POST', game, headers={'Origin': 'http://unrelated.invalid'})[0] == 403
+        assert request(store_games, 'POST', b'bad-id')[0] == 400
+        assert json.loads(request(store_games, 'POST', game)[1]) == {game.decode().lower(): None}
         art = '/api/game-art?titleId=0400F43008C44001'
         assert request(art, auth=False)[0] == 401
         assert request('/api/game-art?titleId=bad')[0] == 400
@@ -106,6 +112,7 @@ with tempfile.TemporaryDirectory(prefix='moader-web-') as temp:
         status, body = request(route + '?offset=0', 'PUT', payload)
         assert status == 200 and json.loads(body)['received'] == len(payload)
         assert request(route, 'POST', b'')[0] == 201
+        assert json.loads(request(store_games, 'POST', game)[1]) == {game.decode().lower(): True}
         for name, mime in [('hbmenu.jpg', 'image/jpeg'), ('mark-alpha.png', 'image/png')]:
             expected = (ROOT / 'branding' / name).read_bytes()
             icon.write_bytes(expected)

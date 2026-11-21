@@ -118,6 +118,11 @@ int main(int argc, char** argv) {
                reopened_prefs.web_port == 8721 && !reopened_prefs.follow_log,
                "All shared preferences must survive app restart.");
         expect(reopened.generation() == generation && reopened.list().size() == 3, "Reopening preserves settings and library.");
+        const auto failed_retry = rejects([&] { reopened.import_zip(title, "collision", fixtures + "/bad-crc.zip", "Bad replacement"); },
+                                          "A damaged replacement ZIP must reject.");
+        expect(failed_retry.find("CRC") != std::string::npos && reopened.list().size() == 3 &&
+               read_file(root + "/library/" + title + "/collision/romfs/config.txt") == "configuration",
+               "A failed reinstall must leave the retained payload intact and the mod removed.");
         rejects([] { moader::checked_relative_path("a/../b"); }, "Parent traversal must reject.");
         rejects([] { moader::checked_relative_path("a\\b"); }, "Windows separator must reject.");
         rejects([&] { library.remove(title, "../escape"); }, "Mod ID traversal must reject.");

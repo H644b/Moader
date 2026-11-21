@@ -4,13 +4,13 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v3.0.0** adds the source-qualified Seedsow standalone implementation and prebuilt bootstrap to the backend kit. Use `sourceCommit` in its [release manifest](https://github.com/H644b/Moader/releases/download/v3.0.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
+**v3.5.0** adds the active community Store to the existing Seedsow standalone backend kit. The v3.0.0 release introduced the source-qualified standalone implementation and prebuilt bootstrap. Use `sourceCommit` in the v3.5.0 [release manifest](https://github.com/H644b/Moader/releases/download/v3.5.0/release-manifest.json) to identify their exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
-| `Moader-v3.0.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v3.0.0.zip` | Public host source, the matched Moader/kaiHEN binaries, pinned official kaiHEN archive, complete regular bundle, and `prebuilt/standalone-bootstrap/{bootstrap.bin,proof.json}`; outer folder includes `START_HERE.txt` |
+| `Moader-v3.5.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
+| `Moader-backend-v3.5.0.zip` | Public host source, the matched Moader/kaiHEN binaries, pinned official kaiHEN archive, complete regular bundle, and `prebuilt/standalone-bootstrap/{bootstrap.bin,proof.json}`; outer folder includes `START_HERE.txt` |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -24,7 +24,7 @@ The host kit contains `research/artifacts/kaiHEN-20261114c.zip` and the full pat
 {
   "schema": 1,
   "programs": {
-    "url": "https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip",
+    "url": "https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-v3.5.0.zip",
     "sha256": "REPLACE_WITH_ACTUAL_RELEASE_ZIP_SHA256"
   },
   "patched_hen": {

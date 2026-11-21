@@ -27,9 +27,12 @@ with tempfile.TemporaryDirectory(prefix='moader-log-snapshots-') as temporary:
     with zipfile.ZipFile(fixture,'w',zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('romfs/Model/sample.bin',b'example texture')
         archive.writestr('romfs/config.txt',b'configuration')
+    replacement = work/'replacement.zip'
+    with zipfile.ZipFile(replacement,'w',zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('romfs/config.txt',b'replacement')
     backend = work/'backend-test'
     subprocess.run([*common,str(ROOT/'tests/backend_test.cpp'),*cpp,'-lz','-o',str(backend)],check=True)
-    subprocess.run([str(backend),str(fixture),str(work/'library')],check=True)
+    subprocess.run([str(backend),str(fixture),str(work/'library'),str(replacement)],check=True)
     native_test = work/'native-test'
     subprocess.run(['clang','-std=c11','-D_POSIX_C_SOURCE=200809L','-O1','-g','-Wall','-Wextra','-Werror',
                     '-fsanitize=address,undefined','-DMOADER_HOST_TEST','-pthread',

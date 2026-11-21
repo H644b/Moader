@@ -88,7 +88,8 @@ If the game becomes unavailable, Moader keeps your enable settings and pauses ne
 | Control | Action |
 | --- | --- |
 | D-pad | Browse games with **← / →**. Use **↑ / ↓** to choose a mod or scroll its details. In Settings, **←** moves to the section list and **→** returns to its controls. |
-| **L** / **R** | Browse games in the library |
+| **L** / **R** | Browse games in the library. In the Store, **R** toggles the game filter. |
+| **X** in the Store | Search the catalog |
 | **A** | Open the game, open the selected mod, then enable or disable it from its details. Select a control in Settings. |
 | **X**, then **X** | Open and confirm removal of the selected mod |
 | **B** | Go back or cancel |
@@ -118,8 +119,10 @@ On the console, **Connection** shows listener status and pairing, **Advanced** c
 
 Press **ZL** in the app or open **Settings → Advanced → Current session** in the browser for the debug log. Library events show what you asked Moader to do. Native events can show what the filesystem accepted or read. Choose **Download debug log** in the browser’s **Advanced** section to save a copy, or press **−** on the console to save an app screenshot. Remove private details before sharing a report. [Reporting a problem](TROUBLESHOOTING.md#reporting-a-problem)
 
-## Community mod repositories
+## Browse and install from the Store
 
-The gray **Store** button is inactive in this build. You can download a mod ZIP from a publisher’s website and import it with **Upload mod** in your paired browser.
+Choose **Store** in the console app or paired browser to browse community releases. Search by mod, game or creator; use **On this Switch** to narrow the list to games Moader can find from the console’s game records, play history, saves or Library. This filter helps browsing and does not verify ownership or game-version compatibility.
+
+Open a release to read its description and previews, then choose **Install**. Moader checks the published package size and SHA-256 before importing it. The new mod appears disabled in your Library; choose the correct game copy and enable it there. If you remove a Store mod from the Library, you can install that release again. You can still import a publisher ZIP with **Upload mod**.
 
 To publish your own mods, copy the repository template. It builds a static website, a game catalog at `catalog.json` and downloadable ZIPs with their sizes and SHA-256 checksums. The template includes instructions for GitHub Pages and other static hosts. [Moader mod repository template](https://github.com/H644b/moader-mod-repo-template)

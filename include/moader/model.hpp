@@ -27,7 +27,10 @@ struct Mod {
     std::string availability_detail;
     uint64_t inventory_stamp = 0;
     uint32_t game_source = 0; // User-selected GameSource; never ZIP metadata.
+    uint64_t install_slot = 0; // Older installations keep their paths for running games.
 };
+inline constexpr char ReinstallDirectory[] = ".installs";
+std::string install_path(const std::string& base, uint64_t slot);
 struct RuntimeStatus {
     bool connected = false;
     uint64_t applied_generation = 0;

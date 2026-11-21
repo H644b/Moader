@@ -221,7 +221,13 @@ extern "C" void svcSleepThread(s64 ns) {
     assert(fake.kicks >= 3); // Poll retried after the injected failure.
     throw std::runtime_error("bounded host shutdown fixture");
 }
-// Empty test library: no NS/settings services should be needed.
+// The empty library and idle Store never query games, saves or play history.
+extern "C" Result pdmqryInitialize(void) { assert(false); return Failure; }
+extern "C" void pdmqryExit(void) { assert(false); }
+extern "C" Result pdmqryQueryPlayStatisticsByApplicationId(u64, bool, PdmPlayStatistics*) { assert(false); return Failure; }
+extern "C" Result fsOpenSaveDataInfoReader(FsSaveDataInfoReader*, FsSaveDataSpaceId) { assert(false); return Failure; }
+extern "C" Result fsSaveDataInfoReaderRead(FsSaveDataInfoReader*, FsSaveDataInfo*, size_t, s64*) { assert(false); return Failure; }
+extern "C" void fsSaveDataInfoReaderClose(FsSaveDataInfoReader*) { assert(false); }
 extern "C" Result nsInitialize(void) { assert(false); return Failure; }
 extern "C" void nsExit(void) { assert(false); }
 extern "C" Result nsListApplicationRecord(NsApplicationRecord*, s32, s32, s32*) { assert(false); return Failure; }

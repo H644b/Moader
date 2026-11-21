@@ -1,5 +1,5 @@
 DEVKITPRO ?= $(CURDIR)/vendor/devkitpro
-MOADER_VERSION := 3.0.0
+MOADER_VERSION := 3.5.0
 export DEVKITPRO
 include $(DEVKITPRO)/libounce/switch2_cpu.mk
 PREFIX := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-
@@ -29,7 +29,7 @@ build/native/switch.specs: $(DEVKITPRO)/libounce/switch.specs | build/native
 build/native/diagnostics.o: native/diagnostics.cpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-build/generated/web_assets.hpp: web/index.html web/style.css web/app.js web/icon.svg branding/lockup.svg native/assets/Text.ttf native/assets/Strong.ttf tools/embed-web.py
+build/generated/web_assets.hpp: web/index.html web/style.css web/app.js web/store.js web/icon.svg branding/lockup.svg native/assets/Text.ttf native/assets/Strong.ttf tools/embed-web.py
 	python3 tools/embed-web.py
 
 build/generated/native_font.hpp: $(wildcard native/assets/*.ttf) native/embed-font.py
@@ -42,7 +42,6 @@ $(UI_OBJ): build/native/%.o: native/%.cpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -Wno-unused-function -c $< -o $@
 
 build/native/canvas.o: build/generated/native_font.hpp
-build/native/store.o: build/generated/store_assets.hpp
 
 build/native/catalog_fetch.o: native/catalog_fetch.cpp native/catalog_fetch.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@

@@ -3,6 +3,10 @@
 #include <stdexcept>
 
 namespace moader {
+std::string install_path(const std::string& base, uint64_t slot) {
+    if (!slot) return base;
+    return base + '/' + ReinstallDirectory + '/' + std::to_string(slot);
+}
 std::string preferences_json(const Preferences& p) {
     return std::string("{\"gameNames\":") + (p.game_names ? "true" : "false") +
         ",\"reducedMotion\":" + (p.reduced_motion ? "true" : "false") +

@@ -1,10 +1,11 @@
 #include "store.hpp"
 #include "ui.hpp"
-#include "store_assets.hpp"
 #include "third_party/picojson.h"
 #include <algorithm>
 #include <cctype>
-#include <cstdio>
+#include <cmath>
+#include <tuple>
+#include <sstream>
 #include <deque>
 
 namespace moader_ui {
@@ -50,16 +51,41 @@ const Array& array(const Object& o, const char* key) {
     return v.is<Array>() ? v.get<Array>() : none;
 }
 bool https_url(const std::string& s) {
-    return s.starts_with("https://") && s.size() > 8 && s.size() < 2049 &&
-           s.find_first_of(" \t\r\n\\") == s.npos;
+    if (!s.starts_with("https://") || s.size() > 2048 ||
+        std::any_of(s.begin(), s.end(), [](unsigned char c) { return c <= 32 || c == 127 || c == '\\'; }))
+        return false;
+    auto authority = s.substr(8, s.find_first_of("/?#", 8) - 8);
+    return !authority.empty() && authority.find('@') == authority.npos;
 }
-template <class T> void unique_push(std::vector<T>& out, const T& v) {
-    if (std::find(out.begin(), out.end(), v) == out.end())
-        out.push_back(v);
+std::string folded(std::string value) {
+    for (char& c : value)
+        if (c >= 'A' && c <= 'Z')
+            c += 'a' - 'A';
+    return value;
 }
-unsigned step(unsigned v, int d, unsigned n) { return n ? unsigned((int(v) + d + int(n)) % int(n)) : 0; }
+Package package_for(const Object& m, const Release& release) {
+    const auto& d = m.get("download");
+    if (!d.is<picojson::object>() || release.id.size() > 48 ||
+        release.id.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_-") != std::string::npos ||
+        release.title.size() > 120 ||
+        std::any_of(release.title.begin(), release.title.end(),
+                    [](unsigned char c) { return c < 32 || c == 127; }))
+        return {};
+    auto url = field(d, "url"), hash = folded(field(d, "sha256", 64));
+    const auto& length = d.get("bytes");
+    if (!https_url(url) || hash.size() != 64 || hash.find_first_not_of("0123456789abcdef") != hash.npos ||
+        !length.is<double>())
+        return {};
+    double n = length.get<double>();
+    if (!std::isfinite(n) || n != std::floor(n) || n < 22 || n > StorePackageLimit)
+        return {};
+    return {std::move(url), std::move(hash), static_cast<uint64_t>(n)};
+}
+unsigned step(unsigned v, int d, unsigned n) {
+    return n ? unsigned((int(v) + d + int(n)) % int(n)) : 0;
+}
 } // namespace
-bool Store::load_catalog(const std::string& json) {
+bool Store::load_catalog(const std::string& json, bool hosted_only) {
     if (!bounded_json(json))
         return false;
     Object root;
@@ -68,6 +94,13 @@ bool Store::load_catalog(const std::string& json) {
     if (!error.empty() || !std::all_of(end, json.end(), [](unsigned char c) { return std::isspace(c); }) ||
         !root.is<picojson::object>() || field(root, "format") != "moader.catalog.v1")
         return false;
+    auto cursor = field(root, "next");
+    if (!cursor.empty()) {
+        const auto prefix = std::string(StoreFeed) + "?after=";
+        if (!cursor.starts_with(prefix) || cursor.size() != prefix.size() + 36 ||
+            cursor.find_first_not_of("0123456789abcdef-", prefix.size()) != cursor.npos)
+            return false;
+    }
     std::vector<StoreGame> next;
     const auto& list = array(root, "games");
     if (list.size() > 256)
@@ -98,6 +131,8 @@ bool Store::load_catalog(const std::string& json) {
                       field(m, "version", 64),
                       field(m, "published", 64),
                       {},
+                      {},
+                      {},
                       {}};
             if (r.title.empty() || r.author.empty() || r.category.empty() || r.id.empty())
                 return false;
@@ -116,24 +151,31 @@ bool Store::load_catalog(const std::string& json) {
                     return false;
                 r.previews.push_back(p.get<std::string>());
             }
+            r.package = package_for(m, r);
+            if (hosted_only) {
+                if (!r.package.url.starts_with(StoreFiles)) r.package = {};
+                std::erase_if(r.previews, [](const std::string& link) { return !link.starts_with(StoreFiles); });
+            }
+            r.license = field(m, "license", 100);
             if (std::any_of(g.mods.begin(), g.mods.end(), [&](const Release& old) { return old.id == r.id; }))
                 return false;
             g.mods.push_back(std::move(r));
         }
         next.push_back(std::move(g));
     }
+    next_page = std::move(cursor);
     games = std::move(next);
-    game = row = tab = release = frame = mirror = 0;
-    page = origin = picker_origin = Shelf::Discover;
-    host.clear();
+    page = Shelf::Browse;
+    row = frame = 0;
+    results.clear();
+    rebuild_results();
     return true;
 }
-bool Store::merge_catalog(const std::string& json) {
+bool Store::merge_catalog(const std::string& json, bool hosted_only) {
     Store incoming;
-    if (!incoming.load_catalog(json))
+    if (!incoming.load_catalog(json, hosted_only))
         return false;
-    const auto old_tabs = tabs();
-    std::string active = tab < old_tabs.size() ? old_tabs[tab] : "Discover";
+    next_page = std::move(incoming.next_page);
     for (auto& item : incoming.games) {
         auto existing =
             std::find_if(games.begin(), games.end(), [&](const StoreGame& g) { return item.id == g.id; });
@@ -151,166 +193,122 @@ bool Store::merge_catalog(const std::string& json) {
                 existing->mods.push_back(std::move(incoming_mod));
         }
     }
-    const auto now = tabs();
-    auto current = std::find(now.begin(), now.end(), active);
-    if (current != now.end())
-        tab = current - now.begin();
+    rebuild_results();
     return true;
 }
-void Store::start(uint64_t preferred) {
-    initialized = true;
-    if (games.empty())
-        load_catalog(store_assets::catalog);
-    char id[17];
-    std::snprintf(id, sizeof(id), "%016llX", (unsigned long long)preferred);
-    for (unsigned i = 0; i < games.size(); ++i)
-        if (games[i].id == id) {
-            game = i;
-            break;
+void Store::start() {
+    *this = Store{};
+    preview_queue.clear();
+    preview_cache.clear();
+    fetching.clear();
+}
+void Store::rebuild_results() {
+    StoreEntry current = row < results.size() ? results[row] : StoreEntry{~0u, ~0u};
+    results.clear();
+    std::istringstream search(folded(query));
+    std::vector<std::string> terms;
+    for (std::string term; search >> term;)
+        terms.push_back(std::move(term));
+    for (unsigned g = 0; g < games.size(); ++g) {
+        const auto& group = games[g];
+        if (owned && group.presence != Presence::Present)
+            continue;
+        const std::string game_name = folded(group.title);
+        for (unsigned i = 0; i < group.mods.size(); ++i) {
+            const auto& m = group.mods[i];
+            if (!terms.empty()) {
+                const auto text =
+                    game_name + "\n" + folded(m.title) + "\n" + folded(m.author) + "\n" + folded(m.category);
+                if (!std::all_of(terms.begin(), terms.end(),
+                                 [&](const auto& word) { return text.find(word) != text.npos; }))
+                    continue;
+            }
+            results.push_back({g, i});
         }
-    select_tab(0);
-}
-std::vector<std::string> Store::tabs() const {
-    std::vector<std::string> result{"Discover"};
-    if (game < games.size())
-        for (const auto& mod : games[game].mods)
-            unique_push(result, mod.category);
-    result.push_back("Hosts");
-    return result;
-}
-std::vector<std::string> Store::hosts() const {
-    std::vector<std::string> result;
-    if (game < games.size())
-        for (const auto& m : games[game].mods)
-            for (const auto& l : m.sources)
-                unique_push(result, l.label);
-    return result;
-}
-std::vector<unsigned> Store::matches() const {
-    std::vector<unsigned> result;
-    if (game >= games.size())
-        return result;
-    const auto categories = tabs();
-    const auto& mods = games[game].mods;
-    for (unsigned i = 0; i < mods.size(); ++i) {
-        if (page == Shelf::Category && (tab >= categories.size() || mods[i].category != categories[tab]))
-            continue;
-        if (page == Shelf::Host && !std::any_of(mods[i].sources.begin(), mods[i].sources.end(),
-                                                [&](const SourceLink& s) { return s.label == host; }))
-            continue;
-        result.push_back(i);
     }
-    return result;
+    std::stable_sort(results.begin(), results.end(), [&](StoreEntry a, StoreEntry b) {
+        const auto& ga = games[a.game];
+        const auto& gb = games[b.game];
+        return std::tie(ga.title, ga.mods[a.release].title) < std::tie(gb.title, gb.mods[b.release].title);
+    });
+    auto it = std::find(results.begin(), results.end(), current);
+    row = it == results.end() ? 0 : unsigned(it - results.begin());
 }
-void Store::select_tab(unsigned i) {
-    const auto count = tabs().size();
-    tab = std::min(i, unsigned(count - 1));
-    page = tab == 0 ? Shelf::Discover : tab == count - 1 ? Shelf::Hosts : Shelf::Category;
-    row = 0;
+void Store::set_query(std::string text) {
+    auto first = text.find_first_not_of(" \t\r\n");
+    query = first == text.npos ? "" : text.substr(first, text.find_last_not_of(" \t\r\n") - first + 1);
+    results.clear();
+    rebuild_results();
+    focus = StoreFocus::Results;
+}
+void Store::set_owned(bool enable) {
+    if (owned == enable)
+        return;
+    owned = enable;
+    if (owned) {
+        ++inventory_revision;
+        for (auto& g : games)
+            if (g.presence != Presence::Present) g.presence = Presence::Unchecked;
+    }
+    results.clear();
+    rebuild_results();
 }
 bool Store::back() {
-    switch (page) {
-    case Shelf::Release:
-        page = origin;
-        break;
-    case Shelf::Games:
-        page = picker_origin;
-        row = 0;
-        break;
-    case Shelf::Host:
-        page = Shelf::Hosts;
-        row = 0;
-        break;
-    case Shelf::Category:
-    case Shelf::Hosts:
-        select_tab(0);
-        break;
-    default:
+    if (page == Shelf::Browse)
         return true;
-    }
+    page = Shelf::Browse;
+    focus = StoreFocus::Results;
     return false;
 }
-bool Store::input(uint32_t b) {
-    if (games.empty())
-        return false;
-    if (b & DetailInput) {
-        if (page != Shelf::Games) {
-            picker_origin = page == Shelf::Release ? origin : page;
-            page = Shelf::Games;
-            row = game;
-        }
-        return false;
-    }
-    if (page == Shelf::Games) {
-        if (b & (LeftInput | UpInput))
-            row = step(row, -1, games.size());
-        if (b & (RightInput | DownInput))
-            row = step(row, 1, games.size());
-        if (b & ActivateInput) {
-            game = row;
-            select_tab(0);
-        }
-        return false;
-    }
+uint32_t Store::input(uint32_t b) {
     if (page == Shelf::Release) {
-        const auto& r = games[game].mods[release];
-        if (b & LeftInput)
-            frame = step(frame, -1, r.previews.size());
-        if (b & RightInput)
-            frame = step(frame, 1, r.previews.size());
-        if (b & (UpInput | DownInput))
-            mirror = step(mirror, (b & UpInput) ? -1 : 1, r.sources.size());
-        return b & ActivateInput;
+        const auto& r = games[detail.game].mods[detail.release];
+        if (b & (LeftInput | RightInput))
+            frame = step(frame, b & LeftInput ? -1 : 1, r.previews.size());
+        return (b & ActivateInput) && r.package.bytes ? uint32_t(InstallStoreMod) : 0u;
     }
-    if (b & (PreviousInput | NextInput)) {
-        select_tab(step(tab, b & PreviousInput ? -1 : 1, tabs().size()));
-        return false;
+    if (b & RemoveInput)
+        return SearchStore;
+    if (b & NextInput) {
+        set_owned(!owned);
+        return 0;
     }
-    const auto items = matches();
-    const auto host_list = hosts();
-    const unsigned count = page == Shelf::Hosts ? host_list.size() : items.size();
-    if (!count)
-        return false;
-    if (b & (LeftInput | UpInput))
-        row = step(row, -1, count);
-    if (b & (RightInput | DownInput))
-        row = step(row, 1, count);
-    if (b & ActivateInput) {
-        if (page == Shelf::Hosts) {
-            host = host_list[row];
-            page = Shelf::Host;
-            row = 0;
-        } else {
-            release = items[row];
-            origin = page;
-            page = Shelf::Release;
-            frame = mirror = 0;
-            if (origin == Shelf::Host) {
-                const auto& sources = games[game].mods[release].sources;
-                for (unsigned i = 0; i < sources.size(); ++i)
-                    if (sources[i].label == host)
-                        mirror = i;
-            }
+    if (focus != StoreFocus::Results) {
+        if (b & (LeftInput | RightInput))
+            focus = focus == StoreFocus::Search ? StoreFocus::Filter : StoreFocus::Search;
+        if (b & DownInput)
+            focus = StoreFocus::Results;
+        if (b & ActivateInput) {
+            if (focus == StoreFocus::Search)
+                return SearchStore;
+            if (focus == StoreFocus::Filter)
+                set_owned(!owned);
         }
+        return 0;
     }
-    return false;
-}
-std::string Store::host_url() const {
-    if (page != Shelf::Release || game >= games.size() || release >= games[game].mods.size())
-        return {};
-    const auto& links = games[game].mods[release].sources;
-    return mirror < links.size() ? links[mirror].url : "";
+    if (b & UpInput) {
+        if (row)
+            --row;
+        else
+            focus = StoreFocus::Search;
+    }
+    if ((b & DownInput) && row + 1 < results.size())
+        ++row;
+    if ((b & LeftInput) && row >= 4)
+        row -= 4;
+    if ((b & RightInput) && !results.empty())
+        row = std::min<unsigned>(row + 4, results.size() - 1);
+    if ((b & ActivateInput) && row < results.size()) {
+        detail = results[row];
+        frame = description_first = 0;
+        page = Shelf::Release;
+    }
+    return 0;
 }
 Art Store::preview(const std::string& url) {
     for (const auto& p : preview_cache)
         if (p.first == url)
             return p.second;
-    for (const auto& img : store_assets::images)
-        if (img.url == url) {
-            auto result = decode_art(img.bytes, img.length);
-            finish_preview(url, result);
-            return result;
-        }
     if (url != fetching && preview_queue.size() < 16 &&
         std::find(preview_queue.begin(), preview_queue.end(), url) == preview_queue.end())
         preview_queue.push_back(url);

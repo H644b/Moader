@@ -21,11 +21,14 @@ with tempfile.TemporaryDirectory(prefix='moader-runtime-') as temporary:
     with zipfile.ZipFile(fixture,'w',zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('romfs/Model/sample.bin',b'example texture')
         archive.writestr('romfs/config.txt',b'configuration')
+    replacement = work / 'replacement.zip'
+    with zipfile.ZipFile(replacement, 'w', zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr('romfs/config.txt', b'replacement')
     backend = BUILD / 'backend-test'
     subprocess.run(['clang++','-std=c++17','-g','-O1','-Wall','-Wextra','-Werror',
                     '-fsanitize=address,undefined','-I'+str(ROOT/'include'),
                     str(ROOT/'tests/backend_test.cpp'),
                     *[str(ROOT/'source'/name) for name in ['model.cpp','library.cpp','zip.cpp','runtime_backend.cpp']],
                     '-lz','-o',str(backend)],check=True)
-    subprocess.run([str(backend),str(fixture),str(work/'library')],check=True)
+    subprocess.run([str(backend),str(fixture),str(work/'library'),str(replacement)],check=True)
     subprocess.run([str(binary),str(work/'library/native-fixture.bin')],check=True,cwd=work)
