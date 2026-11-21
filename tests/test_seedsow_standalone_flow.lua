@@ -161,10 +161,16 @@ local ctx = {layout = {captureStart = base + 0x10000000,
     donorRow = {vptr = base + 0x2b1e20},
     notifier = {object = notifier, B = backend, handle = 0x46},
     fsProcess = {handle = 0x45}, launch = {pid = 218}}
+local ro_lookups, ro_waits = 0, 0
 local env = {
     rt = {get_service_sm = function(name)
-        assert(name == "ro:dmnt")
+        assert(name == "mfs:ro")
+        ro_lookups = ro_lookups + 1
+        if ro_lookups < 3 then return 0, 0x202 end
         return 0x44
+    end, wait_ms = function(ms)
+        assert(ms == 25)
+        ro_waits = ro_waits + 1
     end, wr = function(_, bytes) data_slot = bytes end,
     rd = function(_, length) return data_slot:sub(1, length) end,
     close_handle = function(handle) handles[handle] = nil end},
@@ -202,6 +208,7 @@ local receipt = installer.install(env)
 assert(receipt.fsBase == base and receipt.fsPid == 941 and
        receipt.context == context and receipt.runtime == runtime and
        receipt.hooks == 19 and ctx.moaderFsVerified)
+assert(ro_lookups == 3 and ro_waits == 2)
 assert(mapped_pages == 26 and invocations == 5 and patches >= 19,
     string.format("flow count mismatch: maps=%d calls=%d patches=%d",
         mapped_pages, invocations, patches))

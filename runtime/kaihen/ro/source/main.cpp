@@ -8,20 +8,21 @@
 namespace {
 
 constexpr u32 MaxSessions = 16;
-constexpr u32 PortCount = 3;
+constexpr u32 PortCount = 4;
 constexpr u64 RegistrationRetryNs = 50000000;
 
-// Native RO registers ldr:ro in service space sets 1 and 2. Its private
-// ro:dmnt endpoint belongs to set 1.
+// Native RO registers ldr:ro in service space sets 1 and 2. HEN keeps its
+// private ro:dmnt endpoint in set 1; Seedsow's FS adapter uses mfs:ro in set 2.
 struct RoPort {
     const char* name;
     u32 space;
-    bool fs_memory; ///< ro:dmnt: FS memory access and diagnostics.
+    bool fs_memory; ///< FS memory commands, with an FS-only gate in app space.
 };
 constexpr RoPort ServicePorts[PortCount] = {
     {"ldr:ro", 1, false},
     {"ldr:ro", 2, false},
     {"ro:dmnt", 1, true},
+    {"mfs:ro", 2, true},
 };
 
 class RoServer {
@@ -44,7 +45,8 @@ class RoServer {
             const SmServiceName name = smEncodeName(ServicePorts[i].name);
             Result rc = smRegisterServiceInSpace(
                 &port, ServicePorts[i].space, name, false, 4);
-            if (R_FAILED(rc) && ServicePorts[i].fs_memory && !dmnt_stale_released_) {
+            if (R_FAILED(rc) && ServicePorts[i].space == 1 &&
+                ServicePorts[i].fs_memory && !dmnt_stale_released_) {
                 // Stock RO's name may survive its process as a dead SM entry.
                 // A fresh boot can also have no stale entry, so a failed
                 // Unregister must never suppress a successful Register.
@@ -57,7 +59,7 @@ class RoServer {
             }
             if (R_SUCCEEDED(rc)) {
                 ports_[i].reset(port);
-                if (ServicePorts[i].fs_memory)
+                if (ServicePorts[i].space == 1 && ServicePorts[i].fs_memory)
                     dmnt_stale_released_ = true;
             }
         }
@@ -74,6 +76,7 @@ class RoServer {
             if (sessions_[i].get() == INVALID_HANDLE) {
                 sessions_[i].reset(session);
                 fs_memory_[i] = ServicePorts[port].fs_memory;
+                fs_only_[i] = ServicePorts[port].fs_memory && ServicePorts[port].space == 2;
                 clients_[i].port_index = port;
                 roRecordAcceptedSession(port);
                 return;
@@ -89,6 +92,7 @@ class RoServer {
             roSessionClose(&clients_[slot]);
         }
         fs_memory_[slot] = false;
+        fs_only_[slot] = false;
         sessions_[slot].reset();
     }
 
@@ -144,7 +148,7 @@ class RoServer {
 
         Handle copied_client = INVALID_HANDLE;
         if (fs_memory_[client]) {
-            roFsMemoryDispatch(message);
+            roFsMemoryDispatch(message, fs_only_[client]);
         } else {
             copied_client = roDispatch(clients_, MaxSessions, client, message);
         }
@@ -161,6 +165,7 @@ class RoServer {
     ounce::HandleOwner sessions_[MaxSessions];
     RoSession clients_[MaxSessions] = {};
     bool fs_memory_[MaxSessions] = {};
+    bool fs_only_[MaxSessions] = {};
     bool dmnt_stale_released_ = false;
 };
 

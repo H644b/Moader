@@ -14,7 +14,7 @@ Moader ships a modified kaiHEN for features such as cooperative service reload a
 
 ## Current source profile
 
-The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. The current HEN passed a controlled clean-card Demo installation and game-entry check; its proof sets `console_retest_passed` to true for that bounded result. The earlier Demo installation records in [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) apply to previous HEN bytes. Use the tagged proof above for the v0.1.2 kit.
+The source tree has a matched RO, HEN and bootstrap for Seedsow Lullaby Demo. Its schema-3 proof records the exact component hashes. The current HEN and bootstrap retain the bytes from a controlled clean-card Demo installation and game-entry check. The RO now adds an app-space, FS-only endpoint for the experimental standalone Seedsow adapter. That new RO and the complete pair have only host validation, so the current proof sets `console_retest_passed` to false. The earlier Demo installation records in [Seedsow validation](VALIDATION.md#seedsow-lullaby-demo-source-workflow) apply to the prior RO bytes. Use the tagged proof above for the v0.1.2 kit.
 
 ## Hold-R game entry candidate
 

@@ -37,10 +37,12 @@ local function run(alter_at, ro_active, corrupt_profile, fail_first_query,
         fsProcess = {handle = 0x45}, launch = {pid = 218}}
     _G.__MOADER_FS_UNCERTAIN = false
     local env = {
-        rt = {get_service_sm = function()
+        rt = {get_service_sm = function(name)
+            assert(name == "mfs:ro")
             services = services + 1
             return ro_active and 0x44 or 0
-        end, rd = function(_, length) return bulk_bytes:sub(1, length) end},
+        end, wait_ms = function(ms) assert(ms == 25) end,
+        rd = function(_, length) return bulk_bytes:sub(1, length) end},
         fs = {send_packet = function(_, packet)
             sends = sends + 1
             local at = P.domain_data_start(packet)
@@ -114,8 +116,8 @@ local occupied, occupied_services = run(0x24d100, true)
 assert(occupied:find("already occupied", 1, true) and
        occupied_services == 1, "occupied code cave reached a native mutation")
 local unavailable, unavailable_services, unavailable_reads = run(nil, false)
-assert(unavailable:find("replacement ro:dmnt is unavailable", 1, true) and
-       unavailable_services == 1 and unavailable_reads == 0,
+assert(unavailable:find("replacement mfs:ro is unavailable", 1, true) and
+       unavailable_services == 20 and unavailable_reads == 0,
        "missing RO reached a memory read")
 local uncertain, active_services, _, sends, _, ctx =
     run(nil, true, false, true)
