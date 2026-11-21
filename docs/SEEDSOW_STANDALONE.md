@@ -1,4 +1,4 @@
-# Seedsow on-console Moader route (experimental)
+# Seedsow on-console Moader route
 
 This experimental method starts on the Switch after one-time computer preparation. The Moader route requires a qualified local filesystem capture. The v3.0.0 kit includes the standalone bootstrap.
 
@@ -12,16 +12,6 @@ This method builds on [Malev0's Seedsow console-only chain](https://github.com/M
 - The matching [v3.0.0 backend kit](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip), Python 3.10+, Git, Node.js 20+ and `luac`. The kit includes the verified source-built standalone bootstrap in `prebuilt/standalone-bootstrap/`; no SDK is needed to stage that prebuilt. A clean source checkout instead needs the pinned `vendor/devkitpro` toolchain to reproduce it ([SDK setup](BUILDING.md#build-from-a-clean-source-checkout)). macOS host preparation has been checked; Linux and WSL2 use the same Python and Node paths, but their standalone route has not yet been verified end to end.
 - The exact previously qualified sparse FS capture with SHA-256 `0f58beb0a35ca2dadaf6300a8bbf4432974edfeac405aba4b3a3aa01af7d9271`. The generator refuses any other capture. This private console capture and its derived payload are **not in the v3.0.0 kit**. [Obtain and check a local capture](#obtain-and-check-the-fs-capture) before preparing A. Without the exact qualified input, the Moader A route cannot be prepared from the public kit alone.
 - A working launcher save on a **second console profile** before uploading, as the upstream instructions recommend. The uploader writes and commits `save:/` for the profile that is actually running Seedsow. Confirm the profile at game launch; the HTTP uploader cannot identify it from the console address. Back up any profile whose save you need to preserve.
-
-### If Checkpoint cannot back up the working Seedsow Demo save
-
-The unofficial [Switch 2 Checkpoint fork](https://github.com/wowilookgood/Checkpoint/releases/tag/v5.3.0-switch2-1) has a [Seedsow Demo report](https://github.com/wowilookgood/Checkpoint/issues/1) where backup error `0x1559` follows an unreadable `NS2_GAP_.../canary` scratch entry. Checkpoint refuses that backup because it would be incomplete. Leave that original profile's save untouched; do not treat the failed backup as a recovery copy.
-
-For the Demo, the reported workaround is to make a normal Seedsow save on a **new profile** and back up that clean save with Checkpoint. In Checkpoint, use the bottom-left user avatar to select that profile. Download [alula's v2 Demo launcher save](https://github.com/alula/switch-artemis-launcher/releases/tag/v2); its `seedsow_save.zip` asset has SHA-256 `dfd58a4e1151d29e9152b3a528568f95a990aa427914bafc21711e9b7fca691e` and contains nine launcher files. Extract those files into a **new sibling folder** beside the clean backup under Checkpoint's Seedsow Demo save directory on SD (normally `switch/Checkpoint/saves/0x010042D022AEA000 Seedsow Lullaby Demo/`). Leave the clean backup folder intact. Reopen Checkpoint on the new profile and restore the new launcher folder. Confirm that **Y** starts its HTTP launcher on that profile before using `upload-save` below. Checkpoint's Switch 2 release reports backup testing but lists restore as untested in general. One Profile B transfer in this Moader investigation reported success and its launcher answered HTTP 200. The Demo archive is not a full-game save.
-
-Use the complete kaiHEN archive supplied by this Moader checkout or matching backend kit. The tool verifies the official 20261114c base, Moader's source-qualified protocol-7 RO/HEN/bootstrap, the app and resident, then stages the full set with the source-built standalone bootstrap. Do not use upstream **Prepare SD** or **Update kaiHEN** afterward: those buttons stage the regular upstream build over Moader's matched files.
-
-A clean source checkout does not contain the ignored prebuilt files. Use the matching v3.0.0 backend kit, or provide the **exact** app, resident and RO/HEN/bootstrap bytes recorded in `config/release.json` and build the standalone bootstrap from the pinned source. A local `--build` can produce different app/resident bytes on another host and does not by itself satisfy this release-identity check. Do not copy binaries from a different Moader version into this checkout.
 
 ## Obtain and check the FS capture
 
