@@ -4,11 +4,11 @@ Reload replaces the running `moader.nso` plugin. The game and the filesystem run
 
 ## First install
 
-Use a Moader app and resident built for the matching patched **protocol-7 HEN and bootstrap**. If your running HEN doesn't support reload, [set up the matching backend for this boot](INSTALLATION.md#start-the-backend-for-this-boot).
+Use a Moader app and resident built for the matching patched **protocol-7 HEN and bootstrap**. If your running HEN doesn't support reload, [set up the matching backend for this boot](GETTING_STARTED.md#start-the-backend-for-this-boot).
 
 ## Use it
 
-1. Finish mod uploads and imports. Copy the compatible replacement to `kaihen/plugins/moader.nso` on the SD card. If you also updated the app, close it before [copying the NRO](INSTALLATION.md#copy-or-update-the-console-app).
+1. Finish mod uploads and imports. Copy the compatible replacement to `kaihen/plugins/moader.nso` on the SD card. If you also updated the app, close it before [copying the NRO](GETTING_STARTED.md#copy-or-update-the-console-app).
 2. Open Moader. Choose **Settings → Advanced → Reload Moader service**.
 3. Keep the app open until it reconnects or displays a failure. A successful reconnect means the new service passed startup and filesystem checks.
 4. Reopen the browser page. If **Start web automatically** is off, press **Y** in Moader to start the listener first. Your saved library, game-copy settings and pairing code stay on SD.

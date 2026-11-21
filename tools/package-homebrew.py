@@ -28,25 +28,32 @@ repository = 'https://github.com/' + release['repository']
 source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 instructions = f'''Moader {tag}
 
-1. Close Moader on the Switch if it is open.
-2. Copy switch/Moader.nro to the SD card's switch folder.
-3. Open Moader from hbmenu.
+1. Close Moader if it is open. Copy switch/Moader.nro to the switch/
+   folder at the top of the SD card.
+2. If you use the resident service, also copy kaihen/plugins/moader.nso
+   to the matching folder on the card.
+3. Open Moader from hbmenu. An empty Game library is normal before you
+   add your first mod.
 
-If the matching backend is running, the app connects to it. Otherwise the
-app can manage the library and serve the browser while it stays open.
-Press Y if the web listener is off. Press ZR for the address and six-digit
-pairing code. Open the displayed address on the same local network.
+If you're updating a compatible running service, choose Settings >
+Advanced > Reload Moader service after opening Moader.
 
-This ZIP also contains kaihen/plugins/moader.nso. Copy it to the matching
-folder on SD to stage a replacement. Open Settings > Advanced >
-Reload Moader service to load it if your running backend supports reload.
-For first-time backend setup, a reboot or a HEN update, use the matching
-backend kit and the installation guide.
+For in-game mods, open Settings > Advanced > Runtime details and look
+for Runtime connection to say Connected. To pair a browser, press ZR.
+If the web listener is off, select Start listener. Open the displayed
+address on the same local network and enter the six-digit code.
 
-Install and update: {repository}/blob/{source_commit}/docs/INSTALLATION.md
-Manage mods: {repository}/blob/{source_commit}/docs/USAGE.md
-Downloads and checksums: {repository}/releases/tag/{tag}
-Corresponding source: {repository}/tree/{source_commit}
+Installation and backend setup
+{repository}/blob/{source_commit}/docs/GETTING_STARTED.md
+
+Upload and enable your first mod
+{repository}/blob/{source_commit}/docs/USAGE.md#upload-your-first-mod
+
+Release notes and checksums
+{repository}/releases/tag/{tag}
+
+Corresponding source
+{repository}/tree/{source_commit}
 '''
 manifest = {name: {'bytes': path.stat().st_size,
                   'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}

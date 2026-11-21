@@ -1,8 +1,10 @@
-# Seedsow on-console Moader route (experimental)
+# Seedsow on-console (standalone)
 
-The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blob/ff14e26cb950db5cff0da911d28774404adb5cd1/console-only/README.md), adapted from [rushinz's on-console Lua port](https://gitlab.com/rushinz/seedsow-semi-untethered), runs FS acquisition and kaiHEN from Seedsow after a one-time save upload. Moader's preparation tool pins that upstream revision and stages the complete matched Moader kaiHEN set on SD. The computer is needed to prepare the SD and upload the save; later runs of this *kaiHEN chain* do not need it.
+This method uses a computer once to prepare the SD card and a profile save for your edition of Seedsow Lullaby. Later boots run on the Switch. For in-game mods, v3.0.0 requires a matching local filesystem capture. The regular homebrew option opens hbmenu.
 
-**Profile B's A route reached `KH READY` and a connected Moader runtime and FS on a fresh Demo boot.** The saved run records 19 active FS hooks, HEN result `0x0`, both Loader restoration results `0x0`, and the Moader plugin listed by HEN. A same-boot read-only check found the current catalogue and CRC-valid FS acknowledgement at the same epoch and generation with result `0x0`. After v3.0.0 publication, the rebuilt app and resident were staged with full FTP readback; the owner reported another fresh Profile B A boot reaching `KH READY` and showing Moader v3.0.0 with runtime and FS connected. This later result has no independent same-boot acknowledgement receipt. On a separate fresh boot with the same SD files, the owner reported that the regular **B** route reached hbmenu and Moader showed disconnected, as expected because B does not install Moader FS. Other consoles and games, repeated v3 A boots, and physical mod routing have not been checked. The regular patched kaiHEN bootstrap remains unchanged; v3.0.0 bundles the separate standalone candidate. [Device evidence](VALIDATION.md#v300-standalone-release-scope).
+The console check used the Demo and showed Moader's runtime connected. A full-game installation and standalone preparation from Linux or WSL2 still await end-to-end verification. [Device test results](VALIDATION.md#v300-standalone-release-scope)
+
+If your setup is already prepared, [check the connection in Moader](GETTING_STARTED.md#check-your-installation).
 
 ## Requirements and boundaries
 
@@ -89,7 +91,7 @@ This makes a read-only request for nine A/B file presences and sizes; it does no
 
 On later fresh boots, **A** runs the Moader FS candidate and **B** runs the original upstream Seedsow Lua chain without the Moader FS adapter. Both buttons read the **same staged SD kaiHEN files**; B is a regular upstream Lua route, not a separate unpatched native kaiHEN build. Choose one button per full reboot. The profile selected when Seedsow starts determines which save these entries use. On a separate full reboot with this shared SD set, the owner reported that B reached hbmenu and Moader showed disconnected; B does not install Moader's FS runtime.
 
-## Experimental Moader installation check on a fresh boot
+## Moader installation check on a fresh boot
 
 1. Fully reboot the Switch. Leave other FS and kaiHEN methods unrun on this boot. Open Seedsow using the profile with the standalone save and press **A** at its launcher. The on-console chain now runs without the computer.
 2. Look for the Moader FS installer lines showing source qualification, 26 mapped executable pages, retained SD/report references and 19 active hooks, then wait for `KH: === READY! Close Seedsow Lullaby and hold R while launching a game ===`. Any uncertain stop requires a full reboot. READY still does not prove the Moader resident or game entry.

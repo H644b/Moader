@@ -1,6 +1,6 @@
-# Install Moader through Seedsow Lullaby
+# Seedsow Lullaby, PC-driven
 
-This guide covers the PC-driven GUI installer. The separate [experimental on-console Seedsow route](SEEDSOW_STANDALONE.md) prepares SD and a standalone save once, then runs from Seedsow without a PC on later boots.
+This guide covers the desktop installer, which uses a computer each time the Switch starts after a full reboot. For one-time computer preparation followed by later starts on the Switch, see [Seedsow on-console (standalone)](SEEDSOW_STANDALONE.md).
 
 Download the [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) for Seedsow Lullaby Demo or the full game.
 

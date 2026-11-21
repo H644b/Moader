@@ -1,6 +1,6 @@
 # Standalone Seedsow: Moader FS installer candidate
 
-This is the development boundary for the experimental [on-console route](SEEDSOW_STANDALONE.md). The first Profile B device run proved upstream FS promotion, HEN startup, hbmenu and Moader app launch. It did not install Moader's FS runtime: the current catalogue and the old acknowledgement had generation 136 but different epochs. The app therefore showed the filesystem backend disconnected. The PC-driven route installs that runtime separately in `tools/install-runtime.cjs` before its HEN handoff.
+This is the development boundary for the [on-console route](SEEDSOW_STANDALONE.md). The first Profile B device run proved upstream FS promotion, HEN startup, hbmenu and Moader app launch. It did not install Moader's FS runtime: the current catalogue and the old acknowledgement had generation 136 but different epochs. The app therefore showed the filesystem backend disconnected. The PC-driven route installs that runtime separately in `tools/install-runtime.cjs` before its HEN handoff.
 
 ## Offline payload now available
 

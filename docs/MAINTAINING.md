@@ -79,12 +79,14 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 7. Exercise the Seedsow kit separately: run `setup-backend.py --host-profile seedsow-malev0` using the pinned upstream archives, then its read-only `--check`, and provision/check the GUI from the reviewed upstream revision. These are host checks; do not acquire FS or start HEN in a packaging test.
 8. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
 
-Use [INSTALLATION.md](INSTALLATION.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
+Use [the installation guide](GETTING_STARTED.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
 
 
 ## Update the official GitHub Wiki
 
-The [GitHub Wiki](https://github.com/H644b/Moader/wiki) uses the same guides as this repository. Edit the canonical Markdown under `docs/` first, then regenerate the linked wiki pages:
+The Wiki's **Installation** page, README and package welcome text all use [the beginner installation guide](GETTING_STARTED.md). Update the method table there when a setup changes. The Wiki links to the repository for method-specific instructions.
+
+Edit the canonical Markdown under `docs/` first, then regenerate the [GitHub Wiki](https://github.com/H644b/Moader/wiki) pages.
 
 ```sh
 python3 tools/build-wiki.py

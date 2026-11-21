@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 'use strict';
-// Build source-qualified SD inputs for the experimental on-console FS adapter.
+// Build source-qualified SD inputs for the on-console FS adapter.
 // This host tool never contacts a console or installs a hook by itself.
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');

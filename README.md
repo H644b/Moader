@@ -2,21 +2,17 @@
 
 Moader manages Switch 2 mods from a controller or a web browser. Import mods, turn them on or off, and see what the console has applied. The Switch serves the browser interface directly.
 
-The **Moader app** opens from hbmenu, the homebrew launcher. It can manage the library while open. The **backend** loads mods into games and keeps browser access running after you close the app. Set up the backend once after each full reboot.
+## Get started
 
-## Prebuilt downloads for v3.0.0
+1. [Install Moader](docs/GETTING_STARTED.md). If it's already in your homebrew menu, [check your installation](docs/GETTING_STARTED.md#check-your-installation).
+2. [Pair a phone or computer](docs/USAGE.md#connect-a-browser) with your Switch.
+3. [Upload your first mod](docs/USAGE.md#upload-your-first-mod) and enable it for the matching game.
 
-| I want to… | Download | Start here |
-| --- | --- | --- |
-| Open or update the console app | [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip) | [Copy the app](docs/INSTALLATION.md#copy-or-update-the-console-app) |
-| Set up the backend for this boot | [Moader-backend-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) | [Choose a setup method](docs/INSTALLATION.md#start-the-backend-for-this-boot) |
-| Update a compatible running service | [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip) | [Reload the resident service](docs/PLUGIN_RELOAD.md#use-it) |
-
-The backend kit includes the matched Seedsow RO/HEN/bootstrap set, the pinned GUI helper, and the [experimental on-console A/B implementation](docs/SEEDSOW_STANDALONE.md) with its verified standalone bootstrap prebuilt. One Profile B Demo A boot reached `KH READY` with an independently read, connected FS acknowledgement; after publication the owner reported another A boot opening Moader v3.0.0 with runtime and FS connected. B reached hbmenu on a separate boot without Moader FS. Preparing A still requires a locally qualified FS capture: the kit cannot bundle console-derived FS bytes. SmileBASIC and experimental CivSwitch use the same kit with their own source profiles. [PC-driven Seedsow guide](docs/SEEDSOW.md) · [Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v3.0.0) · [Validation scope](docs/VALIDATION.md)
+[Current downloads and release notes](https://github.com/H644b/Moader/releases/latest)
 
 ## Use Moader
 
-[Connect a browser and import a mod](docs/USAGE.md). Moader accepts RomFS files and images, ExeFS modules and images, and binary IPS patches. Close and relaunch the game to apply executable changes. Some loose RomFS replacements can take effect the next time a running game reads the file.
+Use the controller or paired browser to manage the mods for each game. [Controls and settings](docs/USAGE.md#controller-controls) · [Supported mod files](docs/USAGE.md#upload-your-first-mod)
 
 | Console app | Browser |
 | --- | --- |

@@ -15,10 +15,7 @@ PAGES = {
     'Release-v0.1.2': 'docs/releases/v0.1.2.md',
     'Release-v0.1.1': 'docs/releases/v0.1.1.md',
     'Changelog': 'CHANGELOG.md',
-    'Installation': 'docs/INSTALLATION.md',
-    'Seedsow-Demo': 'docs/SEEDSOW.md',
-    'Seedsow-Standalone': 'docs/SEEDSOW_STANDALONE.md',
-    'CivSwitch-Entrypoint': 'docs/CIV7.md',
+    'Installation': 'docs/GETTING_STARTED.md',
     'Using-Moader': 'docs/USAGE.md',
     'Game-Card-Checks': 'docs/CARTRIDGES.md',
     'Plugin-Reload': 'docs/PLUGIN_RELOAD.md',
@@ -87,34 +84,21 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 ## Start here
 
-1. **[Install Moader](Installation)** — choose SmileBASIC, Seedsow Lullaby or the experimental CivSwitch route. The Seedsow guide covers its additional host SDK and GUI setup.
-2. **[Learn the controls](Using-Moader#controller-controls)** — navigate the app, open Settings and turn the web interface on.
-3. **[Connect a browser](Using-Moader#connect-a-browser)** — open the displayed Switch address and pair.
-4. **[Import your first mod](Using-Moader#upload-your-first-mod)** — select the correct game Title ID, upload a ZIP, then enable it and read its apply state.
+1. [Install Moader](Installation). If it already opens from hbmenu, [check the connection](Installation#check-your-installation).
+2. [Pair a browser](Using-Moader#connect-a-browser) on your phone or computer.
+3. [Upload your first mod](Using-Moader#upload-your-first-mod) and enable it for the matching game.
 
 ## Find what you need
 
 | Guide | Covers |
 | --- | --- |
-| [v3.0.0 release notes](Release-v3.0.0) | Current downloads, standalone kit and validation scope |
-| [v0.2.5 release notes](Release-v0.2.5) | Historical BSD session fix |
-| [v0.2.0 release notes](Release-v0.2.0) | Historical carousel and Store release |
-| [v0.1.3 release notes](Release-v0.1.3) | Historical Seedsow backend kit and validation scope |
-| [v0.1.2 release notes](Release-v0.1.2) | Historical source-matched HEN refresh |
-| [v0.1.1 release notes](Release-v0.1.1) | Historical cumulative release |
-| [Changelog](Changelog) | Release history |
-| [Installation](Installation) | Downloads, Linux/WSL and macOS setup, once-per-boot backend installation and updates |
-| [Seedsow Lullaby](Seedsow-Demo) | Pinned PC-driven GUI preparation and one-boot Moader installation |
-| [Seedsow on-console](Seedsow-Standalone) | Experimental Moader A route and regular B route; A needs a qualified local FS capture |
-| [CivSwitch entrypoint](CivSwitch-Entrypoint) | Existing Civ7 FS access, exact source profile, prerequisites and Moader validation status |
-| [Using Moader](Using-Moader) | Every controller shortcut, browser pairing, ZIP formats/limits, removal, Settings, Advanced and Credits |
-| [Troubleshooting](Troubleshooting) | Network/pairing problems, game names, pending changes, cache reloads, software errors and setup recovery |
-| [Game-card checks](Game-Card-Checks) | Per-game copy selection, missing cards, game-key downloads, digital choices and verification limits |
-| [Plugin reload](Plugin-Reload) | Reload the resident service, read progress, reconnect and recover from a failed replacement |
-| [How Moader works](How-Moader-Works) | Console app, resident service, filesystem runtime, apply states and component lifetimes |
-| [Frequently asked questions](FAQ) | Quick answers about reboot, live changes, removal and game errors |
-| [Validation](Validation) | What was tested on hardware and what the host checks establish |
-| [kaiHEN modifications](kaiHEN-Modifications) | The complete patch, plugin reload protocol, upstream base and shipped HEN/bootstrap hashes |
+| [Installation](Installation) | App and backend downloads, setup methods, updates and what to repeat after a reboot |
+| [Using Moader](Using-Moader) | Controller controls, game selection, browser pairing and mod management |
+| [Game-card checks](Game-Card-Checks) | Selecting your digital or physical copy |
+| [Service reload](Plugin-Reload) | Updating a compatible running service |
+| [Troubleshooting](Troubleshooting) | Help with the app, browser, imports and setup |
+| [Frequently asked questions](FAQ) | Common questions about setup and playing with mods |
+| [Release notes]({base}/releases/tag/{tag}) · [Changelog](Changelog) | Downloads for {tag} and the history of earlier versions |
 
 ## Interface previews
 
@@ -122,31 +106,25 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 | --- | --- |
 | ![Console workbench](https://raw.githubusercontent.com/{repository}/main/docs/images/native-workbench.png) | ![Browser workbench](https://raw.githubusercontent.com/{repository}/main/docs/images/web-workbench.png) |
 
-These are synthetic sample libraries rendered by the actual interfaces, rather than game or device captures. [Image provenance]({base}/blob/main/docs/images/README.md).
-
-## Before expecting an in-game change
-
-An enabled request and accepted routing are different from a visible game effect. Supported later file reads can change live, but a game may keep an asset in memory until a scene reload. Executable changes require a game relaunch. The running backend lasts until the console reboots; the saved library and preferences remain on SD.
+The screenshots show sample libraries in the console app and paired browser. [About the screenshots]({base}/blob/main/docs/images/README.md)
 
 ## Project links
 
-[Download {tag}]({base}/releases/tag/{tag}) · [Report a problem]({base}/issues/new/choose) · [Ask a question]({base}/discussions) · [Source code]({base})
-
-Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](Contributing), [Security](Security), [Credits and licenses](Credits-and-Licenses).
+[Report a problem]({base}/issues/new/choose) · [Ask a question]({base}/discussions) · [Device test results](Validation) · [Source code]({base})
 '''
     pages['FAQ'] = '''# Frequently asked questions
 
 ## Do I need a Mac?
 
-No. The v3.0.0 backend kit supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer, then can run without one. Its Moader A route requires a qualified local FS capture that is not bundled. [Installation](Installation) covers the method choices and host requirements.
+Linux and Windows with WSL2 are options for several computer-assisted methods. Seedsow on-console (standalone) uses a computer for initial preparation. The [installation guide](Installation#start-the-backend-for-this-boot) lists supported hosts and requirements for each method.
 
 ## Do I need FS access every time I toggle a mod?
 
-Backend installation uses a fresh verified held FS session once per boot. After installation, upload, enable, disable and removal use the resident service. A console reboot needs fresh backend setup; it does not erase your library.
+Start the backend once after a full reboot. During that boot you can upload, enable or remove mods. Your library and preferences stay on the SD card.
 
-## Can Civilization VII provide FS access?
+## Can I use Civilization VII?
 
-Yes. CivSwitch has an upstream FS route. Moader's separate integration has an exact source profile and validation limits; see [CivSwitch entrypoint](CivSwitch-Entrypoint). Loader readiness on port 9026 alone is not FS readiness, and another fork's session is not interchangeable.
+Moader's CivSwitch method is experimental. Its installation on a console still needs verification. [Compare the setup methods](Installation#start-the-backend-for-this-boot)
 
 ## Where do mods go on SD?
 
@@ -186,25 +164,17 @@ Select the game and open **Settings → Game copy**. Cartridge and game-key copi
 
 ## Where is the pairing code?
 
-Turn Web ON with **Y**, then press **ZR**. Enter all six digits, including leading zeros, at the displayed address. Keep the code private. Use the listener on a trusted local network.
+Press **ZR** for **Connection**. If the web listener is off, select **Start listener**. Open the displayed address on your local network and enter all six digits, including leading zeros. [Pair a browser](Using-Moader#connect-a-browser)
 
 ## How do I report a problem?
 
 Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the release, steps, exact error/apply state, and whether content or the game was reopened. Remove pairing values, session commands, personal paths and network details from excerpts. Do not upload game assets, firmware, keys or saves.
 '''
-    pages['_Sidebar'] = '''**Moader**
+    pages['_Sidebar'] = f'''**Moader**
 
 - [Home](Home)
-- [v3.0.0 release notes](Release-v3.0.0)
-- [v0.2.5 release notes (historical)](Release-v0.2.5)
-- [v0.2.0 release notes (historical)](Release-v0.2.0)
-- [v0.1.3 release notes](Release-v0.1.3)
-- [v0.1.2 release notes (historical)](Release-v0.1.2)
-- [v0.1.1 release notes (historical)](Release-v0.1.1)
-- [Changelog](Changelog)
-- [Install / Linux / WSL / macOS](Installation)
-- [Seedsow Lullaby](Seedsow-Demo)
-- [CivSwitch entrypoint](CivSwitch-Entrypoint)
+- [Install Moader](Installation)
+- [Check your installation](Installation#check-your-installation)
 - [App and browser usage](Using-Moader)
 - [SD card layout](Using-Moader#sd-card-layout)
 - [Settings and Advanced](Using-Moader#settings)
@@ -217,6 +187,8 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
 
 **Project**
 
+- [Release {tag}]({base}/releases/tag/{tag})
+- [Changelog](Changelog)
 - [Building](Building)
 - [Maintaining](Maintaining)
 - [Contributing](Contributing)
@@ -224,7 +196,7 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
 - [kaiHEN modifications](kaiHEN-Modifications)
 - [Security](Security)
 '''
-    pages['_Footer'] = f'[Moader]({base}) · [Downloads]({base}/releases/tag/{tag}) · [Issues]({base}/issues) · [Discussions]({base}/discussions)\n\nDocs for {tag}; app version `{release["version"]}`.\n'
+    pages['_Footer'] = f'[Moader]({base}) · [Download {tag}]({base}/releases/tag/{tag}) · [Issues]({base}/issues) · [Discussions]({base}/discussions)\n'
     for name, content in pages.items():
         for _, _, target in LINK.findall(content):
             url = urlsplit(target)

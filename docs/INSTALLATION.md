@@ -1,29 +1,21 @@
-# Install Moader
+# Installation reference
+
+For the console app, backend choices and first-use check, start with [Install Moader](GETTING_STARTED.md).
 
 ## Copy or update the console app
 
-1. Download and extract [Moader-v3.0.0.zip](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip).
-2. Close Moader if it's open.
-3. Copy `switch/Moader.nro` to the SD card's `switch/` folder.
-4. Open **Moader** from hbmenu.
-
-If the matching resident service is already running, the app connects to it. Otherwise you can manage the library and use the browser while the app stays open. [Use Moader](USAGE.md)
-
-The ZIP also contains `kaihen/plugins/moader.nso`. Copying it puts the plugin on SD. To replace a running plugin, follow [Updating](#updating).
+[Download the console ZIP and copy the app to SD](GETTING_STARTED.md#copy-or-update-the-console-app).
 
 ## Start the backend for this boot
 
-The backend has two parts. The resident service keeps managing the library after you close the app. The filesystem runtime (FS) applies mod files in games. Setup starts both for the current boot. Your mod files and preferences stay on SD after a reboot.
+[Compare setup methods and computer requirements](GETTING_STARTED.md#start-the-backend-for-this-boot).
 
-| Method | Computer | Download |
-| --- | --- | --- |
-| [SmileBASIC with mac2jb](#route-b-macos-with-mac2jb) | macOS | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
-| [SmileBASIC with direct ns2jb](#route-a-linuxwsl-or-macos-with-ns2jb) | macOS, Linux, WSL2 | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
-| [Seedsow Lullaby Demo or full game](SEEDSOW.md) | Apple Silicon macOS, Linux x86_64, WSL2 x86_64 | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
-| [Seedsow on-console, experimental](SEEDSOW_STANDALONE.md) | One-time SD and save preparation on a computer; later runs on the Switch | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip). Includes the standalone bootstrap; A also needs a locally qualified FS capture ([requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries)) |
-| [CivSwitch, experimental](CIV7.md#experimental-setup) | macOS or Linux host path | [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) |
+## Updating
 
-The PC-driven Seedsow method uses the included matched RO/HEN/bootstrap set and its guide covers additional SDK and GUI preparation. The on-console route uses the kit's pinned standalone bootstrap and prepares an A/B save; one Profile B Demo A installation reached HEN and a current FS acknowledgement on the same boot. After publication, the owner reported another A boot with the exact v3 app and resident connected. Its FS payload still requires a qualified local capture. The v0.2.5 resident was previously reloaded into a Demo-installed backend and Minecraft for Switch 2 ran in a world after an earlier v0.2.0 crash. A fresh preparation from the complete public v3.0.0 kit and the full-game route remain to be checked on hardware. [Validation scope](VALIDATION.md#v300-standalone-release-scope)
+[Update the app or a running service](GETTING_STARTED.md#updating).
+
+<details>
+<summary>SmileBASIC computer setup and WSL2 network reference</summary>
 
 ### Before either SmileBASIC method
 
@@ -140,10 +132,4 @@ The [pinned runner](https://gitlab.com/kurumuz/ns2jb/-/blob/28f03b5895e5569d8fbc
 
 **Never forward the separate loopback RPC bridge.**
 
-## Updating
-
-Close Moader before replacing the app file. Keep the app and resident from the same release.
-
-- **App only.** Copy the new NRO to SD and reopen the app.
-- **Compatible resident service.** Copy the replacement NSO to `kaihen/plugins/moader.nso`. Use [Reload Moader service](PLUGIN_RELOAD.md) with the matching protocol-7 HEN and bootstrap already running.
-- **New HEN or bootstrap, or a full reboot.** Use the matching backend kit and follow the [setup method for this boot](#start-the-backend-for-this-boot).
+</details>

@@ -107,7 +107,7 @@ def public_source(root):
             require(name in {'software-builds/kaihen-mo.json', 'software-builds/kaihen-mo.patch'},
                     'Unapproved build record in committed tree: ' + name)
         entries[name] = (git(root, 'show', 'HEAD:' + name), int(mode, 8))
-    for required in ['README.md', 'LICENSE', 'docs/INSTALLATION.md', 'tools/setup-backend.py',
+    for required in ['README.md', 'LICENSE', 'docs/GETTING_STARTED.md', 'docs/INSTALLATION.md', 'tools/setup-backend.py',
                      'tools/install-from-rpc.py', 'tools/install-moader.cjs', 'config/release.json',
                      'runtime/modloader/native/prebuilt/manifest.json']:
         require(required in entries, 'Release source is missing ' + required)
@@ -242,37 +242,21 @@ def main():
         host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
-Use this kit to set up the backend for the current Switch boot. Start by
-opening docs/INSTALLATION.md and choosing a method:
+Keep this kit on your computer. It includes the matching Moader app,
+resident service and backend files.
 
-- SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
-- SmileBASIC with direct ns2jb: macOS, Linux or WSL2 and native Node 24.
-- Seedsow Lullaby Demo or full game: macOS, Linux or WSL2. See docs/SEEDSOW.md.
-- Seedsow on-console: experimental Moader A route or regular B route after
-  one-time SD/save preparation. The kit includes the source-built standalone
-  bootstrap and adapter. A requires an exact qualified FS capture to generate
-  its local payload; no console capture is bundled. See
-  docs/SEEDSOW_STANDALONE.md before using either route.
-- CivSwitch: experimental. See docs/CIV7.md for the required profile.
+Open docs/GETTING_STARTED.md to choose your setup method. Seedsow on-console
+(standalone) uses a computer for initial SD card and save preparation.
+The guide lists its local filesystem capture requirement and the computer
+requirements for the other methods.
 
-The kit includes the Moader app, resident service and matching backend
-binaries. Install Python 3.10 or newer. The first preparation downloads
-pinned dependencies, so have internet access. SmileBASIC setup uses prebuilt
-files without an SDK. The full patched kaiHEN release is in
-bundles/kaiHEN-Moader-20261114c.zip, including hbmenu, hbloader, OunceShell,
-licenses, and the matched RO/HEN/bootstrap and Moader binaries. The Seedsow
-guide provisions the pinned patched
-GUI from upstream and installs the SDK needed by its live helper.
+If Moader is already on your Switch, open it from hbmenu. In Settings >
+Advanced > Runtime details, check that Runtime connection says Connected
+before using mods in a game. Your mods and preferences stay on the SD
+card after a reboot.
 
-Run preparation from this outer folder (the one containing tools/).
-For SmileBASIC and CivSwitch, preparation checks local files and prints
-one installation command. For Seedsow, the pinned GUI performs the one
-owned installation after its local preparation. Follow the completion
-steps for your method in docs/INSTALLATION.md, docs/SEEDSOW.md or
-docs/CIV7.md.
-
-Mod layout and controls: docs/USAGE.md
-Test results: docs/VALIDATION.md
+For browser pairing and your first mod, open docs/USAGE.md.
+For help with an error, open docs/TROUBLESHOOTING.md.
 Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''
     host[prefix + 'START_HERE.txt'] = (start_here.encode(), 0o100644)
