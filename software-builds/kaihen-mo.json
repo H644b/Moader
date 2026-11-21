@@ -4,9 +4,9 @@
   "release_base": "20261114c",
   "toolchain": "devkitA64 GCC 16.1.0 + ounce-devkit 20261114",
   "patch": "software-builds/kaihen-mo.patch",
-  "patch_sha256": "1b22bf5948265406bd7bef864ae5753a367410091968b06fff9e720d138e90da",
+  "patch_sha256": "3de387d0ba59da9712e38f151ace76b5708af7898e14c8c76ddb2ce5b722bbb3",
   "source_tree_algorithm": "sha256-sorted-path-nul-sha256-newline-v1",
-  "source_tree_sha256": "af72a8de6c84c266b1251ce643d05b1cc01fb030cf219472903473fff07c460a",
+  "source_tree_sha256": "9fcb9f95090e34848e8b3ae2ffc6d1c1b609973dd47abbc2c46bde7108c51bce",
   "protocol_version": 7,
   "hen_sha256": "092fd1987a018944975dfa02a14e348d02c576595a4c697a6d217d407b41b607",
   "components": {
@@ -19,12 +19,12 @@
       "sha256": "4f18cb99ac810855de180bc6d4f5ec8d32fc40e9e2512e6cd23a33e2c79c8d57"
     },
     "ro/main": {
-      "bytes": 27420,
-      "sha256": "dde71459716d59cae8f13078e67f6172891d7f0c471fb5b11356fa8ea268d4e8"
+      "bytes": 28378,
+      "sha256": "bb3122c7870d3d13e541d604e7f0ff530e6fdb186c31bde48d0d53395a8d5c5f"
     }
   },
   "native_build_passed": true,
-  "console_retest_passed": true,
-  "reason": "On a replacement SD card reported blank before setup, a fresh Seedsow Demo boot installed this exact HEN. The maintainer reported a normal first Pokemon Z-A launch without R, then hbmenu and connected Moader runtime/FS on the second launch with R. Read-only SD FTP confirmed a 1908-byte META game policy afterward. The affected tester and other console setups have not retested this candidate.",
-  "validation_scope": "The same-boot installation receipt verified matched RO/HEN/bootstrap startup, HEN protocol 7/result 0, game arm waiting, connected Moader resident/FS, restored FS cache, retired endpoint and closed listener. The maintainer used a replacement SD card reported blank before setup, launched Pokemon Z-A without R for at least 20 seconds, fully closed it, then held R through a second launch and reported hbmenu and Moader runtime/FS connected. Read-only FTP found /kaihen/bin/game/main.npdm with a META header and 1908 bytes after the game launches. The first-launch policy file was not independently read before the first launch; the blank-card initial state is user-reported. The affected tester's failure cause and behavior on their console remain unverified."
+  "console_retest_passed": false,
+  "reason": "The previous RO/HEN/bootstrap pair passed a bounded clean-card Demo installation and game-entry check. This candidate handles standalone Seedsow FS-only commands on the existing app-space ldr:ro service; the new RO bytes and complete pair have not yet been retested on a console.",
+  "validation_scope": "The new RO compiles with the pinned AArch64 toolchain and its host RO suite passes. The full source patch replays to the committed native tree. The HEN and bootstrap binaries are unchanged from the earlier clean-card device-verified pair, but the new RO has only host validation. A fresh-boot standalone Profile B installation must verify Moader FS and resident startup before console_retest_passed can be true for this pair."
 }

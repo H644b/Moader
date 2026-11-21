@@ -218,6 +218,9 @@ opening docs/INSTALLATION.md and choosing a method:
 - SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
 - SmileBASIC with direct ns2jb: macOS, Linux or WSL2 and native Node 24.
 - Seedsow Lullaby Demo or full game: macOS, Linux or WSL2. See docs/SEEDSOW.md.
+- Seedsow on-console: experimental kaiHEN staging only. The observed Moader
+  backend remained disconnected because FS hook installation is not yet wired.
+  Use the PC-driven Seedsow route for Moader; see docs/SEEDSOW_STANDALONE.md.
 - CivSwitch: experimental. See docs/CIV7.md for the required profile.
 
 The kit includes the Moader app, resident service and matching backend

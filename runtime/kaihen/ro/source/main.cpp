@@ -11,8 +11,9 @@ constexpr u32 MaxSessions = 16;
 constexpr u32 PortCount = 3;
 constexpr u64 RegistrationRetryNs = 50000000;
 
-// Native RO registers ldr:ro in service space sets 1 and 2. Its private
-// ro:dmnt endpoint belongs to set 1.
+// Native RO registers ldr:ro in service space sets 1 and 2. HEN keeps its
+// private ro:dmnt endpoint in set 1; Seedsow uses qualified commands on the
+// already accessible app-space ldr:ro session.
 struct RoPort {
     const char* name;
     u32 space;
@@ -144,7 +145,11 @@ class RoServer {
 
         Handle copied_client = INVALID_HANDLE;
         if (fs_memory_[client]) {
-            roFsMemoryDispatch(message);
+            roFsMemoryDispatch(message, false);
+        } else if (clients_[client].port_index == 1 && roIsStandaloneFsCommand(message)) {
+            // The app can already open set-2 ldr:ro during upstream Stage C.
+            // Only the dedicated high commands may enter this FS-only path.
+            roFsMemoryDispatch(message, true);
         } else {
             copied_client = roDispatch(clients_, MaxSessions, client, message);
         }

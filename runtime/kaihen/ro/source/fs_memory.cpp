@@ -425,11 +425,45 @@ void closeRequestHandles(const HipcParsedRequest& request) {
 
 } // namespace
 
-void roFsMemoryDispatch(void* message) {
+bool roIsStandaloneFsCommand(void* message) {
+    const HipcParsedRequest request = hipcParseRequest(message);
+    const CmifInHeader* header = getHeader(message, request, 0);
+    if (!header || header->magic != CMIF_IN_HEADER_MAGIC)
+        return false;
+    const u32 command = header->command_id;
+    return command == 0x524f0010 || command == 0x524f0012 ||
+           command == 0x524f0014 || command == 0x524f0015 ||
+           command == RoProcessReadCommand;
+}
+
+void roFsMemoryDispatch(void* message, bool fs_only) {
     if (roReplyQueryPointerBufferSize(message))
         return;
 
     const HipcParsedRequest request = hipcParseRequest(message);
+    if (fs_only) {
+        const CmifInHeader* header = getHeader(message, request, 0);
+        const Handle process = request.meta.num_copy_handles == 1 ?
+            request.data.copy_handles[0] : INVALID_HANDLE;
+        u64 program = 0;
+        const bool standalone_command = roIsStandaloneFsCommand(message);
+        if (!header || header->magic != CMIF_IN_HEADER_MAGIC ||
+            !standalone_command ||
+            !request.meta.send_pid || process == INVALID_HANDLE ||
+            R_FAILED(svcGetInfo(&program, InfoType_ProgramId, process, 0)) ||
+            program != FilesystemProgramId) {
+            closeRequestHandles(request);
+            roWriteDiagnosticReply(message, RoResult_BadRequest, nullptr, 0);
+            return;
+        }
+        if (serveProbe(message, request)) {
+            closeRequestHandles(request);
+            return;
+        }
+        closeRequestHandles(request);
+        roWriteDiagnosticReply(message, RoResult_BadRequest, nullptr, 0);
+        return;
+    }
     if (serveDiagnostics(message, request))
         return;
 
