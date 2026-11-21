@@ -44,8 +44,8 @@ PAGES = {
 LINK = re.compile(r'(!?)\[([^\]\n]*)\]\(([^()\s]+)\)')
 
 
-def convert(content, source, repository):
-    """Keep wiki navigation local and point source/assets to the main repository."""
+def convert(content, source, repository, *, bundled_guides=None):
+    """Keep links to available guides local, using the published Wiki for the rest of an app ZIP."""
     names = {value: key for key, value in PAGES.items()}
     # Keep generic validation limits from shared policy pages while using the
     # same software-error wording as the user guides.
@@ -66,10 +66,14 @@ def convert(content, source, repository):
             raise ValueError('Missing or external local guide target in ' + str(source.relative_to(ROOT)))
         relative = target.relative_to(ROOT).as_posix()
         suffix = ('#' + url.fragment) if url.fragment else ''
+        if bundled_guides is not None and relative in bundled_guides:
+            return match.group()
         if image:
             destination = 'https://raw.githubusercontent.com/' + repository + '/main/' + quote(relative, safe='/')
         elif relative in names:
             destination = names[relative] + suffix
+            if bundled_guides is not None:
+                destination = 'https://github.com/' + repository + '/wiki/' + destination
         else:
             kind = 'tree' if target.is_dir() else 'blob'
             destination = 'https://github.com/' + repository + '/' + kind + '/main/' + quote(relative, safe='/') + suffix
@@ -112,6 +116,9 @@ Moader manages Switch 2 mods from your controller or a paired browser.
   - [App and plugin](Installation#install-the-app-and-plugin)
   - [First-time setup](Installation#first-time-setup)
   - [SmileBASIC](SmileBASIC)
+  - [Seedsow on-console (standalone)](Seedsow-Standalone)
+  - [Seedsow Lullaby, PC-driven](Seedsow-Demo)
+  - [CivSwitch (experimental)](CivSwitch-Entrypoint)
   - [Updates](Installation#updating)
 - [Using Moader](Using-Moader)
 - [Controls and settings](Controls)

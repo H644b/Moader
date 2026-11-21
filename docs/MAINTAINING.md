@@ -84,7 +84,7 @@ Use [the installation guide](INSTALLATION.md), [USAGE.md](USAGE.md) and [TROUBLE
 
 ## Update the official GitHub Wiki
 
-The README, Wiki and package welcome text point to [Installation](INSTALLATION.md). Document the app and resident plugin together there. Update the requirements, SD paths and setup methods when a release changes them. Keep implementation notes in the [developer docs](dev/README.md).
+The README, Wiki and package welcome text point to [Installation](INSTALLATION.md). Document the app and resident plugin together there. Keep each method’s requirements, install steps and connection check on its own page under `docs/`. The app ZIP includes those pages, and the backend kit includes the full docs tree. Keep implementation notes in the [developer docs](dev/README.md).
 
 Edit the canonical Markdown under `docs/` first, then regenerate the [GitHub Wiki](https://github.com/H644b/Moader/wiki) pages.
 

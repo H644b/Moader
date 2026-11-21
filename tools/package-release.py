@@ -108,7 +108,8 @@ def public_source(root):
                     'Unapproved build record in committed tree: ' + name)
         entries[name] = (git(root, 'show', 'HEAD:' + name), int(mode, 8))
     for required in ['README.md', 'LICENSE', 'docs/GETTING_STARTED.md', 'docs/INSTALLATION.md',
-                     'docs/SMILEBASIC.md', 'tools/setup-backend.py',
+                     'docs/SMILEBASIC.md', 'docs/SEEDSOW_STANDALONE.md', 'docs/SEEDSOW.md', 'docs/CIV7.md',
+                     'tools/setup-backend.py',
                      'tools/install-from-rpc.py', 'tools/install-moader.cjs', 'config/release.json',
                      'runtime/modloader/native/prebuilt/manifest.json']:
         require(required in entries, 'Release source is missing ' + required)
@@ -243,17 +244,15 @@ def main():
         host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
-Extract this kit on your computer. Open docs/INSTALLATION.md for the
-requirements, install steps and connection check. The setup guides are
-docs/SMILEBASIC.md, docs/SEEDSOW_STANDALONE.md, docs/SEEDSOW.md and
-docs/CIV7.md. Full computer references are in docs/dev/.
+Open docs/INSTALLATION.md for requirements, setup, verification and updates.
+Choose your method guide in the same folder.
 
-The kit includes both required files. After setup, check these SD paths.
-  Console app       /switch/Moader.nro
-  Resident plugin   /kaihen/plugins/moader.nso
+  SmileBASIC                     docs/SMILEBASIC.md
+  Seedsow on-console (standalone) docs/SEEDSOW_STANDALONE.md
+  Seedsow Lullaby, PC-driven      docs/SEEDSOW.md
+  CivSwitch (experimental)        docs/CIV7.md
 
-Open Moader from hbmenu. Under Settings > Advanced > Runtime details,
-Runtime connection should say Connected before you use mods in a game.
+Computer-side references are in docs/dev/.
 
 Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''
