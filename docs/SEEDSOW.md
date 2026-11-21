@@ -1,6 +1,6 @@
-# Install Moader through Seedsow Lullaby
+# Install Moader through Seedsow Lullaby from a computer
 
-This guide covers the PC-driven GUI installer. The separate [experimental on-console Seedsow route](SEEDSOW_STANDALONE.md) prepares SD and a standalone save once, then runs from Seedsow without a PC on later boots.
+Use this method to start Moader from Seedsow Lullaby on a new boot with the help of a computer. The [on-console method](SEEDSOW_STANDALONE.md) has its own requirements.
 
 Download the [v3.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) for Seedsow Lullaby Demo or the full game.
 

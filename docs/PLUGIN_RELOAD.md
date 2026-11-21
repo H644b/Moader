@@ -8,10 +8,10 @@ Use a Moader app and resident built for the matching patched **protocol-7 HEN an
 
 ## Use it
 
-1. Finish mod uploads and imports. Copy the compatible replacement to `kaihen/plugins/moader.nso` on the SD card. If you also updated the app, close it before [copying the NRO](INSTALLATION.md#copy-or-update-the-console-app).
+1. Finish uploads and close Moader. Keep the Switch on and [copy the app and compatible plugin from the same release](INSTALLATION.md#copy-or-update-the-console-app) with your usual file-transfer method.
 2. Open Moader. Choose **Settings → Advanced → Reload Moader service**.
 3. Keep the app open until it reconnects or displays a failure. A successful reconnect means the new service passed startup and filesystem checks.
-4. Reopen the browser page. If **Start web automatically** is off, press **Y** in Moader to start the listener first. Your saved library, game-copy settings and pairing code stay on SD.
+4. Reopen the browser page. If the listener is off, press **ZR** in Moader and choose **Start listener**. Your saved library, game-copy settings and pairing code stay on SD.
 
 ## Errors and recovery
 

@@ -2,7 +2,7 @@
 
 ## Choose the game's copy
 
-Select a game, then open **Settings → Game copy** in the app or browser. Moader saves the choice per game.
+Select a game, then open **Settings → General → Game copy** in the app or browser. Moader saves the choice per game.
 
 | Choice | What Moader checks |
 | --- | --- |

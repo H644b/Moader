@@ -11,8 +11,8 @@ body:
     id: version
     attributes:
       label: Moader version
-      description: Release tag or source commit used for this report (for example, v0.1.2).
-      placeholder: v0.1.2
+      description: Release tag or source commit used for this report (for example, v3.0.0).
+      placeholder: v3.0.0
     validations:
       required: true
   - type: input
@@ -29,7 +29,8 @@ body:
       options:
         - Unknown
         - SmileBASIC through ns2jb or mac2jb
-        - Seedsow Lullaby Demo from source
+        - Seedsow Lullaby, PC-driven
+        - Seedsow Lullaby, on-console (experimental)
         - CivSwitch (experimental)
         - Other (describe below)
   - type: input

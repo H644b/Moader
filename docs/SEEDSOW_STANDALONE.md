@@ -1,8 +1,10 @@
 # Seedsow on-console Moader route (experimental)
 
-The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blob/ff14e26cb950db5cff0da911d28774404adb5cd1/console-only/README.md), adapted from [rushinz's on-console Lua port](https://gitlab.com/rushinz/seedsow-semi-untethered), runs FS acquisition and kaiHEN from Seedsow after a one-time save upload. Moader's preparation tool pins that upstream revision and stages the complete matched Moader kaiHEN set on SD. The computer is needed to prepare the SD and upload the save; later runs of this *kaiHEN chain* do not need it.
+This experimental method starts on the Switch after one-time computer preparation. The Moader route requires a qualified local filesystem capture. The v3.0.0 kit includes the standalone bootstrap.
 
-**Profile B's A route reached `KH READY` and a connected Moader runtime and FS on a fresh Demo boot.** The saved run records 19 active FS hooks, HEN result `0x0`, both Loader restoration results `0x0`, and the Moader plugin listed by HEN. A same-boot read-only check found the current catalogue and CRC-valid FS acknowledgement at the same epoch and generation with result `0x0`. After v3.0.0 publication, the rebuilt app and resident were staged with full FTP readback; the owner reported another fresh Profile B A boot reaching `KH READY` and showing Moader v3.0.0 with runtime and FS connected. This later result has no independent same-boot acknowledgement receipt. On a separate fresh boot with the same SD files, the owner reported that the regular **B** route reached hbmenu and Moader showed disconnected, as expected because B does not install Moader FS. Other consoles and games, repeated v3 A boots, and physical mod routing have not been checked. The regular patched kaiHEN bootstrap remains unchanged; v3.0.0 bundles the separate standalone candidate. [Device evidence](VALIDATION.md#v300-standalone-release-scope).
+One Demo run recorded a connected filesystem runtime; a later owner test confirmed the v3.0.0 app and service connected on the same console. See the [device test results](VALIDATION.md#v300-standalone-release-scope) for the tested setup and limits.
+
+This method builds on [Malev0's Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blob/ff14e26cb950db5cff0da911d28774404adb5cd1/console-only/README.md) and [rushinz's on-console Lua port](https://gitlab.com/rushinz/seedsow-semi-untethered).
 
 ## Requirements and boundaries
 

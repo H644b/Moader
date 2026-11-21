@@ -29,19 +29,19 @@ source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, 
 instructions = f'''Moader {tag}
 
 1. Close Moader on the Switch if it is open.
-2. Copy switch/Moader.nro to the SD card's switch folder.
+2. Copy switch/Moader.nro and kaihen/plugins/moader.nso to those same
+   locations on the SD card. Use both files from this ZIP.
 3. Open Moader from hbmenu.
 
-If the matching backend is running, the app connects to it. Otherwise the
-app can manage the library and serve the browser while it stays open.
-Press Y if the web listener is off. Press ZR for the address and six-digit
-pairing code. Open the displayed address on the same local network.
+The app connects when a matching resident service is running. If the
+app is running in foreground mode, its browser listener stops when the
+app closes. Press ZR for Connection. Start the listener if it is off,
+then open the displayed address on your local network and pair.
 
-This ZIP also contains kaihen/plugins/moader.nso. Copy it to the matching
-folder on SD to stage a replacement. Open Settings > Advanced >
-Reload Moader service to load it if your running backend supports reload.
-For first-time backend setup, a reboot or a HEN update, use the matching
-backend kit and the installation guide.
+If you replaced the files while the resident was running, open
+Settings > Advanced > Reload Moader service on a compatible backend.
+For first-time backend setup, a reboot or a HEN update, see the
+installation guide.
 
 Install and update: {repository}/blob/{source_commit}/docs/INSTALLATION.md
 Manage mods: {repository}/blob/{source_commit}/docs/USAGE.md
