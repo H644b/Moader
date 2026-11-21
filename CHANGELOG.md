@@ -5,6 +5,7 @@
 - Ship the pinned on-console Seedsow A/B implementation and the source-built standalone bootstrap in the backend kit. A installs Moader FS and HEN after one-time SD/save preparation; B follows the regular upstream Lua chain with the same staged SD set.
 - Verify one Profile B Demo A boot with `KH READY`, 19 active FS hooks, a running Moader plugin and a same-boot, CRC-valid FS acknowledgement matching the current catalogue. A separate Profile B B boot reached hbmenu by owner report. Other consoles, a second A cold boot and physical mod reads remain unverified.
 - Keep the console-derived FS capture and payload outside public assets. Preparing A requires the exact qualified local capture; the published kit includes the generator and bootstrap but is not sufficient on its own for a new console. [Release notes](docs/releases/v3.0.0.md).
+- After publication, the exact v3 app and resident passed independent FTP readback on the original console; the owner reported a fresh Profile B A boot reaching `KH READY` and Moader v3.0.0 with runtime and FS connected. No same-boot FS acknowledgement was fetched for this later run.
 
 ## v0.2.5 — fewer resident BSD sessions during game launch
 
