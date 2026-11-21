@@ -8,7 +8,7 @@ The [Seedsow console-only chain](https://github.com/Malev0/seedsow-fs-kaihen/blo
 
 - Seedsow Lullaby Demo or full game with a working HTTP launcher save for that edition, a Switch 2 on firmware supported by the [upstream Seedsow project](https://github.com/Malev0/seedsow-fs-kaihen), and an SD card that can be mounted on the computer. Keep the Demo and full-game saves separate.
 - The matching [v3.0.0 backend kit](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip), Python 3.10+, Git, Node.js 20+ and `luac`. The kit includes the verified source-built standalone bootstrap in `prebuilt/standalone-bootstrap/`; no SDK is needed to stage that prebuilt. A clean source checkout instead needs the pinned `vendor/devkitpro` toolchain to reproduce it ([SDK setup](BUILDING.md#build-from-a-clean-source-checkout)). macOS host preparation has been checked; Linux and WSL2 use the same Python and Node paths, but their standalone route has not yet been verified end to end.
-- The exact previously qualified sparse FS capture with SHA-256 `0f58beb0a35ca2dadaf6300a8bbf4432974edfeac405aba4b3a3aa01af7d9271`. The generator refuses any other capture. This private console capture and its derived payload are **not in the v3.0.0 kit**. Without this qualified input, the Moader A route cannot be prepared from the public kit alone.
+- The exact previously qualified sparse FS capture with SHA-256 `0f58beb0a35ca2dadaf6300a8bbf4432974edfeac405aba4b3a3aa01af7d9271`. The generator refuses any other capture. This private console capture and its derived payload are **not in the v3.0.0 kit**. [Obtain and check a local capture](#obtain-and-check-the-fs-capture) before preparing A. Without the exact qualified input, the Moader A route cannot be prepared from the public kit alone.
 - A working launcher save on a **second console profile** before uploading, as the upstream instructions recommend. The uploader writes and commits `save:/` for the profile that is actually running Seedsow. Confirm the profile at game launch; the HTTP uploader cannot identify it from the console address. Back up any profile whose save you need to preserve.
 
 ### If Checkpoint cannot back up the working Seedsow Demo save
@@ -21,12 +21,44 @@ Use the complete kaiHEN archive supplied by this Moader checkout or matching bac
 
 A clean source checkout does not contain the ignored prebuilt files. Use the matching v3.0.0 backend kit, or provide the **exact** app, resident and RO/HEN/bootstrap bytes recorded in `config/release.json` and build the standalone bootstrap from the pinned source. A local `--build` can produce different app/resident bytes on another host and does not by itself satisfy this release-identity check. Do not copy binaries from a different Moader version into this checkout.
 
+## Obtain and check the FS capture
+
+The [PC-driven Seedsow installer](SEEDSOW.md) reads FS code from a fresh, qualified session **before** installing Moader's hooks. It leaves a sparse `fs-4.bin` capture and its `manifest.json` on the computer in the extracted backend kit's `state/` directory. If you already completed that installer, use its existing files; otherwise, follow that guide on one fresh boot and wait for **Moader setup complete** before using the capture on a later boot. Keep the kit and its `state/` folder. You do not need to run the PC installer on each later standalone boot once A has been prepared.
+
+Find the `MOADER_RUN .../build/seedsow-runs/switch-<run-id>` line in the successful GUI log. The capture for that run is `state/switch-<run-id>/native-fs/fs-4.bin` **under the same backend kit folder**; its qualification record is `state/switch-<run-id>/native-fs/manifest.json`. From that folder, replace the example run ID below with the one from your log and check the files locally:
+
+```sh
+RUN_ID="switch-REPLACE_WITH_YOUR_RUN_ID"
+CAPTURE="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve(strict=True))' "state/$RUN_ID/native-fs/fs-4.bin")"
+python3 - "$CAPTURE" <<'PY'
+import hashlib, json, pathlib, sys
+
+capture = pathlib.Path(sys.argv[1])
+manifest = json.loads((capture.parent / "manifest.json").read_text())
+digest = hashlib.sha256(capture.read_bytes()).hexdigest()
+expected = "0f58beb0a35ca2dadaf6300a8bbf4432974edfeac405aba4b3a3aa01af7d9271"
+print(f"capture: {capture}")
+print(f"size: {capture.stat().st_size} bytes; SHA-256: {digest}")
+if not (manifest.get("session") == capture.parent.parent.name
+        and manifest.get("verified") is True
+        and manifest.get("validatedRanges") == 36
+        and manifest.get("runtimeLoggingCompatible") is True
+        and manifest.get("sha256") == digest
+        and capture.stat().st_size == 2416640
+        and digest == expected):
+    raise SystemExit("This capture is not accepted by the v3.0.0 standalone A generator")
+print("Capture is eligible for the v3.0.0 standalone A generator")
+PY
+```
+
+Use `"$CAPTURE"` in the `--capture` command below only if this check passes. A successful PC-driven installation creates and qualifies **its own** capture, but that does not guarantee it has the single hash pinned by the standalone generator. There is currently no standalone-only workflow that turns a new, different capture into an accepted A payload. If the digest differs, A cannot currently be prepared with that capture. Do not rename, edit or substitute bytes to make it pass; use the [PC-driven route](SEEDSOW.md) for that console until a new capture has been independently qualified and supported in a future build. Keep `fs-4.bin`, the manifest and run log private; they are not release assets.
+
 ## Prepare the SD card on the computer
 
 From the extracted v3.0.0 backend kit folder containing `tools/` and `config/`, generate the local candidate payload once from the exact qualified capture. The kit supplies the checked standalone bootstrap. For a clean source checkout, first run `python3 tools/seedsow-standalone-bootstrap.py --output build/standalone-bootstrap`; this build reproduces the published regular bootstrap before creating the standalone candidate.
 
 ```sh
-node tools/seedsow-standalone-fs-payload.cjs --capture "/path/to/qualified/fs-4.bin" --output build/standalone-fs-payload
+node tools/seedsow-standalone-fs-payload.cjs --capture "$CAPTURE" --output build/standalone-fs-payload
 python3 tools/seedsow-standalone.py provision --node "$(command -v node)"
 python3 tools/seedsow-standalone.py check --payload-dir build/standalone-fs-payload --node "$(command -v node)"
 python3 tools/seedsow-standalone.py stage-sd --payload-dir build/standalone-fs-payload --sd-root "/path/to/mounted/SD-root"
