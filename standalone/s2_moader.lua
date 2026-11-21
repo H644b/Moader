@@ -492,9 +492,10 @@ function M.install(env)
     end
     check(call_runtime("lfs_activate", {}) == 0,
         "resident hook activation failed")
-    -- This retained IStorage read passes through the newly active lfs_read
-    -- hook. Its own call is counted as active until its reply is copied, so
-    -- two snapshots must each show exactly that one call and no other work.
+    -- Each read_fs call validates its retained descriptor with one IStorage
+    -- read, then reads the requested bytes with another. Both pass through
+    -- lfs_read; each payload snapshot sees its own active call. Two
+    -- consecutive snapshots therefore advance the call counter by two.
     local before, after = read_fs(context, 104), read_fs(context, 104)
     local before_calls, after_calls = P.u64(before, 16), P.u64(after, 16)
     local before_errors, after_errors = P.u64(before, 88), P.u64(after, 88)
@@ -502,7 +503,7 @@ function M.install(env)
     local report_errors = P.u32(read_fs(context + profile.lazyOffset + 132, 4), 0)
     check(before_errors == 0 and after_errors == 0 and
         before_active == 1 and after_active == 1 and
-        after_calls == before_calls + 1 and report_errors == 0,
+        after_calls == before_calls + 2 and report_errors == 0,
         fmt("resident runtime counters or report failed: calls=%d/%d active=%d/%d errors=%d/%d report=%d",
             before_calls, after_calls, before_active, after_active,
             before_errors, after_errors, report_errors))

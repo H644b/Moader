@@ -187,7 +187,8 @@ local env = {
     end,
     read_fs = function(address, length)
         if invocations >= 5 then
-            observed_calls = observed_calls + 1
+            -- read_fs validates its descriptor, then reads the payload.
+            observed_calls = observed_calls + 2
             q(context + 16, observed_calls)
         end
         local bytes = read(address, length)
