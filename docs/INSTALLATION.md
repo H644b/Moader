@@ -29,7 +29,7 @@ Choose the method you use to start homebrew. Use the v3.0.0 backend ZIP from the
 | SmileBASIC with mac2jb | macOS | [mac2jb setup](#route-b-macos-with-mac2jb) |
 | SmileBASIC with direct ns2jb | macOS, Linux, or Windows with WSL2 | [Direct ns2jb setup](#route-a-linuxwsl-or-macos-with-ns2jb) |
 | Seedsow Lullaby, PC-driven | Apple Silicon macOS, Linux x86_64, or WSL2 x86_64 | [PC-driven Seedsow](SEEDSOW.md) |
-| Seedsow Lullaby, on-console (experimental) | Computer for initial setup | [On-console Seedsow requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries) |
+| Seedsow Lullaby, on-console | Computer for initial setup | [On-console Seedsow requirements](SEEDSOW_STANDALONE.md#requirements-and-boundaries) |
 | CivSwitch (experimental) | macOS or Linux | [CivSwitch setup](CIV7.md#experimental-setup) |
 
 The on-console Seedsow kit includes a standalone bootstrap. The Moader route has a separate requirement for a qualified local filesystem capture. See the [v3.0.0 release notes](https://github.com/H644b/Moader/releases/tag/v3.0.0) and [validation results](VALIDATION.md#v300-standalone-release-scope).
