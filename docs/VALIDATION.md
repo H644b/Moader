@@ -4,7 +4,9 @@ Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The 
 
 ## v3.0.0 standalone release scope
 
-The v3.0.0 app (`f39b8d2caf5c70df993b5ce8c795c85eb9564e25e47100530c64b4963aa553dc`) and resident (`e32d7104866033d08a9a35da5e01fc3975d06ef19b9af5e16472112728555deb`) were cross-built with 3.0.0 version text. The standalone bootstrap and FS adapter retain the exact hashes from the successful Profile B Demo A run below. The v3 kit packages that bootstrap and the public A/B preparation code, while omitting the private console-derived FS payload. The exact v3 app/resident pair and a fresh installation from the published v3 kit have not yet been checked on hardware; the prior same-boot A acknowledgement applies to its recorded pair only.
+The v3.0.0 app (`f39b8d2caf5c70df993b5ce8c795c85eb9564e25e47100530c64b4963aa553dc`) and resident (`e32d7104866033d08a9a35da5e01fc3975d06ef19b9af5e16472112728555deb`) were cross-built with 3.0.0 version text. The standalone bootstrap and FS adapter retain the exact hashes from the successful Profile B Demo A run below. The v3 kit packages that bootstrap and the public A/B preparation code, while omitting the private console-derived FS payload.
+
+After publication on November 21, both exact v3 binaries were staged over OunceShell FTP on the existing SD card, with the previous files saved locally. Independent new FTP sessions read each v3 file back byte-for-byte. The owner then fully rebooted, ran A once using Profile B, and reported `KH READY` followed by Moader v3.0.0 with both runtime and FS connected. This is an exact v3 app/resident console check by owner report. A same-boot catalogue/acknowledgement receipt was not fetched for the v3 run; the earlier independently read FS acknowledgement below applies to its recorded pair. A fresh preparation from the public v3 kit, a second v3 A boot, other consoles and physical mod reads remain unverified. The release manifest's hardware flag records the state at packaging time, before this follow-up.
 
 ## Seedsow standalone host preparation
 
