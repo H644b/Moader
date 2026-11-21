@@ -90,7 +90,7 @@ void public_get(const std::string& url, size_t limit, const std::atomic<bool>& c
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, progress);
     curl_easy_setopt(c, CURLOPT_XFERINFODATA, &cancel);
-    curl_easy_setopt(c, CURLOPT_USERAGENT, "Moader/3.0.0 catalog");
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "Moader/3.5.0 catalog");
     auto rc = curl_easy_perform(c);
     if (rc != CURLE_OK)
         throw std::runtime_error(std::string("Download failed. ") + curl_easy_strerror(rc));

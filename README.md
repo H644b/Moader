@@ -8,14 +8,14 @@ The console app opens from **hbmenu**. The resident plugin keeps the browser and
 
 1. [Download Moader and choose a setup method](docs/INSTALLATION.md).
 2. [Pair a browser with your Switch](docs/USAGE.md#connect-a-browser).
-3. [Add and enable your first mod](docs/USAGE.md#upload-your-first-mod).
+3. [Find a mod in the Store](docs/USAGE.md#browse-and-install-from-the-store) or [upload a ZIP](docs/USAGE.md#upload-your-first-mod), then enable it in your Library.
 
-| v3.0.0 download | What's inside |
+| v3.5.0 download | What's inside |
 | --- | --- |
-| [Moader app and plugin](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-v3.0.0.zip) | The two files to copy to SD when you already have a compatible backend. |
-| [Moader backend kit](https://github.com/H644b/Moader/releases/download/v3.0.0/Moader-backend-v3.0.0.zip) | The app and plugin plus the files for setting up the backend. Check the requirements for your method. |
+| [Moader app and plugin](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-v3.5.0.zip) | The two files to copy to SD when you already have a compatible backend. |
+| [Moader backend kit](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-backend-v3.5.0.zip) | The app and plugin plus the files for setting up the backend. Check the requirements for your method. |
 
-[Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v3.0.0)
+[Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v3.5.0)
 
 | Console app | Browser |
 | --- | --- |
