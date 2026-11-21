@@ -24,6 +24,7 @@ local image, files, handles = {}, {
     ["/moader/runtime/ack.bin"] = string.rep("X", 64),
 }, {}
 local next_handle, data_slot, mapped_pages, invocations, patches = 100, "", 0, 0, 0
+local observed_calls = 0
 local function read(address, length)
     local out = {}
     for i = 0, length - 1 do
@@ -184,7 +185,18 @@ local env = {
         end
         return {str = assert(files[path], "missing readback " .. path)}
     end,
-    read_fs = read, write_fs = write,
+    read_fs = function(address, length)
+        if invocations >= 5 then
+            observed_calls = observed_calls + 1
+            q(context + 16, observed_calls)
+        end
+        local bytes = read(address, length)
+        if invocations >= 5 and address == context and length == 104 then
+            -- The retained IStorage read sees its own active hook call.
+            bytes = P.put_u64(bytes, 96, 1)
+        end
+        return bytes
+    end, write_fs = write,
     compare_write_fs = function(address, before, after)
         assert(read(address, #before) == before,
             "data compare/write preimage changed")
@@ -211,6 +223,7 @@ assert(receipt.fsBase == base and receipt.fsPid == 941 and
        receipt.context == context and receipt.runtime == runtime and
        receipt.hooks == 19 and ctx.moaderFsVerified)
 assert(ro_lookups == 3 and ro_waits == 2)
+assert(observed_calls >= 3, "active reader was not sampled twice")
 assert(mapped_pages == 26 and invocations == 5 and patches >= 19,
     string.format("flow count mismatch: maps=%d calls=%d patches=%d",
         mapped_pages, invocations, patches))

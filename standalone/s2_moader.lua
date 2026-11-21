@@ -492,13 +492,23 @@ function M.install(env)
     end
     check(call_runtime("lfs_activate", {}) == 0,
         "resident hook activation failed")
-    local counters = read_fs(context, 104)
-    check(P.u64(counters, 88) == 0 and P.u64(counters, 96) == 0 and
-        P.u32(read_fs(context + profile.lazyOffset + 132, 4), 0) == 0,
-        "resident runtime is busy or its report write failed")
+    -- This retained IStorage read passes through the newly active lfs_read
+    -- hook. Its own call is counted as active until its reply is copied, so
+    -- two snapshots must each show exactly that one call and no other work.
+    local before, after = read_fs(context, 104), read_fs(context, 104)
+    local before_calls, after_calls = P.u64(before, 16), P.u64(after, 16)
+    local before_errors, after_errors = P.u64(before, 88), P.u64(after, 88)
+    local before_active, after_active = P.u64(before, 96), P.u64(after, 96)
+    local report_errors = P.u32(read_fs(context + profile.lazyOffset + 132, 4), 0)
+    check(before_errors == 0 and after_errors == 0 and
+        before_active == 1 and after_active == 1 and
+        after_calls == before_calls + 1 and report_errors == 0,
+        fmt("resident runtime counters or report failed: calls=%d/%d active=%d/%d errors=%d/%d report=%d",
+            before_calls, after_calls, before_active, after_active,
+            before_errors, after_errors, report_errors))
     stage("")
     ctx.moaderFsVerified = true
-    env.log(fmt("resident FS %d hooks active; idle counters and report verified",
+    env.log(fmt("resident FS %d hooks active; self-counted probes and report verified",
         #profile.hooks))
     return {fsBase = base, fsPid = pid, context = context,
         runtime = runtime, hooks = #profile.hooks}
