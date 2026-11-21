@@ -53,7 +53,7 @@ Fully reboot, launch Seedsow explicitly with Profile B and press Y. Check that t
 python3 tools/seedsow-standalone.py verify-save --host SWITCH_LAN_IPV4 --node "$(command -v node)"
 ```
 
-This makes a read-only request for five file presences and sizes; it does not identify the profile by itself or compare full file contents. After Y, close Seedsow and relaunch it with Profile B before pressing A or B, because the launcher accepts one choice per process.
+This makes a read-only request for nine A/B file presences and sizes; it does not identify the profile by itself or compare full file contents. After Y, close Seedsow and relaunch it with Profile B before pressing A or B, because the launcher accepts one choice per process.
 
 On later fresh boots, **A** runs the Moader FS candidate and **B** runs the original upstream Seedsow Lua chain without the Moader FS adapter. Both buttons read the **same staged SD kaiHEN files**; B is a regular upstream Lua route, not a separate unpatched native kaiHEN build. Choose one button per full reboot. The profile selected when Seedsow starts determines which save these entries use. On a separate full reboot, B reached `KH READY` and hbmenu with the shared SD files; B does not install Moader's FS runtime.
 

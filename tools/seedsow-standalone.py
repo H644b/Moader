@@ -33,8 +33,9 @@ PAYLOAD_FILES = {
     'runtime.bin': 'a0b1fbedd1e3c35f17349f05b19b20b16ced737eb26c768aaf0040dd5ad86c8c',
     'runtime.log': 'dd9b476246581edb636a10ad8caaad58e7ceb2024c87d58333c80550aaeed55f',
 }
-SAVE_PROBE_FILES = ('inject2.lua', 'exploitb2.lua', 's2_b_main.lua',
-                    's2_b_kaihen.lua', 's2_b_kh_ro.lua')
+SAVE_PROBE_FILES = ('inject2.lua', 'exploita2.lua', 's2_main.lua',
+                    's2_kaihen.lua', 's2_kh_ro.lua', 'exploitb2.lua',
+                    's2_b_main.lua', 's2_b_kaihen.lua', 's2_b_kh_ro.lua')
 
 
 def require(ok, message):
