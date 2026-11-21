@@ -151,7 +151,7 @@ Preserve the square crop of game artwork and its rounded corners. The native foc
 
 **Settings.** The console has General, Connection, Advanced, Controls and Credits. The left stick opens Settings, ZR opens Connection and ZL opens the debug log. The browser has General, Advanced and Credits, with Game copy under General and Current session under Advanced. Connection status and Disconnect sit in its Settings sidebar. Preferences save immediately on console and explicitly through **Save settings** in the browser. Per-game copy selection saves immediately on both. [Console settings](native/settings_screen.cpp) · [Browser settings](web/index.html)
 
-**Store.** A search field and the **On this Switch** filter sit above the creator preview and results list. Each row names its game. Mod details show the creator, gallery, license, package size and the **Download & install** action. Download progress stays visible while browsing. The Library receives verified packages with the mod switched off. [Store presentation](native/store_screen.cpp) · [Community catalog](https://h644b.github.io/moader-mod-repo-template/)
+**Store.** A search field and the **On this Switch** filter sit above the creator preview and results list. Each row names its game. Mod details show the creator, gallery, license, package size and the **Download & install** action. Download progress stays visible while browsing. The Library receives verified packages with the mod switched off. [Store presentation](native/store_screen.cpp) · [Community catalog](https://moader.timsfun.com/)
 
 ## Do's and Don'ts
 

@@ -116,10 +116,8 @@ On the console, **Connection** shows listener status and pairing, **Advanced** c
 
 Press **ZL** in the app or open **Settings → Advanced → Current session** in the browser for the debug log. Library events show what you asked Moader to do. Native events can show what the filesystem accepted or read. Choose **Download debug log** in the browser’s **Advanced** section to save a copy, or press **−** on the console to save an app screenshot. Remove private details before sharing a report. [Reporting a problem](TROUBLESHOOTING.md#reporting-a-problem)
 
-## Community mod repositories
+## Community mods
 
-In the v3.0.0 Store test NRO, tap **Store** in the top bar, or press **↑**, **←**, then **A** from the library. The console loads the [community catalog](https://h644b.github.io/moader-mod-repo-template/catalog.json) when you open the Store. Select a release to see the creator, previews and publisher link. **B** goes back.
+Open **Store** from the top bar. Press **X** to search or **R** to show games on this Switch. Open a mod and choose **Download & install**. New mods appear switched off in your Library. Create an account on the [Moader Catalog](https://moader.timsfun.com/) to publish your own releases.
 
-To try the hosted example, open **Orchard Field Notes → Golden hour palette**. This is a catalog and download example for a fictional game. To import a publisher's ZIP, download it on your phone or computer and choose **Upload mod** in the paired browser.
-
-To publish your own mods, copy the repository template. It builds a static website, a game catalog at `catalog.json` and downloadable ZIPs with their sizes and SHA-256 checksums. The template includes instructions for GitHub Pages and other static hosts. [Moader mod repository template](https://github.com/H644b/moader-mod-repo-template)
+Try **Golden hour palette** with the game filter off. **Green Hill Zone** is listed under **Mario Kart 8 Deluxe**.

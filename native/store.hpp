@@ -6,6 +6,8 @@
 
 namespace moader_ui {
 inline constexpr bool StoreAvailable = true;
+inline constexpr char StoreFeed[] = "https://moader.timsfun.com/catalog.json";
+inline constexpr char StoreFiles[] = "https://moader.timsfun.com/files/";
 inline constexpr uint64_t StorePackageLimit = 128ull << 20;
 struct SourceLink {
     std::string label, url;
@@ -41,11 +43,11 @@ struct Store {
     StoreEntry detail;
     Shelf page = Shelf::Browse;
     StoreFocus focus = StoreFocus::Results;
-    std::string query;
+    std::string query, next_page;
     CatalogStatus catalog_status = CatalogStatus::Loading;
     bool catalog_failed = false, owned = false;
-    bool load_catalog(const std::string& json);
-    bool merge_catalog(const std::string& json);
+    bool load_catalog(const std::string& json, bool hosted_only = false);
+    bool merge_catalog(const std::string& json, bool hosted_only = false);
     void start();
     void rebuild_results();
     void set_query(std::string);

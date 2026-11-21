@@ -85,7 +85,7 @@ unsigned step(unsigned v, int d, unsigned n) {
     return n ? unsigned((int(v) + d + int(n)) % int(n)) : 0;
 }
 } // namespace
-bool Store::load_catalog(const std::string& json) {
+bool Store::load_catalog(const std::string& json, bool hosted_only) {
     if (!bounded_json(json))
         return false;
     Object root;
@@ -94,6 +94,13 @@ bool Store::load_catalog(const std::string& json) {
     if (!error.empty() || !std::all_of(end, json.end(), [](unsigned char c) { return std::isspace(c); }) ||
         !root.is<picojson::object>() || field(root, "format") != "moader.catalog.v1")
         return false;
+    auto cursor = field(root, "next");
+    if (!cursor.empty()) {
+        const auto prefix = std::string(StoreFeed) + "?after=";
+        if (!cursor.starts_with(prefix) || cursor.size() != prefix.size() + 36 ||
+            cursor.find_first_not_of("0123456789abcdef-", prefix.size()) != cursor.npos)
+            return false;
+    }
     std::vector<StoreGame> next;
     const auto& list = array(root, "games");
     if (list.size() > 256)
@@ -145,6 +152,10 @@ bool Store::load_catalog(const std::string& json) {
                 r.previews.push_back(p.get<std::string>());
             }
             r.package = package_for(m, r);
+            if (hosted_only) {
+                if (!r.package.url.starts_with(StoreFiles)) r.package = {};
+                std::erase_if(r.previews, [](const std::string& link) { return !link.starts_with(StoreFiles); });
+            }
             r.license = field(m, "license", 100);
             if (std::any_of(g.mods.begin(), g.mods.end(), [&](const Release& old) { return old.id == r.id; }))
                 return false;
@@ -152,6 +163,7 @@ bool Store::load_catalog(const std::string& json) {
         }
         next.push_back(std::move(g));
     }
+    next_page = std::move(cursor);
     games = std::move(next);
     page = Shelf::Browse;
     row = frame = 0;
@@ -159,10 +171,11 @@ bool Store::load_catalog(const std::string& json) {
     rebuild_results();
     return true;
 }
-bool Store::merge_catalog(const std::string& json) {
+bool Store::merge_catalog(const std::string& json, bool hosted_only) {
     Store incoming;
-    if (!incoming.load_catalog(json))
+    if (!incoming.load_catalog(json, hosted_only))
         return false;
+    next_page = std::move(incoming.next_page);
     for (auto& item : incoming.games) {
         auto existing =
             std::find_if(games.begin(), games.end(), [&](const StoreGame& g) { return item.id == g.id; });

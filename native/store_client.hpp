@@ -3,17 +3,13 @@
 #include "store.hpp"
 #include "../source/web_worker.hpp"
 #include <atomic>
-#include <algorithm>
 #include "ui.hpp"
-#include <deque>
-#include <fstream>
-#include <iterator>
 
 namespace moader_native {
 class StoreClient {
     moader::WebWorker worker;
     std::atomic<bool> done{false}, cancel{false};
-    std::deque<std::string> feeds;
+    std::string feed;
     bool was_open = false, is_feed = false, received_catalog = false;
     std::string url, data;
     moader_ui::Art result;
@@ -32,22 +28,6 @@ class StoreClient {
         }
         c.done.store(true, std::memory_order_release);
     }
-    void configure() {
-        feeds = {"https://h644b.github.io/moader-mod-repo-template/catalog.json"};
-        std::ifstream file("sdmc:/moader/store/sources.txt", std::ios::binary | std::ios::ate);
-        if (!file || file.tellg() < 0 || file.tellg() > 32768)
-            return;
-        file.seekg(0);
-        constexpr size_t max_catalogs = 1 + 16; // Default publisher plus SD subscriptions.
-        for (std::string line; feeds.size() < max_catalogs && std::getline(file, line);) {
-            if (!line.empty() && line.back() == '\r')
-                line.pop_back();
-            if (line.starts_with("https://") && line.size() <= 2048 &&
-                std::find(feeds.begin(), feeds.end(), line) == feeds.end())
-                feeds.push_back(line);
-        }
-    }
-
   public:
     ~StoreClient() {
         cancel = true;
@@ -58,7 +38,7 @@ class StoreClient {
         const bool open = s.view == moader_ui::View::Store;
         if (open && !was_open) {
             s.store.start();
-            configure();
+            feed = moader_ui::StoreFeed;
             received_catalog = false;
         } else if (!open && was_open) {
             cancel.store(true, std::memory_order_relaxed);
@@ -73,9 +53,13 @@ class StoreClient {
             if (open && !cancel.load(std::memory_order_relaxed)) {
                 if (!is_feed)
                     moader_ui::Store::finish_preview(url, std::move(result));
-                else if (s.store.merge_catalog(data))
+                else if (s.store.merge_catalog(data, true)) {
                     received_catalog = true;
-                else
+                    if (!s.store.next_page.empty()) {
+                        if (s.store.next_page > url) feed = s.store.next_page;
+                        else s.store.catalog_failed = true;
+                    }
+                } else
                     s.store.catalog_failed = true;
             }
             data.clear();
@@ -83,10 +67,10 @@ class StoreClient {
         }
         if (!open)
             return;
-        is_feed = !feeds.empty();
+        is_feed = !feed.empty();
         if (is_feed) {
-            url = std::move(feeds.front());
-            feeds.pop_front();
+            url.swap(feed);
+            feed.clear();
         } else {
             s.store.catalog_status = received_catalog ? moader_ui::CatalogStatus::Ready
                                                       : moader_ui::CatalogStatus::Unavailable;

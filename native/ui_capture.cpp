@@ -265,6 +265,18 @@ void tests(State s) {
         assert(parsed.load_catalog(invalid));
         assert(!parsed.games[0].mods[0].package.bytes);
     }
+    Store canonical;
+    assert(canonical.load_catalog(catalog, true));
+    assert(!canonical.games.front().mods.front().package.bytes);
+    auto official = catalog;
+    official.replace(official.find("https://example.org/mod.zip"), std::string("https://example.org/mod.zip").size(),
+                     std::string(StoreFiles) + "test/package.zip");
+    assert(canonical.load_catalog(official, true));
+    assert(canonical.games.front().mods.front().package.bytes == 242);
+    official.insert(1, std::string("\"next\":\"") + StoreFeed + "?after=00000000-0000-0000-0000-000000000001\",");
+    assert(canonical.merge_catalog(official, true) && !canonical.next_page.empty());
+    official.replace(official.find(StoreFeed), std::string(StoreFeed).size(), "https://example.org/catalog.json");
+    assert(!canonical.merge_catalog(official, true));
     Store st;
     assert(!st.load_catalog("{}"));
     st.start();

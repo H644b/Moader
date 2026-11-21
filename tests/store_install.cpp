@@ -14,7 +14,13 @@ int main(int argc, char** argv) {
     std::atomic<bool> cancel{false}, importing{false};
     std::atomic<uint64_t> received{0};
     Store store;
-    assert(store.load_catalog(fetch_catalog_asset(argv[1], 1 << 20, cancel)));
+    std::string page = argv[1];
+    const bool hosted = page == StoreFeed;
+    do {
+        assert(store.merge_catalog(fetch_catalog_asset(page, 1 << 20, cancel), hosted));
+        assert(store.next_page.empty() || store.next_page > page);
+        page = store.next_page;
+    } while (!page.empty());
     moader::UnavailableBackend backend;
     fs::path root(argv[2]);
     moader::Library lib(root.string(), backend);

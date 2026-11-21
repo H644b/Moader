@@ -73,7 +73,8 @@ void public_get(const std::string& url, size_t limit, const std::atomic<bool>& c
     curl_easy_setopt(c, CURLOPT_PROTOCOLS, long(CURLPROTO_HTTPS));
     curl_easy_setopt(c, CURLOPT_REDIR_PROTOCOLS, long(CURLPROTO_HTTPS));
 #endif
-    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, 1L);
+    const bool hosted = url.starts_with(StoreFeed) || url.starts_with(StoreFiles);
+    curl_easy_setopt(c, CURLOPT_FOLLOWLOCATION, hosted ? 0L : 1L);
     curl_easy_setopt(c, CURLOPT_MAXREDIRS, 3L);
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1L);
     curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 2L);
