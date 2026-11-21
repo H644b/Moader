@@ -193,7 +193,7 @@ def main() -> None:
                         default=ROOT / 'build/standalone-bootstrap')
     parser.add_argument('--sdk', type=Path, default=ROOT / 'vendor/devkitpro')
     parser.add_argument('--stage-sd', type=Path,
-                        help='replace only both bootstrap copies on a matched mounted SD card')
+                        help='replace both bootstrap copies and the adapter on a matched mounted SD card')
     parser.add_argument('--payload-dir', type=Path,
                         help='source-qualified FS payload, required with --stage-sd')
     options = parser.parse_args()

@@ -24,6 +24,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parent.parent
 PROFILE = ROOT / 'config/seedsow-standalone.json'
 DEFAULT_SOURCE = ROOT / 'build/seedsow-standalone-upstream'
+DEFAULT_BOOTSTRAP = ROOT / 'build/standalone-bootstrap'
 PAYLOAD_FILES = {
     'context.bin': '44690bcfc77b3550ea87e38d00161cc5311b190285e7759f96278f2b236881a9',
     'fs-abi.bin': '1b7e348fd08186640c2c554e97d0b04141bf2c333dc2d584b17b9ec912f42b4f',
@@ -239,6 +240,40 @@ def moader_sd_files():
                    'fileCount': len(files), 'sha256': sha(archive)}
 
 
+def add_standalone_bootstrap(files, output):
+    """Replace both release copies with the source-built, device-tested pair."""
+    selected = Path(output).absolute()
+    require(not selected.is_symlink(),
+            'Standalone bootstrap output must be a regular directory')
+    directory = selected.resolve(strict=True)
+    require(directory.is_dir(),
+            'Build the standalone bootstrap before staging SD')
+    image = directory / 'bootstrap.bin'
+    receipt = directory / 'proof.json'
+    require(image.is_file() and not image.is_symlink() and
+            receipt.is_file() and not receipt.is_symlink(),
+            'Standalone bootstrap image and build proof are required')
+    module_spec = importlib.util.spec_from_file_location(
+        'moader_standalone_bootstrap', ROOT / 'tools/seedsow-standalone-bootstrap.py')
+    builder = importlib.util.module_from_spec(module_spec)
+    module_spec.loader.exec_module(builder)
+    proof = json.loads(receipt.read_text())
+    candidate = image.read_bytes()
+    require(sha(files['kaihen/bootstrap.bin']) == builder.RELEASE_SHA256 and
+            files['kaihen/bin/bootstrap.bin'] == files['kaihen/bootstrap.bin'] and
+            sha(files['kaihen/moader-fs/s2_moader.lua']) == builder.ADAPTER_SHA256 and
+            sha(candidate) == builder.STANDALONE_SHA256 and
+            proof.get('releaseBootstrapSha256') == builder.RELEASE_SHA256 and
+            proof.get('standaloneBootstrapSha256') == builder.STANDALONE_SHA256 and
+            proof.get('adapterSha256') == builder.ADAPTER_SHA256 and
+            proof.get('bytes') == len(candidate),
+            'Standalone bootstrap or FS adapter differs from the device-tested build')
+    files['kaihen/bootstrap.bin'] = candidate
+    files['kaihen/bin/bootstrap.bin'] = candidate
+    return {'bootstrapSha256': builder.STANDALONE_SHA256,
+            'adapterSha256': builder.ADAPTER_SHA256}
+
+
 def standalone_payload_files(directory):
     selected = Path(directory).absolute()
     require(not selected.is_symlink(),
@@ -340,6 +375,8 @@ def main(argv=None):
     parser.add_argument('--node', default='node', help='Node.js 20+ for the upstream uploader')
     parser.add_argument('--payload-dir', type=Path,
                         help='exact source-qualified Moader FS payload directory')
+    parser.add_argument('--bootstrap-output', type=Path, default=DEFAULT_BOOTSTRAP,
+                        help='source-built standalone bootstrap output (default: build/standalone-bootstrap)')
     options = parser.parse_args(argv)
     spec = profile()
     if options.action == 'provision':
@@ -358,9 +395,13 @@ def main(argv=None):
         payload_info = None
     if options.action in ('check', 'stage-sd', 'verify-sd'):
         files, bundle = moader_sd_files()
+        if options.action == 'check' and payload is not None:
+            files.update(payload)
+            bundle.update(add_standalone_bootstrap(files, options.bootstrap_output))
         if options.action != 'check':
             require(payload is not None, '--payload-dir is required for Moader FS installation')
             files.update(payload)
+            bundle.update(add_standalone_bootstrap(files, options.bootstrap_output))
             require(options.sd_root is not None, '--sd-root is required')
             root = sd_root(options.sd_root)
             if options.action == 'stage-sd':
@@ -401,7 +442,7 @@ def main(argv=None):
                       if options.action == 'upload-save' else
                       'read-only selected-profile save check; no FS/HEN run'
                       if options.action == 'verify-save' else 'host and SD only',
-                      'moaderBackend': 'experimental on-console FS installer; same-boot device result pending',
+                      'moaderBackend': 'Profile B Demo same-boot HEN and connected FS verified; other consoles and games pending',
                       **({'saveFiles': observed} if options.action == 'verify-save' else {}),
                       **({'fsPayload': payload_info} if payload_info else {}),
                       **({'matchedBundle': bundle} if bundle else {})}, indent=2))

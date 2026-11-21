@@ -197,3 +197,4 @@ jobs:
           python3 tools/setup-devkit.py
           python3 tools/setup-backend.py --build --host-profile seedsow-malev0 --node node
           python3 tools/setup-backend.py --check --host-profile seedsow-malev0 --node node
+          python3 tools/seedsow-standalone-bootstrap.py --output build/ci-standalone-bootstrap
