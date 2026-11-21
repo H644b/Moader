@@ -220,7 +220,7 @@ No direct Linux/WSL console acquisition or installation, WSL LAN/firewall config
 
 ## Experimental CivSwitch integration
 
-Civilization VII FS access and Civ7 HEN startup are reported by the [reviewed upstream projects](CIV7.md#reviewed-source-revisions). Those are upstream results, distinct from Moader's hardware evidence above.
+Civilization VII FS access and Civ7 HEN startup are reported by the [reviewed upstream projects](dev/CIV7.md#reviewed-source-revisions). Those are upstream results, distinct from Moader's hardware evidence above.
 
 The initial Moader profile is `civ7-s8n`, pinned to s8n commit `51a804cbce09216e1a42e65929644fd436b4c8bf`. HerXayah and mac2jb CivSwitch runs are not admitted by the initial pin.
 

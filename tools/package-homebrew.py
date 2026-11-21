@@ -28,26 +28,19 @@ repository = 'https://github.com/' + release['repository']
 source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 instructions = f'''Moader {tag}
 
-1. Close Moader if it is open. Copy switch/Moader.nro to the switch/
-   folder at the top of the SD card.
+1. Close Moader. Copy switch/Moader.nro to the switch/ folder on your SD card.
 2. If you use the resident service, also copy kaihen/plugins/moader.nso
    to the matching folder on the card.
-3. Open Moader from hbmenu. An empty Game library is normal before you
-   add your first mod.
+3. Open Moader from hbmenu.
 
-If you're updating a compatible running service, choose Settings >
-Advanced > Reload Moader service after opening Moader.
+For in-game mods, check Settings > Advanced > Runtime details.
+Runtime connection should say Connected.
 
-For in-game mods, open Settings > Advanced > Runtime details and look
-for Runtime connection to say Connected. To pair a browser, press ZR.
-If the web listener is off, select Start listener. Open the displayed
-address on the same local network and enter the six-digit code.
+Install guide
+{repository}/wiki/Installation
 
-Installation and backend setup
-{repository}/blob/{source_commit}/docs/GETTING_STARTED.md
-
-Upload and enable your first mod
-{repository}/blob/{source_commit}/docs/USAGE.md#upload-your-first-mod
+SmileBASIC guide
+{repository}/wiki/SmileBASIC
 
 Release notes and checksums
 {repository}/releases/tag/{tag}

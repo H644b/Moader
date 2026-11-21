@@ -107,7 +107,8 @@ def public_source(root):
             require(name in {'software-builds/kaihen-mo.json', 'software-builds/kaihen-mo.patch'},
                     'Unapproved build record in committed tree: ' + name)
         entries[name] = (git(root, 'show', 'HEAD:' + name), int(mode, 8))
-    for required in ['README.md', 'LICENSE', 'docs/GETTING_STARTED.md', 'docs/INSTALLATION.md', 'tools/setup-backend.py',
+    for required in ['README.md', 'LICENSE', 'docs/GETTING_STARTED.md', 'docs/INSTALLATION.md',
+                     'docs/SMILEBASIC.md', 'tools/setup-backend.py',
                      'tools/install-from-rpc.py', 'tools/install-moader.cjs', 'config/release.json',
                      'runtime/modloader/native/prebuilt/manifest.json']:
         require(required in entries, 'Release source is missing ' + required)
@@ -242,21 +243,16 @@ def main():
         host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
-Keep this kit on your computer. It includes the matching Moader app,
-resident service and backend files.
+Keep this kit on your computer. The app is included.
 
-Open docs/GETTING_STARTED.md to choose your setup method. Seedsow on-console
-(standalone) uses a computer for initial SD card and save preparation.
-The guide lists its local filesystem capture requirement and the computer
-requirements for the other methods.
+Open docs/GETTING_STARTED.md to choose a setup.
+Using SmileBASIC? Open docs/SMILEBASIC.md.
+For Seedsow on-console (standalone), open docs/SEEDSOW_STANDALONE.md.
+Full computer setup references are in docs/dev/.
 
-If Moader is already on your Switch, open it from hbmenu. In Settings >
-Advanced > Runtime details, check that Runtime connection says Connected
-before using mods in a game. Your mods and preferences stay on the SD
-card after a reboot.
+After setup, open Moader from hbmenu. In Settings > Advanced > Runtime
+details, look for Runtime connection to say Connected.
 
-For browser pairing and your first mod, open docs/USAGE.md.
-For help with an error, open docs/TROUBLESHOOTING.md.
 Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''
     host[prefix + 'START_HERE.txt'] = (start_here.encode(), 0o100644)

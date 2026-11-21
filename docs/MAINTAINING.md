@@ -84,7 +84,7 @@ Use [the installation guide](GETTING_STARTED.md), [USAGE.md](USAGE.md) and [TROU
 
 ## Update the official GitHub Wiki
 
-The Wiki's **Installation** page, README and package welcome text all use [the beginner installation guide](GETTING_STARTED.md). Update the method table there when a setup changes. The Wiki links to the repository for method-specific instructions.
+The Wiki's **Installation** page, README and package welcome text all use [the beginner installation guide](GETTING_STARTED.md). Keep each reader page short and put technical detail in [developer docs](dev/README.md). Edit the method guides in the repository to update both the Wiki and the next kit.
 
 Edit the canonical Markdown under `docs/` first, then regenerate the [GitHub Wiki](https://github.com/H644b/Moader/wiki) pages.
 
