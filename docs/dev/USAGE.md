@@ -1,6 +1,6 @@
 # Use Moader
 
-Open **Moader** from hbmenu on the Switch. Each cover in **Game library** represents a game with mods on your SD card. If the library is empty, [pair a browser](#connect-a-browser) and [upload your first mod](#upload-your-first-mod). For help getting the app or its runtime connected, see the [installation guide](../GETTING_STARTED.md).
+Open **Moader** from hbmenu on the Switch. Each cover in **Game library** represents a game with mods on your SD card. If the library is empty, [pair a browser](#connect-a-browser) and [upload your first mod](#upload-your-first-mod). For help getting the app or its runtime connected, see the [installation guide](../INSTALLATION.md).
 
 ## Browse the game library
 

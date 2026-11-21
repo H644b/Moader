@@ -4,10 +4,10 @@ Press **ZL** in Moader, or open **Settings → Advanced → Current session** in
 
 ## Browser or app connection
 
-- **Moader is missing from hbmenu.** Check that the file is at `switch/Moader.nro` on the SD card. Extract the console ZIP before copying. [Copy the console app](../GETTING_STARTED.md#copy-or-update-the-console-app)
+- **Moader is missing from hbmenu.** Check that the app is at `/switch/Moader.nro`. The required matching plugin belongs at `/kaihen/plugins/moader.nso`. Extract the ZIP before copying. [Install the app and plugin](../INSTALLATION.md#copy-or-update-the-console-app)
 - **The page won't load.** Press **ZR** for **Connection**. If the web listener is off, select **Start listener**. Enter the displayed address on a device on the same local network. If you changed the port, restart the listener first. [Browser pairing](USAGE.md#connect-a-browser)
 - **Pairing fails.** Enter all six digits, including leading zeros. After repeated failures, wait 30 seconds before trying again.
-- **The page stops when I close Moader.** The app may be hosting the listener in foreground mode. To keep the page available during play, [set up the backend for this boot](../GETTING_STARTED.md#start-the-backend-for-this-boot).
+- **The page stops when I close Moader.** The app may be hosting the listener in foreground mode. To keep the page available during play, [set up the backend for this boot](../INSTALLATION.md#start-the-backend-for-this-boot).
 - **The app lost the service during a reload.** Keep the app open until it reconnects or shows an error. [Read the reload status and recovery steps](PLUGIN_RELOAD.md#errors-and-recovery).
 
 ## Library and mods
@@ -27,11 +27,11 @@ If the app or browser still connects, disable the suspected mod and relaunch the
 
 Compare the archive with the [supported layout and size limits](USAGE.md#upload-your-first-mod). Put the payload at the top level or inside one enclosing folder. Leave out screenshots and other extras. Use binary IPS files for executable patches. If two enabled mods replace the same path, disable one and read the conflict details.
 
-Browser imports use the running service's ZIP reader. If a supported ZIP still fails after updating the app, check that the running service matches its release. [Update Moader](../GETTING_STARTED.md#updating)
+Browser imports use the running service's ZIP reader. If a supported ZIP still fails after updating the app, check that the running service matches its release. [Update Moader](../INSTALLATION.md#updating)
 
 ## The setup helper rejects my input
 
-Check that the backend kit matches your app release and that your computer meets the requirements for the method you chose. If setup still stops, keep the exact message and the log from that attempt. [Compare setup methods](../GETTING_STARTED.md#start-the-backend-for-this-boot) · [Report a problem](#reporting-a-problem)
+Check that the backend kit matches your app release and that your computer meets the requirements for the method you chose. If setup still stops, keep the exact message and the log from that attempt. [Compare setup methods](../INSTALLATION.md#start-the-backend-for-this-boot) · [Report a problem](#reporting-a-problem)
 
 ## Backend setup failed or timed out
 

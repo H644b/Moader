@@ -14,7 +14,7 @@ flowchart LR
     Runtime -->|Supplies replacement files| Game[Game]
 ```
 
-Copying the app or plugin to SD puts the file in place. [Backend setup](GETTING_STARTED.md#start-the-backend-for-this-boot) starts the resident service and installs FS routing. A [compatible service reload](PLUGIN_RELOAD.md) replaces the resident while the filesystem runtime keeps running.
+Install both the app and the matching resident plugin on the SD card. [Backend setup](INSTALLATION.md#start-the-backend-for-this-boot) starts the resident service and installs FS routing. A [compatible service reload](PLUGIN_RELOAD.md) replaces the resident while the filesystem runtime keeps running.
 
 ## From an enable request to a visible change
 

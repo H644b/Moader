@@ -28,15 +28,20 @@ repository = 'https://github.com/' + release['repository']
 source_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
 instructions = f'''Moader {tag}
 
-1. Close Moader. Copy switch/Moader.nro to the switch/ folder on your SD card.
-2. If you use the resident service, also copy kaihen/plugins/moader.nso
-   to the matching folder on the card.
-3. Open Moader from hbmenu.
+Install the app and plugin together. Both files are required and must come
+from the same release.
 
-For in-game mods, check Settings > Advanced > Runtime details.
-Runtime connection should say Connected.
+1. Finish uploads and close Moader.
+2. Copy both files to these paths on your SD card. Create the folders if needed.
+   Console app       /switch/Moader.nro
+   Resident plugin   /kaihen/plugins/moader.nso
+3. Open Moader from hbmenu. Game library appears on first launch.
 
-Install guide
+For in-game mods, open Settings > Advanced > Runtime details.
+Runtime connection should say Connected. When updating, keep your
+moader/ folder and replace both files.
+
+Installation and first-time setup
 {repository}/wiki/Installation
 
 SmileBASIC guide

@@ -243,15 +243,17 @@ def main():
         host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
-Keep this kit on your computer. The app is included.
+Extract this kit on your computer. Open docs/INSTALLATION.md for the
+requirements, install steps and connection check. The setup guides are
+docs/SMILEBASIC.md, docs/SEEDSOW_STANDALONE.md, docs/SEEDSOW.md and
+docs/CIV7.md. Full computer references are in docs/dev/.
 
-Open docs/GETTING_STARTED.md to choose a setup.
-Using SmileBASIC? Open docs/SMILEBASIC.md.
-For Seedsow on-console (standalone), open docs/SEEDSOW_STANDALONE.md.
-Full computer setup references are in docs/dev/.
+The kit includes both required files. After setup, check these SD paths.
+  Console app       /switch/Moader.nro
+  Resident plugin   /kaihen/plugins/moader.nso
 
-After setup, open Moader from hbmenu. In Settings > Advanced > Runtime
-details, look for Runtime connection to say Connected.
+Open Moader from hbmenu. Under Settings > Advanced > Runtime details,
+Runtime connection should say Connected before you use mods in a game.
 
 Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''

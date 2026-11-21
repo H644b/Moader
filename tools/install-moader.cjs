@@ -39,7 +39,7 @@ async function main(args=process.argv.slice(2)){
  if(args.length===1&&args[0]==='--help'){
   console.log(usage);
   console.log('--check prepares installer files on this computer.');
-  console.log('For setup instructions, open docs/GETTING_STARTED.md.');
+  console.log('For setup instructions, open docs/INSTALLATION.md.');
   return;
  }
  args=[...args];let selected;

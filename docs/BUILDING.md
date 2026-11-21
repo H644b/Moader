@@ -1,10 +1,10 @@
 # Building and preparing the backend
 
-Use [Installation](GETTING_STARTED.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v3.0.0 backend ZIP supplies the matched binaries and standalone bootstrap. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
+Use [Installation](INSTALLATION.md) for the prebuilt releases. Build from source if you are developing Moader or reproducing the [Seedsow Lullaby backend](SEEDSOW.md). The v3.0.0 backend ZIP supplies the matched binaries and standalone bootstrap. The supported SDK hosts are Apple Silicon macOS and Linux x86_64, including WSL2.
 
 ## Prepare the host kit
 
-The [installation guide](GETTING_STARTED.md#start-the-backend-for-this-boot) lists the methods and their host requirements. The steps below are for working with a local development kit.
+The [installation guide](INSTALLATION.md#start-the-backend-for-this-boot) lists the methods and their host requirements. The steps below are for working with a local development kit.
 
 To validate already prepared inputs without downloading, compiling or creating an installer snapshot:
 

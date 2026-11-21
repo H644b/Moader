@@ -79,12 +79,12 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 7. Exercise the Seedsow kit separately: run `setup-backend.py --host-profile seedsow-malev0` using the pinned upstream archives, then its read-only `--check`, and provision/check the GUI from the reviewed upstream revision. These are host checks; do not acquire FS or start HEN in a packaging test.
 8. Record source-build, export checks, published download checks and device acceptance separately. A passed installer `--check` establishes local input qualification; it does not demonstrate hardware installation or game behavior. Publish only the validation scope actually observed.
 
-Use [the installation guide](GETTING_STARTED.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
+Use [the installation guide](INSTALLATION.md), [USAGE.md](USAGE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for user workflows. After any transport outcome becomes uncertain, inspect the run's installation journal and current state before another native operation; do not automate retries.
 
 
 ## Update the official GitHub Wiki
 
-The Wiki's **Installation** page, README and package welcome text all use [the beginner installation guide](GETTING_STARTED.md). Keep each reader page short and put technical detail in [developer docs](dev/README.md). Edit the method guides in the repository to update both the Wiki and the next kit.
+The README, Wiki and package welcome text point to [Installation](INSTALLATION.md). Document the app and resident plugin together there. Update the requirements, SD paths and setup methods when a release changes them. Keep implementation notes in the [developer docs](dev/README.md).
 
 Edit the canonical Markdown under `docs/` first, then regenerate the [GitHub Wiki](https://github.com/H644b/Moader/wiki) pages.
 

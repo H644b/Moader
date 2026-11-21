@@ -15,7 +15,7 @@ PAGES = {
     'Release-v0.1.2': 'docs/releases/v0.1.2.md',
     'Release-v0.1.1': 'docs/releases/v0.1.1.md',
     'Changelog': 'CHANGELOG.md',
-    'Installation': 'docs/GETTING_STARTED.md',
+    'Installation': 'docs/INSTALLATION.md',
     'SmileBASIC': 'docs/SMILEBASIC.md',
     'Seedsow-Demo': 'docs/SEEDSOW.md',
     'Seedsow-Standalone': 'docs/SEEDSOW_STANDALONE.md',
@@ -92,21 +92,31 @@ def build():
              for name, path in PAGES.items()}
     pages['Home'] = '''# Moader user guide
 
-1. [Install Moader](Installation) or open the [SmileBASIC guide](SmileBASIC).
-2. [Pair a phone or computer](Using-Moader#connect-a-browser).
-3. [Add your first mod](Using-Moader#upload-your-first-mod).
+Moader manages Switch 2 mods from your controller or a paired browser.
 
-[Install from an SD card](Mod-Files) · [Controls and settings](Controls) · [Fix a problem](Troubleshooting) · [Quick answers](FAQ)
+## Installation
+
+[Install Moader](Installation) covers requirements, downloads, SD card paths and first launch. Install the console app and resident plugin together. For in-game mods, [choose your setup method](Installation#first-time-setup) or go straight to the [SmileBASIC guide](SmileBASIC).
+
+## Using Moader
+
+- [Pair a browser and upload your first mod](Using-Moader#connect-a-browser).
+- [Browse games and manage installed mods](Using-Moader).
+- [Install a mod from the SD card](Mod-Files).
+- [Troubleshoot problems](Troubleshooting).
 '''
-    pages['_Sidebar'] = f'''**User guide**
+    pages['_Sidebar'] = f'''**Moader documentation**
 
 - [Home](Home)
-- [Install Moader](Installation)
-- [SmileBASIC](SmileBASIC)
-- [Pair and add mods](Using-Moader)
+- [Installation](Installation)
+  - [App and plugin](Installation#install-the-app-and-plugin)
+  - [First-time setup](Installation#first-time-setup)
+  - [SmileBASIC](SmileBASIC)
+  - [Updates](Installation#updating)
+- [Using Moader](Using-Moader)
 - [Controls and settings](Controls)
-- [Fix a problem](Troubleshooting)
-- [Quick answers](FAQ)
+- [Troubleshooting](Troubleshooting)
+- [Frequently asked questions](FAQ)
 
 [Developer docs](Developer-Docs) · [Downloads]({base}/releases/tag/{tag})
 '''

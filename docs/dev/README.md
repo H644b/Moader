@@ -12,4 +12,4 @@
 
 The original setup references keep their filenames in this directory. The published v3.0.0 kit keeps them one level up in `docs/`.
 
-[Repository docs](https://github.com/H644b/Moader/tree/main/docs) · [Quick install](../GETTING_STARTED.md)
+[Repository docs](https://github.com/H644b/Moader/tree/main/docs) · [Installation guide](../INSTALLATION.md)
