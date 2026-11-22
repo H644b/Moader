@@ -6,7 +6,11 @@ const net = require('node:net');
 const {spawn} = require('node:child_process');
 const {app, BrowserWindow, dialog, Menu, shell} = require('electron');
 
-const kit = path.resolve(__dirname, '../..');
+// A release app carries its matched backend beside Electron's app resources.
+// The source-tree launcher keeps using the repository root for development.
+const packagedKit = path.join(process.resourcesPath, 'kit');
+const kit = fs.existsSync(path.join(packagedKit, 'config/release.json'))
+  ? packagedKit : path.resolve(__dirname, '../..');
 const logo = path.join(kit, 'branding/mark-alpha.png');
 app.setName('Moader Setup');
 if (process.platform === 'darwin') Menu.setApplicationMenu(Menu.buildFromTemplate([

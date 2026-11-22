@@ -1,10 +1,20 @@
 # Moader Setup
 
-Download the separate, self-contained [v4.0.0 Moader Setup ZIP](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0.zip). It includes the matching backend files and pinned desktop runtimes, so you do not need the command-line backend ZIP too. [Installation](INSTALLATION.md) also documents the command-line routes.
+Choose the prebuilt app for your operating system and architecture. Each app includes the matching backend files and its own pinned desktop runtime. The smaller [backend ZIP](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) is for command-line use; you do not need both.
 
-Extract the whole Setup ZIP and open the outer `Moader-Setup-...` folder. On macOS, open **Moader Setup.app**. On Linux, open **Moader Setup** in the file manager and choose Run if asked. On Windows, open **Moader Setup Windows/Moader Setup.exe** and choose a WSL2 Linux distribution in its picker. Keep the complete extracted kit together. Moader Setup opens its own desktop window. Its private local controller performs the computer work; the separate **Open Moader in browser** task opens the page hosted by the Switch.
+## Download
 
-The Setup ZIP includes the matching app, resident plugin, HEN, RO, bootstrap, a Node 24 controller runtime and a pinned Python preparation helper. You do not need the separate console app ZIP for a complete backend installation. The first host preparation fetches reviewed provider sources and, if needed, a Python distribution into the kit's state folder. Git is needed to fetch those sources. Seedsow preparation also needs clang and, on Linux, zstd. If an OS tool is missing, Setup names it. On macOS it opens the Command Line Tools installer. On Linux it can use a graphical software manager or, after an explicit click, the distribution's signed package manager with graphical administrator approval. In WSL2 it can install the named tools into the selected distribution through its signed package manager. A distribution without one of the supported package managers needs a supported desktop Linux or WSL2 environment before preparation can proceed. Nothing is installed globally by the Python helper.
+- [macOS Apple Silicon](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0-macos-arm64.zip)
+- [macOS Intel](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0-macos-x64.zip)
+- [Linux ARM64](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0-linux-arm64.zip)
+- [Linux x64](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0-linux-x64.zip)
+- [Windows x64 with WSL2](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0-windows-x64.zip)
+
+The release files are packaged by [GitHub Actions](https://github.com/H644b/Moader/actions/workflows/package-setup.yml). [Installation](INSTALLATION.md) also documents the command-line routes.
+
+Extract the ZIP for your computer. On macOS, open **Moader Setup.app**. On Linux, open **Moader Setup** in the file manager and choose Run if asked. On Windows, open **Moader Setup.exe** and choose a WSL2 Linux distribution in its picker. Keep the complete extracted kit together. Moader Setup opens its own desktop window. Its private local controller performs the computer work; the separate **Open Moader in browser** task opens the page hosted by the Switch.
+
+Each prebuilt Setup app includes the matching console app, resident plugin, HEN, RO, bootstrap, a Node 24 controller runtime and a pinned Python preparation helper. You do not need the separate console app ZIP for a complete backend installation. The first host preparation fetches reviewed provider sources and, if needed, a Python distribution into the kit's state folder. Git is needed to fetch those sources. Seedsow preparation also needs clang and, on Linux, zstd. If an OS tool is missing, Setup names it. On macOS it opens the Command Line Tools installer. On Linux it can use a graphical software manager or, after an explicit click, the distribution's signed package manager with graphical administrator approval. In WSL2 it can install the named tools into the selected distribution through its signed package manager. A distribution without one of the supported package managers needs a supported desktop Linux or WSL2 environment before preparation can proceed. Nothing is installed globally by the Python helper.
 
 ## Choose a task
 
@@ -22,7 +32,7 @@ The support export offers a short text summary and advanced JSON. It includes re
 
 Seedsow PC setup targets Apple Silicon macOS and Linux x86_64, including WSL2 x86_64. mac2jb is a macOS route. Direct ns2jb uses native macOS or Linux Node. CivSwitch remains experimental and its host-tested workflow still needs console acceptance. Windows uses a chosen WSL2 distribution; it is not a native Windows backend. A WSL distro must have working network access and a reachable address for the chosen provider. The graphical WSL picker and Linux arm64 runtime are packaged, but have no live Windows/Linux acceptance from this development host.
 
-The macOS launcher in the v4.0.0 kit is unsigned and unnotarized. Distribution to a quarantined macOS download requires the project's normal signing and notarization release process. Setup does not ask you to disable platform security. CLI guides remain in [Installation](INSTALLATION.md) for advanced users.
+The macOS v4.0.0 apps have ad hoc signatures and are not notarized. Distribution to a quarantined macOS download requires the project's normal signing and notarization release process. Setup does not ask you to disable platform security. CLI guides remain in [Installation](INSTALLATION.md) for advanced users.
 
 ## Verification boundary
 

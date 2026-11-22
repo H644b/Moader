@@ -2,12 +2,12 @@
 
 Choose a download based on what is already running on your Switch. Use the app and resident plugin from the same release.
 
-For guided installation, SD copying, connection checks and support export, download the separate, self-contained [Moader Setup ZIP](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0.zip). Extract it and open **Moader Setup.app** on macOS, **Moader Setup** on Linux, or **Moader Setup Windows/Moader Setup.exe** on Windows with WSL2. The smaller backend ZIP provides the command-line routes below. [Setup guide](SETUP_GUI.md)
+For guided installation, SD copying, connection checks and support export, choose the prebuilt [Moader Setup app for your computer](SETUP_GUI.md#download). Extract it and open **Moader Setup.app** on macOS, **Moader Setup** on Linux, or **Moader Setup.exe** on Windows with WSL2. Each app contains its matching backend files. The smaller backend ZIP provides the command-line routes below.
 
 | What you need | Download |
 | --- | --- |
 | Install or update Moader on an existing compatible backend | [Moader-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-v4.0.0.zip) |
-| Guided setup for this boot | [Moader-Setup-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0.zip) |
+| Guided setup for this boot | [Choose your macOS, Linux or Windows app](SETUP_GUI.md#download) |
 | Command-line backend kit | [Moader-backend-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) |
 
 ## Copy or update the console app
