@@ -542,7 +542,15 @@ async function importCapture() {
 }
 async function pickSd() {
   if (!window.showDirectoryPicker) throw Error('The desktop app could not open a writable folder picker on this computer. Reopen Moader Setup and try again.');
-  const handle = await window.showDirectoryPicker({mode: 'readwrite'});
+  let handle;
+  try { handle = await window.showDirectoryPicker({mode: 'readwrite'}); }
+  catch (error) {
+    if (error?.name === 'AbortError') {
+      show('SD card selection was canceled. No files were changed.');
+      return;
+    }
+    throw error;
+  }
   let nintendo = false, layout = false;
   try { await handle.getDirectoryHandle('Nintendo'); nintendo = true; } catch {}
   try { await handle.getDirectoryHandle('switch'); await handle.getDirectoryHandle('kaihen'); layout = true; } catch {}
