@@ -102,7 +102,7 @@ const operationView = () => {
   let body = safe(op.message);
   if (op.firstError) body += '<br><strong>First error:</strong> ' + safe(op.firstError);
   if (op.status === 'running' || op.status === 'waiting')
-    body += '<br>Keep this page open if convenient. The controller continues if the tab closes; reopen the launcher to reconnect.';
+    body += '<br>Keep this window open if convenient. The controller continues if the window closes; reopen Moader Setup to reconnect.';
   if (op.status === 'uncertain')
     body += '<br>Do not repeat a native action on this boot. Export the report, keep the original journal, and follow reboot recovery.';
   return note('Current result · ' + safe(op.phase.replaceAll('-', ' ')), body, cls);
@@ -372,7 +372,7 @@ function connection() {
 }
 function browser() {
   return heading('Open Moader in browser',
-    'Use the current HTTP address shown under Connection in the Switch app. This opens the Switch-hosted library, separate from this computer-side setup page.') +
+    'Use the current HTTP address shown under Connection in the Switch app. This opens the Switch-hosted library, separate from the Moader Setup app.') +
     field('Switch LAN IPv4', 'console', 'Address shown in Moader') +
     field('Listener port', 'listenerPort', 'Port shown in Moader', 'Use the current port shown by the app, especially after changing it.', 'number') +
     '<div class="button-row">' + button('Open Moader in browser', 'open-browser') + '</div>' +
@@ -541,7 +541,7 @@ async function importCapture() {
   await refresh(true);
 }
 async function pickSd() {
-  if (!window.showDirectoryPicker) throw Error('This browser does not offer a writable folder picker. Open Moader Setup in a current Chromium-based browser to stage SD files.');
+  if (!window.showDirectoryPicker) throw Error('The desktop app could not open a writable folder picker on this computer. Reopen Moader Setup and try again.');
   const handle = await window.showDirectoryPicker({mode: 'readwrite'});
   let nintendo = false, layout = false;
   try { await handle.getDirectoryHandle('Nintendo'); nintendo = true; } catch {}

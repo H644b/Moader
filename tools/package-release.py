@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """Package the recorded release from committed source and pinned binaries."""
 from pathlib import Path, PurePosixPath
+from contextlib import ExitStack
 import argparse
 import datetime
 import hashlib
 import importlib.util
 import io
 import json
+import posixpath
 import re
 import subprocess
 import sys
 import tarfile
 import urllib.request
 import zipfile
+from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parent.parent
 PRIVATE_TOP = {
@@ -33,6 +36,19 @@ HOST_UV_ARCHIVES = {
     'linux-arm64': ('aarch64-unknown-linux-gnu', '36d913ee9c647481d64f1a0a0485f85ff2feaee605c341fc22e73398f9212c26'),
     'linux-x64': ('x86_64-unknown-linux-gnu', '8e5c6e5523dffc2dcf615bd995554c84c9feb4e577808a3fb8698a639d3f8d9c'),
 }
+HOST_ELECTRON_VERSION = '45.4.1'
+HOST_ELECTRON_ARCHIVES = {
+    'darwin-arm64': 'd080c3b05a01bd16137f2c12ab9ebf083c577757fe846844ba325bafa8e8bdf4',
+    'darwin-x64': '1c80d2ccf71b02c8fd9940fd09cafe88090a48c1bab0193c79b597b08d890e79',
+    'linux-arm64': '3da04c450fa682e3b80961e92a918a1c2a1a10796527a7e63dec7b8e466b6334',
+    'linux-x64': 'e1d077c7a087d7e344350ea0c5cd2b7dc5af3d9bf7979474f38e0fc1a560b875',
+    'win32-x64': '2ba6223afa9121f42831fefe92c434334907540165294fc56697449d12e7cfe9',
+}
+
+
+class ArchiveMember(NamedTuple):
+    archive: Path
+    name: str
 
 
 def require(ok, message):
@@ -132,6 +148,7 @@ def public_source(root):
                      'setup/launch.sh', 'setup/windows-launch.ps1', 'setup/wsl-entry.sh',
                      'setup/controller.cjs', 'setup/host-policy.cjs',
                      'setup/host-tools.cjs',
+                     'setup/desktop-app/package.json', 'setup/desktop-app/main.cjs',
                      'setup/bridge.cjs', 'setup/export-sd.py',
                      'setup/ui/index.html', 'setup/ui/style.css', 'setup/ui/app.js',
                      'setup/licenses/uv-LICENSE-APACHE.txt',
@@ -151,19 +168,92 @@ def public_source(root):
 
 def write_zip(target, entries, timestamp):
     require(not target.exists(), 'Release output already exists: ' + target.name)
-    with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for name in sorted(entries):
-            data, mode = entries[name]
-            info = zipfile.ZipInfo(name, timestamp)
-            info.create_system = 3
-            info.external_attr = mode << 16
-            info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(info, data)
-    with zipfile.ZipFile(target) as archive:
-        require(archive.testzip() is None, 'Release ZIP failed CRC validation')
-        require(set(archive.namelist()) == set(entries), 'Release ZIP file list differs')
-        for name, (data, _) in entries.items():
-            require(archive.read(name) == data, 'Release ZIP bytes differ: ' + name)
+    with ExitStack() as stack:
+        source_archives = {}
+        def entry_bytes(data):
+            if isinstance(data, ArchiveMember):
+                if data.archive not in source_archives:
+                    source_archives[data.archive] = stack.enter_context(zipfile.ZipFile(data.archive))
+                return source_archives[data.archive].read(data.name)
+            return data
+        with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+            for name in sorted(entries):
+                data, mode = entries[name]
+                info = zipfile.ZipInfo(name, timestamp)
+                info.create_system = 3
+                info.external_attr = mode << 16
+                info.compress_type = zipfile.ZIP_DEFLATED
+                archive.writestr(info, entry_bytes(data))
+        with zipfile.ZipFile(target) as archive:
+            require(archive.testzip() is None, 'Release ZIP failed CRC validation')
+            require(set(archive.namelist()) == set(entries), 'Release ZIP file list differs')
+            for name, (data, _) in entries.items():
+                require(archive.read(name) == entry_bytes(data),
+                        'Release ZIP bytes differ: ' + name)
+
+
+def host_electron_runtimes(root):
+    """Keep every official Electron desktop runtime tied to its verified release ZIP."""
+    cache = root / 'build/host-electron'
+    cache.mkdir(parents=True, exist_ok=True)
+    output = {}
+    for platform, expected in HOST_ELECTRON_ARCHIVES.items():
+        name = f'electron-v{HOST_ELECTRON_VERSION}-{platform}.zip'
+        file = cache / name
+        if not file.is_file() or sha(file.read_bytes()) != expected:
+            require(not file.exists(), 'Cached Electron archive has the wrong checksum: ' + name)
+            with urllib.request.urlopen(urllib.request.Request(
+                f'https://github.com/electron/electron/releases/download/v{HOST_ELECTRON_VERSION}/{name}',
+                headers={'User-Agent': 'Moader release packager'}), timeout=120) as response:
+                data = response.read(170 * 1024 * 1024 + 1)
+            require(len(data) <= 170 * 1024 * 1024 and sha(data) == expected,
+                    'Pinned Electron archive checksum differs: ' + name)
+            temporary = file.with_suffix('.zip.tmp')
+            temporary.write_bytes(data)
+            temporary.replace(file)
+        with zipfile.ZipFile(file) as archive:
+            require(archive.testzip() is None, 'Pinned Electron archive failed CRC validation: ' + name)
+            names = set(archive.namelist())
+            require({'LICENSE', 'LICENSES.chromium.html'} <= names,
+                    'Pinned Electron notices are missing: ' + name)
+            total = 0
+            for item in archive.infolist():
+                if item.is_dir():
+                    continue
+                member = PurePosixPath(item.filename)
+                require(not member.is_absolute() and '..' not in member.parts and
+                        item.file_size <= 400 * 1024 * 1024,
+                        'Unexpected Electron archive member: ' + item.filename)
+                total += item.file_size
+                require(total <= 500 * 1024 * 1024,
+                        'Pinned Electron archive has unexpected expanded size: ' + name)
+                mode = item.external_attr >> 16
+                kind = mode & 0o170000
+                require(kind in (0o100000, 0o120000),
+                        'Unexpected Electron archive member type: ' + item.filename)
+                if kind == 0o120000:
+                    target = archive.read(item).decode('utf8')
+                    combined = posixpath.normpath(posixpath.join(posixpath.dirname(item.filename), target))
+                    require(not target.startswith('/') and not combined.startswith('../') and
+                            combined != '..', 'Electron archive symlink leaves its runtime')
+                dest = item.filename
+                if platform == 'win32-x64':
+                    if dest == 'electron.exe': dest = 'Moader Setup.exe'
+                    if dest == 'electron_wer.dll': dest = 'Moader Setup_wer.dll'
+                    dest = 'Moader Setup Windows/' + dest
+                else:
+                    dest = f'host-runtimes/electron-v{HOST_ELECTRON_VERSION}/{platform}/' + dest
+                require(dest not in output, 'Duplicate Electron runtime member: ' + dest)
+                output[dest] = (ArchiveMember(file, item.filename), mode)
+            program = 'Moader Setup Windows/Moader Setup.exe' if platform == 'win32-x64' else (
+                f'host-runtimes/electron-v{HOST_ELECTRON_VERSION}/{platform}/' +
+                ('Electron.app/Contents/MacOS/Electron' if platform.startswith('darwin') else 'electron'))
+            require(program in output, 'Pinned Electron runtime executable is missing: ' + name)
+    output['Moader Setup Windows/resources/app/package.json'] = (
+        (root / 'setup/desktop-app/package.json').read_bytes(), 0o100644)
+    output['Moader Setup Windows/resources/app/main.cjs'] = (
+        b"// SPDX-License-Identifier: GPL-2.0-only\nrequire('../../../setup/desktop-app/main.cjs');\n", 0o100644)
+    return output
 
 
 def host_node_runtimes(root):
@@ -332,6 +422,8 @@ def main():
         host[prefix + name] = value
     for name, value in host_uv_runtimes(root).items():
         host[prefix + name] = value
+    for name, value in host_electron_runtimes(root).items():
+        host[prefix + name] = value
     host[prefix + 'vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
     if bootstrap is not None:
         host[prefix + 'vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
@@ -348,15 +440,16 @@ def main():
         host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
-Open Moader Setup in this folder. It checks the computer and guides you through
+Open Moader Setup in this folder. Its desktop app checks the computer and guides you through
 the current-boot backend, standalone preparation, SD copies and support export.
-No command-line tools are needed to open it. Use a supported graphical launcher:
+The setup window is an app; its controller stays private on this computer.
+No command-line tools are needed to open it. Use the graphical launcher:
 
 - macOS: Moader Setup.app
 - Linux: Moader Setup (choose Run if your file manager asks)
-- Windows: Moader Setup Windows.cmd (select a WSL2 distribution in its picker)
+- Windows: Moader Setup Windows/Moader Setup.exe (select a WSL2 distribution)
 
-The Node 24 controller runtime is included for supported macOS/Linux hosts.
+The Node 24 controller and Electron desktop runtimes are included for supported hosts.
 For advanced CLI use, open docs/INSTALLATION.md and choose a method:
 
 - SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
@@ -413,8 +506,11 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         'standaloneBootstrapBundled': standalone is not None,
         'standaloneFsPayloadBundled': False,
         'setupGuiBundled': True,
+        'setupGuiType': 'desktop-app',
         'setupNodeVersion': HOST_NODE_VERSION,
         'setupUvVersion': HOST_UV_VERSION,
+        'setupElectronVersion': HOST_ELECTRON_VERSION,
+        'setupDesktopPlatforms': sorted(HOST_ELECTRON_ARCHIVES),
         'setupRuntimePlatforms': sorted(HOST_NODE_ARCHIVES),
         **({'standaloneBootstrapSha256': sha(standalone[0]),
             'standaloneAdapterSha256': spec['standalone']['adapterSha256']}

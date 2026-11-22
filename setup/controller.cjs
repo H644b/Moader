@@ -897,6 +897,8 @@ async function listen() {
       req.on('timeout', () => { req.destroy(); resolve(false); });
     });
     if (check) {
+      console.log('Moader Setup is ready at http://127.0.0.1:' + existing.port +
+        '/?token=' + existing.token);
       if (process.env.MOADER_SETUP_NO_OPEN !== '1')
         openBrowser('http://127.0.0.1:' + existing.port + '/?token=' + existing.token);
       return;

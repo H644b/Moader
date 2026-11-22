@@ -18,4 +18,4 @@ if [ ! -f "$target/setup/controller.cjs" ]; then
   chmod -R u+w "$temporary"
   mv "$temporary" "$target"
 fi
-exec /bin/sh "$target/setup/launch.sh" "$target"
+MOADER_SETUP_DETACH=1 exec /bin/sh "$target/setup/launch.sh" "$target"

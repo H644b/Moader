@@ -17,7 +17,7 @@ The console app opens from **hbmenu**. The resident plugin keeps the browser and
 
 [Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v3.5.0)
 
-Backend kits built from the in-review Setup branch include a [graphical Moader Setup guide](docs/SETUP_GUI.md). The public v3.5.0 ZIP above predates that launcher.
+Backend kits built from the in-review Setup branch include the [Moader Setup desktop app](docs/SETUP_GUI.md). The public v3.5.0 ZIP above predates that app.
 
 | Console app | Browser |
 | --- | --- |

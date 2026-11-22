@@ -1,0 +1,7 @@
+{
+  "name": "moader-setup",
+  "productName": "Moader Setup",
+  "version": "3.5.0",
+  "main": "main.cjs",
+  "private": true
+}
