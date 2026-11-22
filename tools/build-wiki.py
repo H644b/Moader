@@ -142,7 +142,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-No. The v4.0.0 backend kit includes the Moader Setup desktop app and supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer, then can run without one. Its Moader A route requires a qualified local FS capture that is not bundled. [Installation](Installation) covers the method choices and host requirements.
+No. The separate v4.0.0 Setup ZIP includes the desktop app and complete backend files. The smaller command-line backend ZIP also supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer, then can run without one. Its Moader A route requires a qualified local FS capture that is not bundled. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 
