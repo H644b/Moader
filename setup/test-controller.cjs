@@ -71,9 +71,13 @@ test('host policy rejects unbundled architectures and native Windows', () => {
 test('Seedsow launcher status accepts the current read-only banner', () => {
   const banner = 'n2h HTTP server (seedsow)\nPOST /eval body=<lua>\n' +
     'PUT|POST /save?path=<name> body=<file>\nDELETE /delete?path=<name>\n';
+  const artemis = 'seedsow-lua-editor-pro + switch-artemis-launcher HTTP server\n' +
+    'GET  / (Browser Web IDE)\nPOST /eval body=<lua>\nGET  /list\n';
   assert.equal(launcherStatus(200, banner), true);
+  assert.equal(launcherStatus(200, artemis), true);
   assert.equal(launcherStatus(200, 'status: ok\n'), true);
   assert.equal(launcherStatus(200, 'n2h HTTP server (other)\n'), false);
+  assert.equal(launcherStatus(200, artemis.split('\n')[0] + '\n'), false);
   assert.equal(launcherStatus(404, banner), false);
 });
 
