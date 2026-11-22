@@ -2,7 +2,7 @@
 
 Use this method to start Moader from Seedsow Lullaby on a new boot with the help of a computer. The [on-console method](SEEDSOW_STANDALONE.md) has its own requirements.
 
-Download the [v3.5.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-backend-v3.5.0.zip) for Seedsow Lullaby Demo or the full game.
+Download the [v4.0.0 backend ZIP](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) for Seedsow Lullaby Demo or the full game.
 
 ## Before you begin
 

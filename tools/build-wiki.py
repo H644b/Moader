@@ -8,6 +8,7 @@ import re
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
+    'Release-v4.0.0': 'docs/releases/v4.0.0.md',
     'Release-v3.5.0': 'docs/releases/v3.5.0.md',
     'Release-v3.0.0': 'docs/releases/v3.0.0.md',
     'Release-v0.2.5': 'docs/releases/v0.2.5.md',
@@ -97,7 +98,8 @@ Manage Switch 2 mods from your controller or a browser. Moader serves its web in
 
 | Guide | Covers |
 | --- | --- |
-| [v3.5.0 release notes](Release-v3.5.0) | Current Store release, downloads and validation scope |
+| [v4.0.0 release notes](Release-v4.0.0) | Current Setup and in-app update release, downloads and validation scope |
+| [v3.5.0 release notes](Release-v3.5.0) | Historical community Store release |
 | [v3.0.0 release notes](Release-v3.0.0) | Historical Seedsow standalone kit |
 | [v0.2.5 release notes](Release-v0.2.5) | Historical BSD session fix |
 | [v0.2.0 release notes](Release-v0.2.0) | Historical carousel and Store release |
@@ -140,7 +142,7 @@ Contributors: [Building](Building), [Maintaining](Maintaining), [Contributing](C
 
 ## Do I need a Mac?
 
-No. The v3.5.0 backend kit supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer, then can run without one. Its Moader A route requires a qualified local FS capture that is not bundled. [Installation](Installation) covers the method choices and host requirements.
+No. The v4.0.0 backend kit includes the Moader Setup desktop app and supports direct ns2jb and PC-driven Seedsow Lullaby from Linux x86_64 or WSL2 x86_64. macOS users can also choose mac2jb. PC-driven Seedsow needs its pinned GUI and host SDK preparation. The experimental [on-console Seedsow route](Seedsow-Standalone) prepares its SD and save once on a computer, then can run without one. Its Moader A route requires a qualified local FS capture that is not bundled. [Installation](Installation) covers the method choices and host requirements.
 
 ## Do I need FS access every time I toggle a mod?
 
@@ -197,7 +199,8 @@ Start with [Troubleshooting](Troubleshooting#reporting-a-problem). Include the r
     pages['_Sidebar'] = '''**Moader**
 
 - [Home](Home)
-- [v3.5.0 release notes](Release-v3.5.0)
+- [v4.0.0 release notes](Release-v4.0.0)
+- [v3.5.0 release notes (historical)](Release-v3.5.0)
 - [v3.0.0 release notes (historical)](Release-v3.0.0)
 - [v0.2.5 release notes (historical)](Release-v0.2.5)
 - [v0.2.0 release notes (historical)](Release-v0.2.0)
