@@ -46,16 +46,19 @@ build/native/canvas.o: build/generated/native_font.hpp
 build/native/catalog_fetch.o: native/catalog_fetch.cpp native/catalog_fetch.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
-build/native/app.o: native/app.cpp native/reload_client.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
-	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
+build/native/update.o: native/update.cpp native/update.hpp | build/native
+	$(PREFIX)g++ $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+build/native/app.o: native/app.cpp native/reload_client.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp Makefile | build/native
+	$(PREFIX)g++ $(CPPFLAGS) -DMOADER_APP_VERSION='"$(MOADER_VERSION)"' -Ibuild/generated $(CXXFLAGS) -c $< -o $@
 
 build/native/service.o: native/service.cpp native/resident_lifecycle.hpp runtime/kaihen/libkaihen/include/kaihen/reload.h build/generated/web_assets.hpp | build/native
 	$(PREFIX)g++ $(CPPFLAGS) -Ibuild/generated $(CXXFLAGS) -c $< -o $@
 
 # The redesigned foreground app gets its own ELF identity. The resident service
 # keeps its existing reload protocol and independent build target.
-build/native/Moader.elf: build/native/app.o build/native/catalog_fetch.o $(UI_OBJ) build/native/libmoader.a build/native/switch.specs
-	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=sha1 build/native/app.o build/native/catalog_fetch.o $(UI_OBJ) build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lcurl -lounce_core -lz -o $@
+build/native/Moader.elf: build/native/app.o build/native/catalog_fetch.o build/native/update.o $(UI_OBJ) build/native/libmoader.a build/native/switch.specs
+	$(PREFIX)g++ $(ARCH) -specs=build/native/switch.specs -Wl,--gc-sections -Wl,--build-id=sha1 build/native/app.o build/native/catalog_fetch.o build/native/update.o $(UI_OBJ) build/native/libmoader.a -L$(DEVKITPRO)/libounce/lib -L$(DEVKITPRO)/portlibs/switch/lib -lcurl -lounce_core -lz -o $@
 
 runtime/kaihen/libkaihen/build/libkaihen_plugin.a: $(wildcard runtime/kaihen/libkaihen/source/*) $(wildcard runtime/kaihen/libkaihen/include/kaihen/*) runtime/kaihen/libkaihen/Makefile
 	$(MAKE) -C runtime/kaihen/libkaihen DEVKITPRO=$(DEVKITPRO) LIBOUNCE=$(DEVKITPRO)/libounce build/libkaihen_plugin.a
@@ -103,8 +106,9 @@ check: build/generated/web_assets.hpp
 	LIBOUNCE=$(DEVKITPRO)/libounce CXX=clang++ sh runtime/kaihen/hen/test.sh
 	LIBOUNCE=$(DEVKITPRO)/libounce CXX=clang++ sh runtime/kaihen/ro/test.sh
 	python3 tools/test-native-ui.py
+	python3 tools/test-native-update.py
 
--include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/catalog_fetch.d $(UI_OBJ:.o=.d) build/native/service.d
+-include $(CORE:.o=.d) build/native/diagnostics.d build/native/core-linkcheck.d build/native/app.d build/native/catalog_fetch.d build/native/update.d $(UI_OBJ:.o=.d) build/native/service.d
 .PHONY: all check
 
 # Uses the identical renderer and embedded font; fixtures are explicitly synthetic.

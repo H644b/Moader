@@ -1,4 +1,5 @@
 #include "store.hpp"
+#include "bounded_json.hpp"
 #include "ui.hpp"
 #include "third_party/picojson.h"
 #include <algorithm>
@@ -13,32 +14,6 @@ namespace {
 std::deque<std::pair<std::string, Art>> preview_cache;
 std::deque<std::string> preview_queue;
 std::string fetching;
-bool bounded_json(const std::string& json) {
-    if (json.size() > 1024 * 1024)
-        return false;
-    unsigned depth = 0;
-    bool quoted = false, escaped = false;
-    for (char c : json) {
-        if (quoted) {
-            if (escaped)
-                escaped = false;
-            else if (c == '\\')
-                escaped = true;
-            else if (c == '"')
-                quoted = false;
-        } else if (c == '"')
-            quoted = true;
-        else if (c == '{' || c == '[') {
-            if (++depth > 24)
-                return false;
-        } else if (c == '}' || c == ']') {
-            if (depth == 0)
-                return false;
-            --depth;
-        }
-    }
-    return !quoted && depth == 0;
-}
 using Object = picojson::value;
 using Array = picojson::array;
 std::string field(const Object& o, const char* k, size_t max = 2048) {

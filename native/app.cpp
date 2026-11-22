@@ -10,6 +10,7 @@
 #include "store_games.hpp"
 #include "store_inventory.hpp"
 #include "store_installer.hpp"
+#include "update_client.hpp"
 #include <cmath>
 #include "ui_bitmap.hpp"
 #include <arpa/inet.h>
@@ -369,20 +370,23 @@ Result refresh(){
     ui.runtime_detail=text_chunks(moader::ipc::RuntimeDetail,0,0,latest.detail);refresh_debug();ui.connected=true;refresh_game_source();return 0;
 }
 void update(Result& connection){const auto rc=refresh();if(R_FAILED(rc)){connection=rc;ui.connected=false;ui.confirm_remove=false;error(rc);}}
-void begin_reload(){
-    if(foreground){reload.unavailable(true);sync_reload_ui();message(reload.detail,true);return;}
-    if(reload.begin(reload_transport,monotonic_ms())){
+bool begin_reload(){
+    if(foreground){reload.unavailable(true);sync_reload_ui();message(reload.detail,true);return false;}
+    const bool submitted=reload.begin(reload_transport,monotonic_ms());
+    if(submitted){
         // HEN owns the operation. The old direct session is expected to die.
         if(serviceIsActive(&service))serviceClose(&service);
         ui.connected=false;ui.confirm_remove=false;ui.game_source_available=false;
         ui.inventory_refresh_pending=true;ui.message.clear();
     }else message(reload.detail,true);
     sync_reload_ui();
+    return submitted;
 }
-void poll_reload(Result& connection){
+void poll_reload(Result& connection, moader_native::UpdateClient& updater){
     if(!modern_hen||foreground)return;
     if(!reload.active){
         reload.poll_presence(reload_transport,monotonic_ms());sync_reload_ui();
+        updater.restarted(ui.updater,false,reload.detail);
         return;
     }
     reload.poll(reload_transport,monotonic_ms());sync_reload_ui();
@@ -393,16 +397,25 @@ void poll_reload(Result& connection){
            current.instance_id==reload.request.instance_id&&current.operation_id==reload.status.operation_id&&
            current.process_id==reload.status.new_process_id&&current.generation==reload.status.generation){
             const auto name=moader_name();connection=henOpenPlugin(&hen,&name,&service);
-            if(R_SUCCEEDED(connection))connection=refresh();
-            if(R_SUCCEEDED(connection)){
-                reload.connected();sync_reload_ui();message(reload.detail);
+            const bool opened=R_SUCCEEDED(connection);
+            const bool installing_update=ui.updater.phase==moader_ui::UpdatePhase::Restarting;
+            if(opened)connection=refresh();
+            if(R_SUCCEEDED(connection)||(opened&&installing_update)){
+                // The manager verified the replacement's health and we opened that exact process.
+                // A new app/plugin pair may have changed its library protocol.
+                if(R_FAILED(connection)){serviceClose(&service);ui.connected=false;}
+                reload.connected();sync_reload_ui();message(installing_update?"":reload.detail);
+                updater.restarted(ui.updater,true,{});
+                if(installing_update){
+                    ui.view=moader_ui::View::Updates;ui.settings_row=0;ui.tab_focus=ui.nav_focus=false;
+                }
             }else {
                 ui.connected=false;if(serviceIsActive(&service))serviceClose(&service);
                 // The operation remains query-only; reconnect retries never submit.
                 reload.ready=false;reload.detail=moader_native::ReloadClient::transport_text("New process is healthy but the service could not be opened",connection);sync_reload_ui();
             }
         }else reload.ready=false;
-    }else if(!reload.active){message(reload.detail,true);}
+    }else if(!reload.active){message(reload.detail,true);updater.restarted(ui.updater,false,reload.detail);}
 }
 
 bool allow_hbmenu_return(){
@@ -443,7 +456,7 @@ int framebuffer_failure(PadState& pad,Framebuffer* framebuffer){
 }
 
 }
-int main(){
+int main(int argc, char** argv){
     padConfigureInput(1,HidNpadStyleSet_NpadStandard);PadState pad;padInitializeDefault(&pad);
     Framebuffer framebuffer{};Result rc=framebufferCreate(&framebuffer,nwindowGetDefault(),1280,720,PIXEL_FORMAT_RGBA_8888,2);
     if(R_FAILED(rc))return framebuffer_failure(pad,nullptr);
@@ -453,6 +466,9 @@ int main(){
     moader_native::CoverLoader covers;
     moader_native::StoreClient store_client;
     moader_native::StoreInstaller store_installer;
+    moader_native::UpdateClient updater("sdmc:", argc > 0 && argv && argv[0] ? argv[0] : "");
+    updater.open(ui.updater, MOADER_APP_VERSION);
+    if(ui.updater.phase==moader_ui::UpdatePhase::Recovery)ui.view=moader_ui::View::Updates;
     moader_native::StoreInventory store_inventory(moader_native::read_store_games);
     moader_ui::Renderer renderer;Result connection=establish();if(R_SUCCEEDED(connection))connection=refresh();
     if(R_FAILED(connection)){ui.connected=false;if(modern_hen)message(reload.detail,true);else error(connection);}
@@ -462,16 +478,25 @@ int main(){
     // guarantee safety if the system forcibly terminates the host process.
     while(appletMainLoop()){
         padUpdate(&pad);u64 down=padGetButtonsDown(&pad);const u64 held=padGetButtons(&pad),now=armGetSystemTick();
-        poll_reload(connection);
+        poll_reload(connection,updater);
+        const bool can_prompt=!store_installer.active()&&!ui.confirm_remove&&!ui.reload_busy&&
+                              !ui.reload_shutdown_required&&!ui.reload_exit_unknown;
+        const bool prompt_was_open=ui.updater.prompt;
+        if(updater.poll(ui.updater,monotonic_ms(),can_prompt)){
+            if(!ui.connected||!ui.reload_available||!begin_reload()||!reload.active)
+                updater.restarted(ui.updater,false,reload.detail);
+        }
+        if(!prompt_was_open && ui.updater.prompt){down=0;if(touch.down)touch.cancel=true;}
         if(down&HidNpadButton_Plus){
-            if(allow_hbmenu_return())break;
-            message(reload.shutdown_required()?
+            if(ui.updater.installing())message("Keep Moader open until the update finishes.");
+            else if(allow_hbmenu_return())break;
+            else message(reload.shutdown_required()?
                 "Loader recovery is unverified. Save Debug and a screen, then hold POWER for 20 seconds to shut down.":
                 reload.exit_state_unknown()?"Loader state is unverified. Press Y to query it again; returning to hbmenu is paused.":
                 "Reload is in progress. Wait for its result before returning to hbmenu.",true);
         }
         if((down&HidNpadButton_Y)&&modern_hen&&!reload.can_exit()){
-            reload.resume(monotonic_ms());poll_reload(connection);
+            reload.resume(monotonic_ms());poll_reload(connection,updater);
             message(reload.shutdown_required()?
                 "Loader recovery remains unverified. Save Debug and a screen, then force the console off with POWER.":
                 "Checking the existing Loader state. No new reload request was sent.",reload.shutdown_required());
@@ -526,6 +551,19 @@ int main(){
         if(actions&RefreshEvents)refresh_debug();
         if(actions&SaveReport)save_debug(covers);
         if(actions&SavePreferences)save_preferences();
+        if(actions&CheckUpdates)updater.check(ui.updater,true);
+        if((actions&ExitUpdatedApp)&&allow_hbmenu_return())break;
+        if(actions&ToggleAutoUpdates)updater.toggle(ui.updater);
+        if(actions&InstallUpdate){
+            if(store_installer.active())message("Finish the Store download before updating Moader.",true);
+            else {
+                if(!ui.connected&&!foreground&&reload.can_exit()){
+                    connection=connect();
+                    if(R_SUCCEEDED(connection))update(connection);
+                }
+                updater.install(ui.updater,ui.connected&&ui.reload_available&&!ui.reload_busy);
+            }
+        }
         if(actions&ReloadService)begin_reload();
         if(actions&GetGameSource)refresh_game_source();
         if(actions&GetPairing)pairing();
@@ -567,7 +605,7 @@ int main(){
         store_inventory.poll(ui);
         u32 stride=0;auto* pixels=static_cast<uint32_t*>(framebufferBegin(&framebuffer,&stride));
         if(!pixels){
-            if(reload.can_exit()&&allow_hbmenu_return())break;
+            if(!ui.updater.installing()&&reload.can_exit()&&allow_hbmenu_return())break;
             // A missing framebuffer is not permission to return through an
             // unverified Loader. Keep report/input handling alive for recovery.
             svcSleepThread(16000000);

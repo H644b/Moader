@@ -2,6 +2,7 @@
 #include "moader/ipc.hpp"
 #include "artwork.hpp"
 #include "store.hpp"
+#include "update.hpp"
 #include <memory>
 #include <string>
 #include <vector>
@@ -31,7 +32,8 @@ enum class View {
     Controls,
     BrowserControls,
     Credits,
-    Store
+    Store,
+    Updates
 };
 enum LocalInput : uint32_t {
     BackInput = 1,
@@ -63,7 +65,11 @@ enum LocalAction : uint32_t {
     GetGameSource = 1024,
     Reconnect = 2048,
     SearchStore = 4096,
-    InstallStoreMod = 8192
+    InstallStoreMod = 8192,
+    CheckUpdates = 16384,
+    ToggleAutoUpdates = 32768,
+    InstallUpdate = 65536,
+    ExitUpdatedApp = 131072
 };
 bool settings_view(View);
 unsigned tab_for(View);
@@ -89,6 +95,7 @@ struct State {
     bool game_source_available = false;
     Store store;
     StoreTransfer transfer;
+    UpdateStatus updater;
     bool has_store_mod(const StoreEntry&) const;
     bool inventory_unavailable() const {
         return inventory_refresh_pending || (summary.flags & moader::ipc::InventoryUnavailable);

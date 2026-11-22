@@ -33,7 +33,8 @@ enum class HitType {
     Settings,
     Store,
     StoreClear,
-    StoreItem
+    StoreItem,
+    UpdateChoice
 };
 struct Hit {
     float x, y, w, h;

@@ -80,8 +80,8 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.12'
-      - name: Install host compiler and zlib
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y clang zlib1g-dev
+      - name: Install host compiler, zlib and OpenSSL
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y clang zlib1g-dev libssl-dev
       - name: Prepare checksum-pinned SDK declarations
         run: python3 .github/scripts/prepare-host-deps.py --sdk
       - name: Generate public web header for resident harness
@@ -94,6 +94,7 @@ jobs:
           python3 tools/test-web-worker.py
           python3 tools/test-resident.py
           python3 tools/test-native-ui.py
+          python3 tools/test-native-update.py
           python3 tools/test-reload-client.py
       - name: Actual HEN reload orchestration and lifecycle server
         run: LIBOUNCE="$PWD/vendor/devkitpro/libounce" CXX=clang++ sh runtime/kaihen/hen/test.sh
