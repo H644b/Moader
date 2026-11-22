@@ -834,8 +834,10 @@ function supportReport() {
     if (realFile(file) && fs.statSync(file).size <= 256000)
       journals.push({name, text: redact(fs.readFileSync(file, 'utf8'))});
   }
+  const reportSystem = Object.fromEntries(Object.entries(system()).map(([key, value]) =>
+    [key, typeof value === 'string' ? redact(value) : value]));
   const report = {schema: 1, created: now(), Moader: release.version,
-    components: checkKit().componentHashes, system: system(),
+    components: checkKit().componentHashes, system: reportSystem,
     providers: {ns2jb: {revision: '28f03b5895e5569d8fbc35cbed84906b8f0a65b2'},
       seedsow: {revision: readJson(path.join(root, 'config/seedsow-provider.json')).revision},
       civswitch: {revision: readJson(path.join(root, 'config/civ7-provider.json')).revision}},

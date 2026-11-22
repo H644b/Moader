@@ -185,6 +185,18 @@ test('loopback token, origin, kit identity, SD export and support copy', async t
     'a closed browser request does not stop the controller');
 });
 
+test('support copy redacts a home path emitted by a host tool', async t => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'moader-setup-tool-'));
+  t.after(() => fsp.rm(dir, {recursive: true, force: true}));
+  await fsp.writeFile(path.join(dir, 'clang'),
+    '#!/bin/sh\nprintf "clang version fixture\\nInstalledDir: /Users/fixture/Library/Toolchains\\n"\n',
+    {mode: 0o755});
+  const api = await startController(t, null, {PATH: dir + path.delimiter + process.env.PATH});
+  const report = await (await api.get('/api/report')).json();
+  assert.match(report.system.clang, /\[home\]\/Library\/Toolchains/);
+  assert.ok(!JSON.stringify(report).includes('/Users/fixture'));
+});
+
 test('restart makes a held native session uncertain, blocks retry and retains evidence', async t => {
   const privateAddress = ['192', '168', '10', '7'].join('.');
   const run = await fsp.mkdtemp(path.join(os.tmpdir(), 'moader external run '));
