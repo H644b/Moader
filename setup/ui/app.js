@@ -129,12 +129,11 @@ function home() {
     ['browser','Open Moader in browser','Use the listener address shown by the Switch.'],
     ['report','Collect a support report','Review and save a redacted copy of setup details.']
   ];
-  return heading('Set up Moader', 'Choose what you want to do. Each task shows the computer work, the Switch action and what has actually been verified.') +
-    '<div class="eyeline"><span class="tag">Kit ' + safe(snapshot.kit.version) + '</span><span class="tag">' +
-    safe(osLabel()) + '</span></div>' + bootBanner() + operationView() +
+  return heading('Set up Moader', 'Choose a task for this computer or your Switch.') +
+    bootBanner() + operationView() +
     '<div class="task-list">' + items.map(item =>
       '<button class="task-row" type="button" data-task="' + item[0] + '"><span><strong>' +
-      item[1] + '</strong><small>' + item[2] + '</small></span><span class="arrow" aria-hidden="true">→</span></button>').join('') +
+      item[1] + '</strong><small>' + item[2] + '</small></span><span class="arrow" aria-hidden="true"></span></button>').join('') +
     '</div>' + note('What survives a reboot', 'Your files and preferences stay on SD. The filesystem runtime and resident service must be started again for a fresh boot.') +
     help('The backend kit already includes the matched app and resident binaries. A successful full backend installation copies them as part of that installer. The app-only ZIP is for an existing compatible backend.');
 }
@@ -403,7 +402,10 @@ function render() {
     action: focused.dataset.action, method: focused.dataset.method,
     address: focused.dataset.address,
     selection: typeof focused.selectionStart === 'number' ? focused.selectionStart : null};
+  const pageChanged = main.dataset.page !== task;
+  main.dataset.page = task;
   main.innerHTML = '<div class="content">' + views[task]() + '</div>';
+  if (pageChanged) main.scrollTop = 0;
   if (focusKey) {
     const matching = [...main.querySelectorAll('button,input,select,textarea,summary')].find(item =>
       focusKey.id && item.id === focusKey.id ||
@@ -446,9 +448,9 @@ function activity() {
     title = op ?
     (op.status === 'running' ? 'Working on ' : op.status === 'complete' ? 'Completed ' :
       op.status === 'uncertain' ? 'Outcome uncertain · ' : 'Stopped · ') +
-      op.action.replaceAll('-', ' ') : 'Ready when you are';
-    message = op?.firstError || op?.message || 'Choose a task to begin.';
-    labelText = op?.phase.replaceAll('-', ' ') || 'Not started';
+      op.action.replaceAll('-', ' ') : 'No task running';
+    message = op?.firstError || op?.message || '';
+    labelText = op?.phase.replaceAll('-', ' ') || '';
     labelClass = !op ? '' : op.status === 'complete' ? 'good' :
     op.status === 'uncertain' || op.status === 'failed' ? 'bad' : 'wait';
   }
@@ -741,6 +743,23 @@ document.getElementById('helpButton').addEventListener('click', () => {
   else show('The task instructions on this page are the current help.');
 });
 refresh(true).then(() => {
+  if (!snapshot) {
+    main.innerHTML = '<div class="content">' + heading('Setup is unavailable',
+      'Close this window and reopen Moader Setup to reconnect to its local controller.') + '</div>';
+    const kit = document.getElementById('kitBadge');
+    kit.textContent = 'Kit status unavailable';
+    kit.classList.add('bad');
+    document.getElementById('platformLabel').textContent = 'Unavailable';
+    document.getElementById('activity').hidden = true;
+    document.getElementById('taskSelect').disabled = true;
+    document.getElementById('helpButton').disabled = true;
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.disabled = true;
+      item.classList.remove('current');
+      item.removeAttribute('aria-current');
+    });
+    return;
+  }
   method = snapshot.prefs.lastMethod || 'seedsow';
   render(); setInterval(() => refresh(), 1600);
 });

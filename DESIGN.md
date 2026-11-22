@@ -15,15 +15,10 @@ colors:
   pending: "#F7C577"
   error: "#FFAA98"
   button-ink: "#14211B"
-  setup-rail: "#17251F"
-  setup-soft: "#C5D0C8"
-  setup-muted: "#AEBDB3"
-  setup-focus: "#C7FFE3"
-  setup-field: "#203028"
   setup-field-rule: "#65796C"
-  setup-secondary-rule: "#7D9485"
-  setup-warning-panel: "#342D21"
-  setup-success-panel: "#1E362A"
+  setup-warning-panel: "#302A20"
+  setup-error-panel: "#342722"
+  setup-success-panel: "#1D3026"
 typography:
   display:
     fontFamily: "DM Sans, Noto Sans, sans-serif"
@@ -59,20 +54,35 @@ typography:
     lineHeight: 1.1
     letterSpacing: "-0.045em"
   setup-body:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
+    fontFamily: "DM Sans, system-ui, sans-serif"
     fontSize: "16px"
-    lineHeight: 1.5
+    lineHeight: 1.45
   setup-page-heading:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "29px"
-    fontWeight: 690
-    lineHeight: 1.18
-    letterSpacing: "-0.025em"
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "clamp(34px, 3.45vw, 50px)"
+    fontWeight: 650
+    lineHeight: 1.1
+    letterSpacing: "-0.038em"
   setup-step-heading:
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif"
-    fontSize: "21px"
-    fontWeight: 670
-    lineHeight: 1.25
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "clamp(22px, 1.9vw, 28px)"
+    fontWeight: 650
+    lineHeight: 1.2
+  setup-caption:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "13px"
+  setup-secondary-text:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "14px"
+  setup-label:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "15px"
+  setup-subheading:
+    fontFamily: "DM Sans, system-ui, sans-serif"
+    fontSize: "18px"
+  setup-mono:
+    fontFamily: "ui-monospace, SFMono-Regular, Consolas, monospace"
+    fontSize: "0.9rem"
 rounded:
   field: "8px"
   button: "9px"
@@ -80,16 +90,12 @@ rounded:
   mod-row: "12px"
   panel: "13px"
   cover-ring: "15px"
-  setup-tag: "6px"
-  setup-button: "8px"
-  setup-note: "10px"
-  setup-method: "11px"
 spacing:
   console-inset: "64px"
   cover-ring-outset: "6px"
   browser-inset: "clamp(20px, 4.44vw, 64px)"
-  setup-main-inline: "clamp(22px, 5vw, 70px)"
-  setup-step-gap: "25px"
+  setup-main-inline: "clamp(20px, 4.44vw, 64px)"
+  setup-step-gap: "24px"
   setup-control-gap: "10px"
 components:
   library-cover:
@@ -131,27 +137,27 @@ components:
   setup-primary:
     backgroundColor: "{colors.mint}"
     textColor: "{colors.button-ink}"
-    rounded: "{rounded.setup-button}"
-    padding: "10px 16px"
+    rounded: "{rounded.button}"
+    padding: "9px 16px"
   setup-secondary:
     textColor: "{colors.paper}"
-    rounded: "{rounded.setup-button}"
-    padding: "10px 16px"
+    rounded: "{rounded.button}"
+    padding: "9px 16px"
   setup-method:
-    backgroundColor: "{colors.panel}"
+    backgroundColor: "{colors.ink}"
     textColor: "{colors.paper}"
-    rounded: "{rounded.setup-method}"
-    padding: "15px 17px"
+    rounded: "{rounded.button}"
+    padding: "14px 16px"
   setup-field:
-    backgroundColor: "{colors.setup-field}"
+    backgroundColor: "{colors.panel}"
     textColor: "{colors.paper}"
     rounded: "{rounded.field}"
-    padding: "11px 12px"
+    padding: "10px 13px"
   setup-note:
     backgroundColor: "{colors.panel}"
-    textColor: "{colors.setup-soft}"
-    rounded: "{rounded.setup-note}"
-    padding: "16px 18px"
+    textColor: "{colors.soft}"
+    rounded: "{rounded.button}"
+    padding: "15px 18px"
 ---
 
 # Moader design system
@@ -164,7 +170,7 @@ The mint stacked-cartridge mark and lowercase paper wordmark identify Moader on 
 
 Open the clickable PDF to browse the library, mod details and settings. Its bookmarks also open the community Store design. Both videos show the transitions at the original 1440 × 810 resolution. [Clickable mockup](docs/design/moader-clickable.pdf) · [Library walkthrough](docs/design/moader-motion.mp4) · [Store walkthrough](docs/design/store-walkthrough.mp4)
 
-**Moader Setup is a separate computer-side surface.** It keeps the stacked-cartridge mark, ink ground and mint action color, then uses a calmer utility layout: a task list, a single guided method, short status labels and an activity strip. Its visual hierarchy supports one real preparation or installation action at a time. [Setup interface](setup/ui/style.css) · [Setup workflow](setup/ui/app.js)
+**Moader Setup** uses the console Settings layout on the computer. The original header wordmark, task rail, content column and activity strip share one canvas. [Setup interface](setup/ui/style.css)
 
 **Key Characteristics:**
 
@@ -180,7 +186,7 @@ Ink is the canvas. Fine rules divide controls and facts. A deep green selection 
 
 Runtime states have a colored dot and a text label. Green identifies **Accepted** on console or **Routing active** in the browser. Amber identifies **Pending**, **Reopen content** or **Relaunch game**. Coral identifies **Error** and **Game unavailable**. **Disabled** uses muted text. **Requested** shows the player’s choice separately. [Runtime state guide](docs/USAGE.md#enable-disable-and-remove)
 
-Setup uses a dark green rail against the shared ink canvas and flat green panels for method choices, system context and next steps. Its slightly lighter soft and muted text values improve reading at desktop sizes. Mint remains the primary action; the pale mint focus outline is visible independently of selected-state color. Amber and coral notes always include a text result, such as “Launcher not checked” or “Readback incomplete.”
+Setup uses the same ink, paper, muted text and mint accent as the console. The active task has a mint label on a green fill. Kit status pairs a dot with text, and warning and error notes identify the result in words.
 
 ## Typography
 
@@ -188,7 +194,7 @@ The native renderer embeds DM Sans at weights 475 for reading text, 630 for labe
 
 The game name is the largest centered text. Mod rows pair a strong name with a smaller line for content type and file count. Keep the complete Title ID available in details. Pairing codes retain leading zeros and appear in two groups of three on the console.
 
-Setup intentionally uses the operating system’s sans-serif stack, so the extracted backend kit does not need a separate web-font download. Its page heading is compact and bold (29px); step headings are smaller (21px). Body copy starts at 16px with a 1.5 line height, while short task descriptions and input hints recede without becoming decorative labels. File paths and diagnostics use a monospace stack and wrap inside their container.
+Setup serves the same two local DM Sans faces and vector wordmark as the paired browser. Body text starts at 16px. Page titles reach 50px on desktop. File paths and diagnostics use system monospace and wrap within the window.
 
 ## Layout
 
@@ -202,19 +208,19 @@ Native measurements use a **1440 × 810** artboard. The production framebuffer i
 
 The browser caps its content at 1440 CSS pixels and uses fluid margins. On wide screens the opened game occupies the left 30.8% of the content. At 720 CSS pixels and narrower the cover becomes a 65-pixel thumbnail beside the game name above the mod controls. Settings sections become wrapping tabs. [Browser layout](web/style.css)
 
-Setup has a 72px topbar, a 264px task rail and a main reading column capped at 850px. Guided steps are separated by fine rules and 25px top space. At 850px and below the rail becomes a labeled task selector and method choices become a selector; the topbar contracts to 64px. At 520px and below, the kit badge yields to the step-help button and facts stack in one column. The activity strip stays reachable at the bottom and links back when it reports another task.
+On desktop, Setup aligns its header and activity footer to the browser’s fluid inset. The task rail and content scroll independently. At 850px and below, task and method navigation use labeled selectors. The kit status remains visible on narrow windows. At heights of 560px or less, the page scrolls as one document.
 
 ## Elevation & Depth
 
 Scale, overlap and dimming establish depth in the carousel. On console, the selected artwork lightly tints the background. The browser uses a soft green radial background on the library. Adjacent covers are shaded by 18% and the next pair by 50%. Settings uses a flat ink background and tonal panels. A removal confirmation dims the console frame and brings a single bordered panel forward.
 
-Setup is flat at rest. A darker rail, one-pixel rules and tonal panels separate navigation, steps and status without a shadow on every card. Only the brief toast rises with a soft `0 8px 28px #0007` shadow.
+Setup uses a one-pixel rule between the task rail and content. Notes use flat tonal surfaces. The temporary notification has a soft, downward shadow.
 
 ## Shapes
 
 Preserve the square crop of game artwork and its rounded corners. The native focused cover has a 3.6-unit mint ring with a 6-unit outset and a 15-unit outer radius. The browser uses a 3-pixel ring at the same outset. Round arrows flank the covers. A short mint bar replaces the dot at the current position. [Cover geometry](native/ui.cpp) · [Browser carousel](web/style.css)
 
-Setup uses restrained rounded rectangles: 11px method choices, 10px status notes and 8px buttons and fields. Tags use 6px corners. Selection is a mint border and tonal fill; keyboard focus is a separate 3px pale-mint outline with a 3px offset.
+Setup uses 9px corners for selection, buttons and notes, and 8px corners for fields. Keyboard focus uses a 2px mint outline, usually 3px outside the control. Home task rows draw it 2px inside the row.
 
 ## Components
 

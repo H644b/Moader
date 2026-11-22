@@ -12,6 +12,16 @@ const hostPolicy = require('./host-policy.cjs');
 const hostTools = require('./host-tools.cjs');
 
 const root = path.resolve(__dirname, '..');
+// The desktop window uses the same local identity assets as the paired browser.
+const uiFiles = new Map([
+  ['/', ['setup/ui/index.html', 'text/html; charset=utf-8']],
+  ['/style.css', ['setup/ui/style.css', 'text/css; charset=utf-8']],
+  ['/app.js', ['setup/ui/app.js', 'text/javascript; charset=utf-8']],
+  ['/favicon.svg', ['branding/favicon.svg', 'image/svg+xml']],
+  ['/lockup.svg', ['branding/lockup.svg', 'image/svg+xml']],
+  ['/font/text.ttf', ['native/assets/Text.ttf', 'font/ttf']],
+  ['/font/strong.ttf', ['native/assets/Strong.ttf', 'font/ttf']]
+]);
 const release = JSON.parse(fs.readFileSync(path.join(root, 'config/release.json')));
 const stateDir = process.env.MOADER_SETUP_STATE_DIR
   ? path.resolve(process.env.MOADER_SETUP_STATE_DIR) : path.join(root, 'state/setup');
@@ -915,15 +925,11 @@ async function listen() {
       requireTrue(host && /^127\.0\.0\.1:\d{1,5}$/.test(host), 'Invalid loopback host.');
       const url = new URL(req.url, 'http://' + host);
       const origin = 'http://' + host;
-      if (req.method === 'GET' && ['/', '/app.js', '/style.css', '/favicon.svg'].includes(url.pathname)) {
+      if (req.method === 'GET' && uiFiles.has(url.pathname)) {
         requireTrue(url.pathname !== '/' || url.searchParams.get('token') === token,
           'This setup page needs its private launch link.');
-        const file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
-        return reply(res, 200, fs.readFileSync(file === 'favicon.svg'
-          ? path.join(root, 'branding/favicon.svg') : path.join(__dirname, 'ui', file)),
-          file.endsWith('.html') ? 'text/html; charset=utf-8' :
-          file.endsWith('.css') ? 'text/css; charset=utf-8' :
-          file.endsWith('.svg') ? 'image/svg+xml' : 'text/javascript; charset=utf-8');
+        const [file, type] = uiFiles.get(url.pathname);
+        return reply(res, 200, fs.readFileSync(path.join(root, file)), type);
       }
       requireTrue(req.headers['x-moader-token'] === token, 'Private setup token is missing.');
       if (req.method === 'POST') requireTrue(req.headers.origin === origin &&
