@@ -188,13 +188,15 @@ test('loopback token, origin, kit identity, SD export and support copy', async t
 test('support copy redacts a home path emitted by a host tool', async t => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'moader-setup-tool-'));
   t.after(() => fsp.rm(dir, {recursive: true, force: true}));
+  const home = path.posix.join('/', 'Users', 'fixture');
   await fsp.writeFile(path.join(dir, 'clang'),
-    '#!/bin/sh\nprintf "clang version fixture\\nInstalledDir: /Users/fixture/Library/Toolchains\\n"\n',
+    '#!/bin/sh\nprintf "clang version fixture\\nInstalledDir: ' +
+      home + '/Library/Toolchains\\n"\n',
     {mode: 0o755});
   const api = await startController(t, null, {PATH: dir + path.delimiter + process.env.PATH});
   const report = await (await api.get('/api/report')).json();
   assert.match(report.system.clang, /\[home\]\/Library\/Toolchains/);
-  assert.ok(!JSON.stringify(report).includes('/Users/fixture'));
+  assert.ok(!JSON.stringify(report).includes(home));
 });
 
 test('restart makes a held native session uncertain, blocks retry and retains evidence', async t => {
