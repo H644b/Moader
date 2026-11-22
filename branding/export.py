@@ -61,6 +61,20 @@ def main():
     (ROOT.parent / "web/icon.svg").write_text(icon)
     img = raster(icon, 256, 256).convert("RGB")
     img.save(ROOT / "hbmenu.jpg", quality=96, subsampling=0, progressive=False)
+    # Keep the console hbmenu icon square; the desktop app gets rounded mint corners.
+    rounded = icon.replace(
+        '<rect width="256" height="256" fill="#9CF4CE"/>',
+        '<rect width="256" height="256" rx="52" fill="#9CF4CE"/>',
+    )
+    if rounded == icon:
+        raise ValueError("hbmenu icon background changed; update the Setup icon recipe")
+    (ROOT / "setup-icon.svg").write_text(rounded)
+    setup_icon = raster(rounded, 1024, 1024)
+    setup_icon.save(ROOT / "setup-icon.png")
+    setup_icon.save(ROOT / "setup-icon.ico", format="ICO", sizes=[
+        (16, 16), (24, 24), (32, 32), (48, 48), (64, 64),
+        (128, 128), (256, 256),
+    ])
     art = ET.fromstring((ROOT / "lockup.svg").read_text())
 
     def layer(ink):
@@ -101,6 +115,9 @@ def main():
             "store.svg",
             "hbmenu-source.svg",
             "hbmenu.jpg",
+            "setup-icon.svg",
+            "setup-icon.png",
+            "setup-icon.ico",
             "mark-alpha.hpp",
             "favicon.svg",
         ]

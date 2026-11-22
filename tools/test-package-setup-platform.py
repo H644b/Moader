@@ -21,6 +21,8 @@ def main():
         original = folder / 'universal.zip'
         files = {
             'config/release.json': b'{"version":"4.0.0"}',
+            'branding/setup-icon.png': b'rounded png fixture',
+            'branding/setup-icon.ico': b'rounded ico fixture',
             'setup/desktop-app/main.cjs': b'// desktop entry',
             'setup/desktop-app/package.json': b'{"main":"main.cjs"}',
             'setup/launch.sh': b'#!/bin/sh\n',
@@ -60,10 +62,12 @@ def main():
                         assert root + 'Moader Setup.app/Contents/MacOS/Electron' in names
                         plist = plistlib.loads(built.read(root + 'Moader Setup.app/Contents/Info.plist'))
                         assert plist['CFBundleName'] == 'Moader Setup'
+                        assert plist['CFBundleIconFile'] == 'MoaderSetup.icns'
                     else:
                         resources = root + 'resources/'
                         assert root + ('Moader Setup.exe' if target == 'windows-x64' else 'Moader Setup') in names
                     assert built.read(resources + 'app/main.cjs') == b'// desktop entry'
+                    assert built.read(resources + 'kit/branding/setup-icon.png') == b'rounded png fixture'
                     assert built.read(resources + 'kit/dist/Moader.nro') == b'NRO0fixture'
                     assert len([n for n in names if n.endswith('/node')]) == 1
                     assert len([n for n in names if n.endswith('/uv')]) == 1

@@ -43,6 +43,8 @@ def inventory(archive, prefix, package):
 
 def files_for_target(source, target, tag, package, archive):
     electron, controller = TARGETS[target]
+    package.require('branding/setup-icon.png' in source and 'branding/setup-icon.ico' in source,
+                    'Rounded Setup icon exports are missing')
     folder = f'Moader-Setup-{tag}-{target}/'
     if target.startswith('macos-'):
         app = 'Moader Setup.app/'
@@ -77,6 +79,7 @@ def files_for_target(source, target, tag, package, archive):
             info['CFBundleName'] = 'Moader Setup'
             info['CFBundleIdentifier'] = 'com.moader.setup'
             info['CFBundleShortVersionString'] = tag.removeprefix('v')
+            info['CFBundleIconFile'] = 'MoaderSetup.icns'
             add(folder + destination, (plistlib.dumps(info), value[1]))
         else:
             add(folder + destination, value)
@@ -120,6 +123,19 @@ def sign_macos(path, tag):
         subprocess.run(['ditto', '-x', '-k', str(unsigned), str(temporary / 'extracted')], check=True)
         folder = temporary / 'extracted' / path.stem
         app = folder / 'Moader Setup.app'
+        icon = app / 'Contents/Resources/kit/branding/setup-icon.png'
+        iconset = temporary / 'MoaderSetup.iconset'
+        iconset.mkdir()
+        for name, size in (
+            ('16x16', 16), ('16x16@2x', 32), ('32x32', 32), ('32x32@2x', 64),
+            ('128x128', 128), ('128x128@2x', 256), ('256x256', 256),
+            ('256x256@2x', 512), ('512x512', 512), ('512x512@2x', 1024),
+        ):
+            subprocess.run(['sips', '-z', str(size), str(size), str(icon), '--out',
+                            str(iconset / f'icon_{name}.png')], check=True,
+                           stdout=subprocess.DEVNULL)
+        subprocess.run(['iconutil', '-c', 'icns', str(iconset), '-o',
+                        str(app / 'Contents/Resources/MoaderSetup.icns')], check=True)
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True)
         subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True)
         subprocess.run(['ditto', '-c', '-k', '--keepParent', str(folder), str(path)], check=True)
