@@ -9,8 +9,8 @@ const {app, BrowserWindow, dialog, Menu, shell} = require('electron');
 // A release app carries its matched backend beside Electron's app resources.
 // The source-tree launcher keeps using the repository root for development.
 const packagedKit = path.join(process.resourcesPath, 'kit');
-const kit = fs.existsSync(path.join(packagedKit, 'config/release.json'))
-  ? packagedKit : path.resolve(__dirname, '../..');
+const usesPackagedKit = fs.existsSync(path.join(packagedKit, 'config/release.json'));
+const kit = usesPackagedKit ? packagedKit : path.resolve(__dirname, '../..');
 const logo = path.join(kit, 'branding/mark-alpha.png');
 app.setName('Moader Setup');
 if (process.platform === 'darwin') Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -58,7 +58,8 @@ function startController() {
       path.join(kit, 'setup/windows-launch.ps1'), kit] :
       [path.join(kit, 'setup/launch.sh'), kit];
     const child = spawn(executable, args, {cwd: kit, windowsHide: true,
-      env: {...process.env, MOADER_SETUP_DETACH: '1', MOADER_SETUP_NO_OPEN: '1'},
+      env: {...process.env, MOADER_SETUP_DETACH: '1', MOADER_SETUP_NO_OPEN: '1',
+        MOADER_SETUP_FORCE_COPY: usesPackagedKit ? '1' : process.env.MOADER_SETUP_FORCE_COPY || '0'},
       stdio: ['ignore', 'pipe', 'pipe']});
     let output = '', errorText = '', settled = false;
     const timer = setTimeout(() => finish(Error('The setup controller did not open in time. Check the extracted kit and reopen Moader Setup.')), 300000);

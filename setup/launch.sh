@@ -34,7 +34,9 @@ EOF
 [ "$arch" != unsupported ] || show_error "This computer architecture is not supported by the included controller runtime."
 node="$kit/host-runtimes/node-v24.22.3/$platform-$arch/node"
 [ -f "$node" ] || show_error "The included Node 24 runtime for this computer is missing. Extract the complete backend kit again."
-if ! mkdir -p "$kit/state/setup" 2>/dev/null || ! : > "$kit/state/setup/.write-check" 2>/dev/null; then
+if [ "${MOADER_SETUP_FORCE_COPY:-0}" = 1 ] ||
+   ! mkdir -p "$kit/state/setup" 2>/dev/null ||
+   ! : > "$kit/state/setup/.write-check" 2>/dev/null; then
   id=$({ printf '%s' "$kit"; cat "$kit/config/release.json" "$kit/setup/controller.cjs" \
     "$kit/dist/Moader.nro" "$kit/dist/moader.nso" \
     "$kit/vendor/kaihen-mo/hen/main" "$kit/vendor/kaihen-mo/ro/main" \
