@@ -5,7 +5,7 @@ source_kit=$1
 base="$HOME/.local/share/Moader Setup/wsl-kits"
 mkdir -p "$base"
 id=$({ printf '%s' "$source_kit"; cat "$source_kit/config/release.json" \
-  "$source_kit/setup/controller.cjs" "$source_kit/dist/Moader.nro" \
+  "$source_kit/setup/controller.cjs" "$source_kit/setup/launch.sh" "$source_kit/dist/Moader.nro" \
   "$source_kit/dist/moader.nso" "$source_kit/vendor/kaihen-mo/hen/main" \
   "$source_kit/vendor/kaihen-mo/ro/main" \
   "$source_kit/vendor/kaihen-mo/bootstrap.bin"; } |

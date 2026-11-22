@@ -37,7 +37,7 @@ node="$kit/host-runtimes/node-v24.22.3/$platform-$arch/node"
 if [ "${MOADER_SETUP_FORCE_COPY:-0}" = 1 ] ||
    ! mkdir -p "$kit/state/setup" 2>/dev/null ||
    ! : > "$kit/state/setup/.write-check" 2>/dev/null; then
-  id=$({ printf '%s' "$kit"; cat "$kit/config/release.json" "$kit/setup/controller.cjs" \
+  id=$({ printf '%s' "$kit"; cat "$kit/config/release.json" "$kit/setup/controller.cjs" "$kit/setup/launch.sh" \
     "$kit/dist/Moader.nro" "$kit/dist/moader.nso" \
     "$kit/vendor/kaihen-mo/hen/main" "$kit/vendor/kaihen-mo/ro/main" \
     "$kit/vendor/kaihen-mo/bootstrap.bin"; } |
@@ -56,6 +56,7 @@ if [ "${MOADER_SETUP_FORCE_COPY:-0}" = 1 ] ||
 else
   rm -f "$kit/state/setup/.write-check"
 fi
+mkdir -p "$kit/state/setup"
 chmod u+x "$node" 2>/dev/null || :
 version=$("$node" --version 2>/dev/null || :)
 [ "$version" = v24.22.3 ] || show_error "The included Node runtime failed its version check."
