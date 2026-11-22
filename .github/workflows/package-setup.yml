@@ -36,6 +36,41 @@ jobs:
           shasum -a 256 -c SHA256SUMS.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
+          name: moader-v4-staged-assets
+          path: build/release-artifacts/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  windows-icon:
+    name: Embed Windows app icon and seal release assets
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: moader-v4-staged-assets
+          path: build/release-artifacts
+      - name: Download pinned Windows resource editor
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/rcedit | Out-Null
+          Invoke-WebRequest 'https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe' -OutFile build/rcedit/rcedit-x64.exe
+          $actual = (Get-FileHash build/rcedit/rcedit-x64.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne '3e7801db1a5edbec91b49a24a094aad776cb4515488ea5a4ca2289c400eade2a') { throw 'Pinned rcedit checksum differs' }
+      - name: Embed icon and verify final assets
+        shell: pwsh
+        run: |
+          python tools/finalize-windows-setup-icon.py --release-dir build/release-artifacts --rcedit build/rcedit/rcedit-x64.exe
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
           name: moader-v4-release-assets
           path: build/release-artifacts/*
           if-no-files-found: error

@@ -11,7 +11,7 @@ const {app, BrowserWindow, dialog, Menu, shell} = require('electron');
 const packagedKit = path.join(process.resourcesPath, 'kit');
 const usesPackagedKit = fs.existsSync(path.join(packagedKit, 'config/release.json'));
 const kit = usesPackagedKit ? packagedKit : path.resolve(__dirname, '../..');
-const logo = path.join(kit, 'branding/mark-alpha.png');
+const logo = path.join(kit, 'branding/setup-icon.png');
 app.setName('Moader Setup');
 if (process.platform === 'darwin') Menu.setApplicationMenu(Menu.buildFromTemplate([
   {label: 'Moader Setup', submenu: [{role: 'about'}, {type: 'separator'},

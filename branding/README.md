@@ -9,6 +9,7 @@ Two offset game cartridges form the Moader mark. The front cartridge has a clipp
 | [store.svg](store.svg) | A 24 × 24 shopping bag with cartridge contacts. The Store control uses this silhouette in gray while inactive. |
 | [hbmenu-source.svg](hbmenu-source.svg) | Square icon artwork with a `#17231D` mark on a `#9CF4CE` ground. |
 | [hbmenu.jpg](hbmenu.jpg) | Opaque 256 × 256 RGB icon embedded in the foreground NRO. |
+| [setup-icon.svg](setup-icon.svg), [setup-icon.png](setup-icon.png), and [setup-icon.ico](setup-icon.ico) | Rounded version of the same hbmenu artwork for the desktop Setup window, macOS Dock, Linux launcher and Windows icon. The square console icon stays unchanged. |
 | [mark-alpha.hpp](mark-alpha.hpp) | Generated masks for the native renderer, including the 96 × 96 mark, two 348 × 69 lockup layers and the Store glyph. |
 | [favicon.svg](favicon.svg) and [web/icon.svg](../web/icon.svg) | Square browser icon exports. The web interface also uses this artwork when a cover is unavailable. |
 

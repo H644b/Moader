@@ -17,7 +17,7 @@ const uiFiles = new Map([
   ['/', ['setup/ui/index.html', 'text/html; charset=utf-8']],
   ['/style.css', ['setup/ui/style.css', 'text/css; charset=utf-8']],
   ['/app.js', ['setup/ui/app.js', 'text/javascript; charset=utf-8']],
-  ['/favicon.svg', ['branding/favicon.svg', 'image/svg+xml']],
+  ['/favicon.svg', ['branding/setup-icon.svg', 'image/svg+xml']],
   ['/lockup.svg', ['branding/lockup.svg', 'image/svg+xml']],
   ['/font/text.ttf', ['native/assets/Text.ttf', 'font/ttf']],
   ['/font/strong.ttf', ['native/assets/Strong.ttf', 'font/ttf']]
