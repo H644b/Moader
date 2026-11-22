@@ -33,6 +33,11 @@ const sha = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 function git(gui, ...args) {
   return execFileSync('git', ['-C', gui, ...args], {encoding: 'utf8', timeout: 10000}).trim();
 }
+function sameDirectory(a, b) {
+  const first = fs.statSync(a), second = fs.statSync(b);
+  return first.isDirectory() && second.isDirectory() &&
+    first.dev === second.dev && first.ino === second.ino;
+}
 function fileSha(gui, relative) {
   const file = path.join(gui, relative);
   if (!fs.existsSync(file)) return null;
@@ -44,7 +49,7 @@ function qualify(gui) {
   check(path.isAbsolute(gui) && fs.realpathSync(gui) === gui && fs.lstatSync(gui).isDirectory(),
     'Seedsow GUI checkout must be a canonical absolute directory');
   check(git(gui, 'rev-parse', 'HEAD') === REVISION &&
-    git(gui, 'rev-parse', '--show-toplevel') === gui,
+    sameDirectory(git(gui, 'rev-parse', '--show-toplevel'), gui),
   'Seedsow GUI checkout must be at the reviewed upstream revision');
   check(fileSha(ROOT, 'integration/seedsow-gui.patch') === PATCH_SHA256,
     'Moader Seedsow GUI patch changed');

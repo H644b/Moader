@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Moader Setup</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand" aria-label="Moader Setup">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><g transform="translate(3.5 3.5)"><path d="M0 9 C0 3 3 0 9 0 L30 0 L37 7 L14 7 C9 7 7 10 7 15 L7 43 L2 38 C0.667 36.667 0 35 0 33 L0 9 Z"/><path d="M19 12 L38 12 C39.333 12 40.667 12.667 42 14 L55 27 C56.333 28.333 57 30 57 32 L57 49 C57 54.333 54.333 57 49 57 L43 57 L43 44 C43 42 42 41 40 41 C38 41 37 42 37 44 L37 57 L31 57 L31 44 C31 42 30 41 28 41 C26 41 25 42 25 44 L25 57 L19 57 C14.333 57 12 54.667 12 50 L12 19 C12 14.333 14.333 12 19 12 Z"/></g></svg>
+        <span>moader <small>setup</small></span>
+      </div>
+      <div class="top-actions">
+        <span id="kitBadge" class="badge">Checking kit</span>
+        <button id="helpButton" class="quiet" type="button">Help for this step</button>
+      </div>
+    </header>
+    <div class="workspace">
+      <nav class="rail" aria-label="Setup tasks">
+        <p class="rail-title">Tasks</p>
+        <label class="mobile-task-picker"><span>Task</span><select id="taskSelect">
+          <option value="home">Home</option>
+          <option value="boot">Set up for this boot</option>
+          <option value="standalone">Prepare computer-free boots</option>
+          <option value="copy">Copy app and plugin</option>
+          <option value="reload">Update running service</option>
+          <option value="connection">Check connection</option>
+          <option value="browser">Open Moader in browser</option>
+          <option value="report">Export support report</option>
+        </select></label>
+        <button class="nav-item" data-task="home" type="button">Home</button>
+        <button class="nav-item" data-task="boot" type="button">Set up for this boot</button>
+        <button class="nav-item" data-task="standalone" type="button">Prepare computer-free boots</button>
+        <button class="nav-item" data-task="copy" type="button">Copy app and plugin</button>
+        <button class="nav-item" data-task="reload" type="button">Update running service</button>
+        <button class="nav-item" data-task="connection" type="button">Check connection</button>
+        <button class="nav-item" data-task="browser" type="button">Open Moader in browser</button>
+        <button class="nav-item" data-task="report" type="button">Export support report</button>
+        <div class="rail-bottom">
+          <p id="platformLabel">Detecting computer</p>
+          <p>Moader Setup runs on this computer. The Moader browser opens from the Switch.</p>
+        </div>
+      </nav>
+      <main id="main" tabindex="-1"></main>
+    </div>
+    <aside id="activity" class="activity" aria-label="Current operation">
+      <div class="activity-top">
+        <div>
+          <strong id="activityTitle">Ready when you are</strong>
+          <p id="activityMessage">Choose a task to begin.</p>
+        </div>
+        <span id="activityState" class="state-label">Not started</span>
+      </div>
+      <button id="activityRoute" class="activity-link" type="button" hidden></button>
+      <details id="technicalDetails">
+        <summary>Technical details and recent events</summary>
+        <div id="eventList" class="event-list"></div>
+      </details>
+    </aside>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>
