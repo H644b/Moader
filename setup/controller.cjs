@@ -414,6 +414,7 @@ async function prepare(method) {
   await runStep('Verifying prepared backend inputs', py,
     [path.join(root, 'tools/setup-backend.py'), '--check', '--host-profile', profile, '--node', node]);
   if (method === 'seedsow') {
+    fs.mkdirSync(path.dirname(guiDir), {recursive: true, mode: 0o700});
     const qualified = spawnSync(node, [path.join(root, 'tools/prepare-seedsow-gui.cjs'), '--check', guiDir],
       {cwd: root, encoding: 'utf8', timeout: 10000});
     if (qualified.status !== 0) {

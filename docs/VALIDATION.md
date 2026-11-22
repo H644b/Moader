@@ -12,11 +12,13 @@ The GUI controller prepared the actual pinned ns2jb, CivSwitch and Seedsow host 
 
 ### UI and design checks
 
-The local browser UI was inspected at 1440, 680, 390 and 360 pixels, with keyboard focus, a smaller window, increased text scale and reduced motion. The guided boot, home, standalone and SD-copy states were exercised. Wrong SD roots and a cancelled picker were rejected; a simulated SD readback failure remained visible after rerender and in the support state. A failed launcher check against an invalid address remained visible instead of an older success. Controller reload and task navigation produced no page-script errors. The final Impeccable review scored the captured desktop and mobile hierarchy as meeting the stated quality bar and the material workflow fixes as resolved in source. The Linux and WSL2 tool-install actions were reviewed as argument-array plans, not executed on this Mac.
+The desktop app's local UI was inspected at 1440, 680, 390 and 360 pixels, with keyboard focus, a smaller window, increased text scale and reduced motion. The guided boot, home, standalone and SD-copy states were exercised. Wrong SD roots and a cancelled picker were rejected; a simulated SD readback failure remained visible after rerender and in the support state. A failed launcher check against an invalid address remained visible instead of an older success. Controller reload and task navigation produced no page-script errors. The native app window opened with the verified kit, and its support-report action opened the native Save dialog. The final Impeccable review scored the captured desktop and mobile hierarchy as meeting the stated quality bar and the material workflow fixes as resolved in source. The Linux and WSL2 tool-install actions were reviewed as argument-array plans, not executed on this Mac.
 
 ### Packaged-host checks
 
-Pending the generated ZIP extraction and launcher exercise in a clean location. This section must be updated before calling the candidate packaged.
+A generated desktop backend ZIP was extracted into a clean path containing spaces and `é`, then opened through **Moader Setup.app**. The app loaded the matched 3.5.0 kit and controller without the development checkout. Host-only preparation from the extracted kit verified the pinned Seedsow and CivSwitch sources and matched bundle; a fresh Seedsow run found a missing `build` directory, which was corrected before the final package. A separate extracted browser-launcher candidate exercised ns2jb preparation and an actual SD export with a kit-scoped Python distribution. None of those checks contacted a Switch.
+
+The packager includes checksum-verified Node 24, uv and Electron runtimes for the listed Mac, Linux and Windows architectures. Linux desktop and Windows/WSL2 launches are packaged but have not been run on this Mac. The Mac desktop app is unsigned and unnotarized; launch remains subject to the normal macOS trust prompt.
 
 ### Console checks
 
