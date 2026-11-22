@@ -2,6 +2,8 @@
 
 Choose a download based on what is already running on your Switch. Use the app and resident plugin from the same release.
 
+The public v3.5.0 backend ZIP uses the command-line guides below. Backend kits built from the in-review Setup branch include [Moader Setup](SETUP_GUI.md), a graphical launcher for the same checked installation tools.
+
 | What you need | Download |
 | --- | --- |
 | Install or update Moader on an existing compatible backend | [Moader-v3.5.0.zip](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-v3.5.0.zip) |

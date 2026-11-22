@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Prepare the Moader installer on this computer. With --prepare, print the command that installs it on the Switch."""
 from __future__ import annotations
-import argparse, os, pathlib, re, shlex, shutil, subprocess, sys
+import argparse, json, os, pathlib, re, shlex, shutil, subprocess, sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 PREFIX = 'Prepared read-only local Moader snapshot: '
@@ -118,6 +118,7 @@ def main(argv=None):
     parser.add_argument('--host-profile', choices=HOST_PROFILES, default=HOST_PROFILES[0], help='setup method. Use --run-dir with a nondefault method. Use the Seedsow GUI for Seedsow')
     parser.add_argument('--node', help='Node.js 24 for --run-dir (default: node)')
     parser.add_argument('--prepare', action='store_true', help='prepare files on this computer and print the installation command for SmileBASIC or CivSwitch')
+    parser.add_argument('--json', action='store_true', help='print a structured result for graphical controllers')
     parser.add_argument('--root', type=pathlib.Path, default=ROOT, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
     require(sys.platform != 'win32', 'Native Windows is unsupported; run this helper in Linux/WSL or macOS with Node.js 24')
@@ -131,13 +132,20 @@ def main(argv=None):
         run = run_directory(args.run_dir)
         node = resolve_node('node' if args.node is None else args.node)
     if not args.prepare:
-        print('Parsed Node executable: ' + node)
-        print('Parsed run folder: ' + str(run))
-        print('Input check passed. Add --prepare to prepare the installer on this computer.')
+        if args.json:
+            print(json.dumps({'schema': 1, 'node': node, 'run': str(run), 'prepared': False}))
+        else:
+            print('Parsed Node executable: ' + node)
+            print('Parsed run folder: ' + str(run))
+            print('Input check passed. Add --prepare to prepare the installer on this computer.')
         return None
     command = prepare(args.root.resolve(), node, run, args.host_profile)
-    print('Installer files are ready on this computer. Review the command below and run it once with your current held session.')
-    print(shlex.join(command))
+    if args.json:
+        print(json.dumps({'schema': 1, 'node': node, 'run': str(run), 'hostProfile': args.host_profile,
+                          'prepared': True, 'manifest': command[3], 'command': command}))
+    else:
+        print('Installer files are ready on this computer. Review the command below and run it once with your current held session.')
+        print(shlex.join(command))
     return command
 
 

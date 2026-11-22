@@ -10,12 +10,28 @@ import json
 import re
 import subprocess
 import sys
+import tarfile
+import urllib.request
 import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 PRIVATE_TOP = {
     'state', 'evidence', 'coordination', 'research', 'vendor', 'build', 'dist',
     'docs-site', 'output', '.impeccable', '.playwright-cli', '.git',
+}
+HOST_NODE_VERSION = '24.22.3'
+HOST_NODE_ARCHIVES = {
+    'darwin-arm64': '1d64136c8a43d648d1b3bad10797a4c995b1ca032d2bde8799de43b37f058fe5',
+    'darwin-x64': '4daeec962855c1a6e66cda398a25037319dc1bbd4a0939188b3547afbbfb6490',
+    'linux-arm64': '6e51a2ada00f0011cc266f65d98922b403d7ad88f809ca2aa615a5fe1ce6e86c',
+    'linux-x64': '4f2b175a6d53a5c617a80dba2676238a0688cef28c6da4eba35c7d844e66fcfb',
+}
+HOST_UV_VERSION = '0.12.16'
+HOST_UV_ARCHIVES = {
+    'darwin-arm64': ('aarch64-apple-darwin', 'b6e03fae61704b1aa622f12b792a69483e837b83068e44f4fd34f8a07a8f74a3'),
+    'darwin-x64': ('x86_64-apple-darwin', 'a42bcc9ce97eb8b364d7f162233a9c6b8c0ee25388e551d362809795127e0c31'),
+    'linux-arm64': ('aarch64-unknown-linux-gnu', '36d913ee9c647481d64f1a0a0485f85ff2feaee605c341fc22e73398f9212c26'),
+    'linux-x64': ('x86_64-unknown-linux-gnu', '8e5c6e5523dffc2dcf615bd995554c84c9feb4e577808a3fb8698a639d3f8d9c'),
 }
 
 
@@ -109,7 +125,17 @@ def public_source(root):
         entries[name] = (git(root, 'show', 'HEAD:' + name), int(mode, 8))
     for required in ['README.md', 'LICENSE', 'docs/INSTALLATION.md', 'tools/setup-backend.py',
                      'tools/install-from-rpc.py', 'tools/install-moader.cjs', 'config/release.json',
-                     'runtime/modloader/native/prebuilt/manifest.json']:
+                     'runtime/modloader/native/prebuilt/manifest.json',
+                     'Moader Setup', 'Moader Setup Windows.cmd',
+                     'Moader Setup.app/Contents/MacOS/Moader Setup',
+                     'Moader Setup.app/Contents/Info.plist',
+                     'setup/launch.sh', 'setup/windows-launch.ps1', 'setup/wsl-entry.sh',
+                     'setup/controller.cjs', 'setup/host-policy.cjs',
+                     'setup/host-tools.cjs',
+                     'setup/bridge.cjs', 'setup/export-sd.py',
+                     'setup/ui/index.html', 'setup/ui/style.css', 'setup/ui/app.js',
+                     'setup/licenses/uv-LICENSE-APACHE.txt',
+                     'setup/licenses/uv-LICENSE-MIT.txt', 'docs/SETUP_GUI.md']:
         require(required in entries, 'Release source is missing ' + required)
     # Validate only the committed export, never the private development tree.
     import tempfile
@@ -138,6 +164,82 @@ def write_zip(target, entries, timestamp):
         require(set(archive.namelist()) == set(entries), 'Release ZIP file list differs')
         for name, (data, _) in entries.items():
             require(archive.read(name) == data, 'Release ZIP bytes differ: ' + name)
+
+
+def host_node_runtimes(root):
+    """Bundle only the Node executable and its upstream license from pinned archives."""
+    cache = root / 'build/host-node'
+    cache.mkdir(parents=True, exist_ok=True)
+    output = {}
+    license_bytes = None
+    for platform, expected in HOST_NODE_ARCHIVES.items():
+        name = f'node-v{HOST_NODE_VERSION}-{platform}.tar.xz'
+        file = cache / name
+        if not file.is_file() or sha(file.read_bytes()) != expected:
+            require(not file.exists(), 'Cached Node archive has the wrong checksum: ' + name)
+            with urllib.request.urlopen(
+                urllib.request.Request(
+                    f'https://nodejs.org/download/release/v{HOST_NODE_VERSION}/{name}',
+                    headers={'User-Agent': 'Moader release packager'}), timeout=120
+            ) as response:
+                data = response.read(80 * 1024 * 1024 + 1)
+            require(len(data) <= 80 * 1024 * 1024 and sha(data) == expected,
+                    'Pinned Node archive checksum differs: ' + name)
+            temporary = file.with_suffix(file.suffix + '.tmp')
+            temporary.write_bytes(data)
+            temporary.replace(file)
+        with tarfile.open(file, 'r:xz') as archive:
+            prefix = name[:-7] + '/'
+            binary_member = archive.getmember(prefix + 'bin/node')
+            license_member = archive.getmember(prefix + 'LICENSE')
+            require(binary_member.isfile() and binary_member.size <= 130 * 1024 * 1024 and
+                    license_member.isfile() and license_member.size <= 2 * 1024 * 1024,
+                    'Pinned Node archive has unexpected executable or license')
+            binary = archive.extractfile(binary_member).read()
+            notice = archive.extractfile(license_member).read()
+            require(binary[:4] in (b'\x7fELF', b'\xcf\xfa\xed\xfe', b'\xca\xfe\xba\xbe'),
+                    'Pinned Node executable format differs')
+            if license_bytes is None:
+                license_bytes = notice
+            else:
+                require(notice == license_bytes, 'Node license differs across host archives')
+            output[f'host-runtimes/node-v{HOST_NODE_VERSION}/{platform}/node'] = (
+                binary, 0o100755)
+    output[f'host-runtimes/node-v{HOST_NODE_VERSION}/LICENSE'] = (license_bytes, 0o100644)
+    return output
+
+
+def host_uv_runtimes(root):
+    cache = root / 'build/host-uv'
+    cache.mkdir(parents=True, exist_ok=True)
+    output = {}
+    for platform, (triple, expected) in HOST_UV_ARCHIVES.items():
+        name = f'uv-{triple}.tar.gz'
+        file = cache / name
+        if not file.is_file() or sha(file.read_bytes()) != expected:
+            require(not file.exists(), 'Cached uv archive has the wrong checksum: ' + name)
+            with urllib.request.urlopen(
+                urllib.request.Request(
+                    f'https://github.com/astral-sh/uv/releases/download/{HOST_UV_VERSION}/{name}',
+                    headers={'User-Agent': 'Moader release packager'}), timeout=120
+            ) as response:
+                data = response.read(40 * 1024 * 1024 + 1)
+            require(len(data) <= 40 * 1024 * 1024 and sha(data) == expected,
+                    'Pinned uv archive checksum differs: ' + name)
+            temporary = file.with_suffix(file.suffix + '.tmp')
+            temporary.write_bytes(data)
+            temporary.replace(file)
+        with tarfile.open(file, 'r:gz') as archive:
+            candidates = [member for member in archive.getmembers()
+                          if member.isfile() and member.name.split('/')[-1] == 'uv']
+            require(len(candidates) == 1 and candidates[0].size <= 70 * 1024 * 1024,
+                    'Pinned uv archive has an unexpected executable layout')
+            binary = archive.extractfile(candidates[0]).read()
+            require(binary[:4] in (b'\x7fELF', b'\xcf\xfa\xed\xfe', b'\xca\xfe\xba\xbe'),
+                    'Pinned uv executable format differs')
+            output[f'host-runtimes/uv-v{HOST_UV_VERSION}/{platform}/uv'] = (
+                binary, 0o100755)
+    return output
 
 
 def full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp):
@@ -226,6 +328,10 @@ def main():
     write_zip(output / names[0], app_files, timestamp)
     prefix = f'Moader-backend-{tag}/'
     host = {prefix + name: value for name, value in source.items()}
+    for name, value in host_node_runtimes(root).items():
+        host[prefix + name] = value
+    for name, value in host_uv_runtimes(root).items():
+        host[prefix + name] = value
     host[prefix + 'vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
     if bootstrap is not None:
         host[prefix + 'vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
@@ -242,8 +348,16 @@ def main():
         host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
     start_here = f'''Moader backend kit {tag}
 
-Use this kit to set up the backend for the current Switch boot. Start by
-opening docs/INSTALLATION.md and choosing a method:
+Open Moader Setup in this folder. It checks the computer and guides you through
+the current-boot backend, standalone preparation, SD copies and support export.
+No command-line tools are needed to open it. Use a supported graphical launcher:
+
+- macOS: Moader Setup.app
+- Linux: Moader Setup (choose Run if your file manager asks)
+- Windows: Moader Setup Windows.cmd (select a WSL2 distribution in its picker)
+
+The Node 24 controller runtime is included for supported macOS/Linux hosts.
+For advanced CLI use, open docs/INSTALLATION.md and choose a method:
 
 - SmileBASIC with mac2jb: macOS and mac2jb's bundled Node 24.
 - SmileBASIC with direct ns2jb: macOS, Linux or WSL2 and native Node 24.
@@ -256,15 +370,16 @@ opening docs/INSTALLATION.md and choosing a method:
 - CivSwitch: experimental. See docs/CIV7.md for the required profile.
 
 The kit includes the Moader app, resident service and matching backend
-binaries. Install Python 3.10 or newer. The first preparation downloads
-pinned dependencies, so have internet access. SmileBASIC setup uses prebuilt
+binaries. Preparation checks Python 3.10 or newer and other method dependencies.
+The first preparation downloads pinned sources, so have internet access.
+SmileBASIC setup uses prebuilt
 files without an SDK. The full patched kaiHEN release is in
 bundles/kaiHEN-Moader-20261114c.zip, including hbmenu, hbloader, OunceShell,
 licenses, and the matched RO/HEN/bootstrap and Moader binaries. The Seedsow
 guide provisions the pinned patched
 GUI from upstream and installs the SDK needed by its live helper.
 
-Run preparation from this outer folder (the one containing tools/).
+For CLI fallback, run preparation from this outer folder (the one containing tools/).
 For SmileBASIC and CivSwitch, preparation checks local files and prints
 one installation command. For Seedsow, the pinned GUI performs the one
 owned installation after its local preparation. Follow the completion
@@ -297,6 +412,10 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         'patchedFullKaihenEntries': full_count,
         'standaloneBootstrapBundled': standalone is not None,
         'standaloneFsPayloadBundled': False,
+        'setupGuiBundled': True,
+        'setupNodeVersion': HOST_NODE_VERSION,
+        'setupUvVersion': HOST_UV_VERSION,
+        'setupRuntimePlatforms': sorted(HOST_NODE_ARCHIVES),
         **({'standaloneBootstrapSha256': sha(standalone[0]),
             'standaloneAdapterSha256': spec['standalone']['adapterSha256']}
            if standalone is not None else {}),

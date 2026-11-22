@@ -2,6 +2,26 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
+## Moader Setup GUI candidate (unpublished source branch)
+
+### Functional host checks
+
+The setup controller's six host tests pass. They cover supported host policy, a wrong release hash, missing helpers, WSL2 package-manager argument boundaries, local token and Origin checks, invalid capture import, checked SD source export, SD readback failure and result persistence, duplicate operation submissions, browser disconnect, restart uncertainty, a failed save upload with no replay, and a redacted support copy containing a journal from outside the kit. The existing 47 installer checks also pass without opening a console endpoint. An isolated online SmileBASIC host integration fetched the pinned source, checked exact release inputs, used a path with spaces, made two distinct immutable snapshots, and blocked provider/network/device execution during the test. That integration used this Mac's `/etc/ssl/cert.pem` for Python's TLS trust; Setup separately detected the Mac's unconfigured system Python and installed its kit-scoped Python 3.12.12 in a fresh state folder containing spaces and `é`. A real SD file-list export then completed with that Python.
+
+The GUI controller prepared the actual pinned ns2jb, CivSwitch and Seedsow host profiles and checked their source/patch inputs in this isolated worktree. Those preparation operations did not contact a Switch. Native acquisition and install buttons were not exercised against hardware.
+
+### UI and design checks
+
+The local browser UI was inspected at 1440, 680, 390 and 360 pixels, with keyboard focus, a smaller window, increased text scale and reduced motion. The guided boot, home, standalone and SD-copy states were exercised. Wrong SD roots and a cancelled picker were rejected; a simulated SD readback failure remained visible after rerender and in the support state. A failed launcher check against an invalid address remained visible instead of an older success. Controller reload and task navigation produced no page-script errors. The final Impeccable review scored the captured desktop and mobile hierarchy as meeting the stated quality bar and the material workflow fixes as resolved in source. The Linux and WSL2 tool-install actions were reviewed as argument-array plans, not executed on this Mac.
+
+### Packaged-host checks
+
+Pending the generated ZIP extraction and launcher exercise in a clean location. This section must be updated before calling the candidate packaged.
+
+### Console checks
+
+No console was contacted for this GUI work. PC-driven Seedsow service checks, SmileBASIC held sessions, CivSwitch acquisition, standalone A/B save upload and game modification still require a fresh authorized device session with these exact packaged bytes. Earlier device results in this document apply only to their recorded components and workflows.
+
 ## v3.5.0 community Store release scope
 
 PR #39 host checks cover Store browsing, catalog parsing, controller and browser flows, verified package import and reinstall, and synthetic game discovery. The recorded browser exercise installed and reinstalled a live catalog package in Chromium. During release preparation, the host installer independently fetched the live catalog, verified and imported its 242-byte Orchard palette package into an isolated library, rejected mismatched packages, then removed and reinstalled it under the same ID. The v3.5.0 app and resident are rebuilt from the Store source and their exact hashes are recorded in the release manifest. This is host and packaging evidence: no physical Switch 2 test of Store installation, game discovery, or the exact v3.5.0 app/resident is recorded. The pinned kaiHEN and standalone native components are unchanged from v3.0.0. The v3.0.0 Profile B standalone device result below remains specific to that release pair.

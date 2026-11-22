@@ -1,0 +1,4 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+kit=$(cd "$(dirname "$0")/../../.." && pwd -P)
+exec /bin/sh "$kit/setup/launch.sh" "$kit"
