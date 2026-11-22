@@ -6,8 +6,8 @@ namespace moader_ui {
 namespace {
 namespace icon = moader::brand;
 constexpr float X = 448, R = 1376, W = 928;
-const char* const tabs[] = {"General", "Connection", "Advanced", "Controls", "Credits"};
-const icon::Mask* const symbols[] = {&icon::general, &icon::wifi, &icon::gear, &icon::controls, &icon::info};
+const char* const tabs[] = {"General", "Connection", "Advanced", "Controls", "Credits", "Updates"};
+const icon::Mask* const symbols[] = {&icon::general, &icon::wifi, &icon::gear, &icon::controls, &icon::info, &icon::layers};
 const char* const pref_titles[] = {"Show game names", "Reduce motion", "Follow debug log",
                                    "Start web automatically"};
 const char* const pref_desc[] = {"Use installed names when available. Title IDs are the fallback.",
@@ -36,17 +36,62 @@ void row(Canvas& c, const State& s, unsigned index, float y, const std::string& 
     c.rect(X, y + 76, W, 1, rule);
     c.hit(X - 20, y, W + 20, 78, HitType::Setting, index);
 }
-void toggle(Canvas& c, const State& s, unsigned index, unsigned pref, float y) {
-    bool live = s.connected && s.preferences_available, on = s.preferences.flags & pref_bits[pref];
+void switch_row(Canvas& c, const State& s, unsigned index, float y, const char* title,
+                const char* description, bool on, bool live) {
     focus(c, s, index, y, 79);
-    c.text(X + 1, y + 10, pref_titles[pref], 24, paper, Strong, 660, Left, -.42);
-    c.text(X + 1, y + 45, pref_desc[pref], 17, muted, Text, 730);
+    c.text(X + 1, y + 10, title, 24, paper, Strong, 660, Left, -.42);
+    c.text(X + 1, y + 45, description, 17, muted, Text, 730);
     c.text(R - 69, y + 27, live ? (on ? "On" : "Off") : "Unavailable", 18, live && on ? mint : soft, Strong,
            150, Right);
     c.rect(R - 56, y + 24, 49, 26, live && on ? mint : rgb(0x4d5e54), 13);
     c.rect(R - 56 + (on ? 27.5 : 4.5), y + 28.5, 17, 17, on && live ? base : paper, 8.5);
     c.rect(X, y + 76, W, 1, rule);
     c.hit(X - 20, y, W + 20, 78, HitType::Setting, index);
+}
+void toggle(Canvas& c, const State& s, unsigned index, unsigned pref, float y) {
+    switch_row(c, s, index, y, pref_titles[pref], pref_desc[pref], s.preferences.flags & pref_bits[pref],
+               s.connected && s.preferences_available);
+}
+void updates(Canvas& c, const State& s) {
+    const auto& u = s.updater;
+    using P = UpdatePhase;
+    heading(c, "Updates", "Running app   v" + u.running_version);
+    std::string title, detail;
+    Color accent = mint;
+    switch (u.phase) {
+    case P::Idle: title = "App and plugin"; detail = "Both files update together from Moader’s official releases."; break;
+    case P::Checking: title = "Checking for updates…"; detail = "Looking for the latest stable release."; break;
+    case P::Current: title = "You’re up to date"; detail = "Latest release   v" + u.latest; break;
+    case P::Available: title = "Update available"; detail = "Moader v" + u.latest + "   ·   " + size_text(u.total); break;
+    case P::Downloading: title = "Downloading v" + u.latest; detail = size_text(u.received) + " of " + size_text(u.total); break;
+    case P::Installing: title = "Installing v" + u.latest; detail = "Verifying and installing the app and plugin. Keep Moader open."; break;
+    case P::Restarting: title = "Restarting the plugin"; detail = s.reload_detail; break;
+    case P::RestartNeeded: title = "Plugin restart needed"; accent = pending; break;
+    case P::Recovery: title = "Finish your update"; accent = pending; break;
+    case P::Reopen: title = "Update installed"; detail = "Plugin restarted. Press + to exit, then reopen Moader to use v" + u.latest + "."; break;
+    case P::Failed: title = "Update couldn’t finish"; accent = bad; break;
+    }
+    if (!u.detail.empty()) detail = detail.empty() || u.phase != P::Reopen ? u.detail : detail + " " + u.detail;
+    c.rect(X + 1, 287, 11, 11, u.phase == P::Idle ? muted : accent, 5.5);
+    c.text(X + 25, 272, title, 33, paper, Strong, W - 34, Left, -.8);
+    c.paragraph(X + 26, 324, detail, 19, W - 47, 3, soft);
+    if (u.phase == P::Downloading && u.total) {
+        c.rect(X, 414, W, 5, rule, 2.5);
+        c.rect(X, 414, W * std::min(1.0, double(u.received) / u.total), 5, mint, 2.5);
+    } else c.rect(X, 414, W, 1, rule);
+    if (u.installing()) return;
+    if (u.phase == P::Recovery || u.phase == P::RestartNeeded)
+        row(c, s, 0, 432, u.phase == P::Recovery ? "Finish update" : "Retry plugin restart",
+            "Continue the update already on this console.");
+    else if (u.phase == P::Reopen)
+        row(c, s, 0, 432, "Exit Moader", "Return to the launcher, then open Moader again.");
+    else if (u.phase == P::Checking) {
+        c.text(X + 1, 448, "Check for updates", 24, muted, Strong);
+        c.rect(X, 508, W, 1, rule);
+    } else row(c, s, 0, 432, "Check for updates", "Look for a newer release now.");
+    switch_row(c, s, 1, 513, "Automatically check for updates", "Check at launch and every six hours while Moader is open.", u.automatic, true);
+    if (u.phase == P::Available)
+        row(c, s, 2, 594, "Install v" + u.latest, "Download the app and plugin, then restart the plugin.");
 }
 void button(Canvas& c, float x, float y, const std::string& label, unsigned key, bool primary = true) {
     float w = c.width(label, 19, Strong) + 40;
@@ -103,8 +148,8 @@ void controls(Canvas& c, const State& s) {
 void settings_screen(Canvas& c, const State& s, const std::vector<std::string>& events) {
     const auto cat = tab_for(s.view);
     c.text(64, 145, "Settings", 50, paper, Display, 302, Left, -1.6);
-    for (unsigned i = 0; i < 5; ++i) {
-        float y = 229 + i * 62;
+    for (unsigned i = 0; i < std::size(tabs); ++i) {
+        float y = 222 + i * 57;
         if (i == cat) {
             c.rect(64, y, 298, 52, selected, 10);
             if (s.tab_focus)
@@ -131,6 +176,9 @@ void settings_screen(Canvas& c, const State& s, const std::vector<std::string>& 
     const auto title =
         s.game < s.games.size() ? game_name(s, s.games[s.game]) : "Choose a game in the library.";
     switch (s.view) {
+    case View::Updates:
+        updates(c, s);
+        break;
     case View::Settings:
         heading(c, "General",
                 s.connected && s.preferences_available
@@ -302,8 +350,8 @@ void settings_screen(Canvas& c, const State& s, const std::vector<std::string>& 
                                "devkitPro  /  zlib",
                                "DM Sans  /  Bricolage Grotesque  /  Noto Sans",
                                "stb  /  picojson"};
-        const char* info[] = {
-            "Nintendo Switch mod manager · 3.5.0",
+        const std::string info[] = {
+            "Nintendo Switch mod manager · " + s.updater.running_version,
             "Homebrew environment, console libraries and system services.",
             "Filesystem mod-loader foundation and project research.",
             "Compiler, platform libraries and ZIP decoding.",
@@ -320,6 +368,9 @@ void settings_screen(Canvas& c, const State& s, const std::vector<std::string>& 
     default:
         break;
     }
+    if (s.updater.installing()) return;
+    if (s.view == View::Updates && s.updater.phase == UpdatePhase::Reopen)
+        c.key(821, "+", "Exit Moader", true);
     c.key(82, "←", "Sections");
     c.hit(58, 741, 173, 61, HitType::Key, LeftInput);
     c.key(1145, "B", "Back");

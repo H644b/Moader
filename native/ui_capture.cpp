@@ -22,6 +22,7 @@ constexpr uint64_t ids[] = {0x01006F8002326000, 0x0100F2C0115B6000, 0x0400F43008
                             0x010093801237C000};
 State fixture(const fs::path& assets) {
     State s;
+    s.updater.running_version = "3.5.0";
     s.connected = true;
     s.preferences_available = true;
     s.address = "http://192.0.2.42:7712";
@@ -94,6 +95,35 @@ void capture(const fs::path& p, const State& s, int w = 1280, int h = 720) {
     assert(out.good());
 }
 void tests(State s) {
+    {
+        auto u = s;
+        Renderer renderer;
+        std::vector<uint32_t> pixels(1280 * 720);
+        auto draw = [&] { renderer.draw(pixels.data(), 1280, 720, 1280 * 4, u, .016f); };
+        u.open_tab(tab_for(View::Updates));
+        assert(u.view == View::Updates && u.local_input(ActivateInput, 0) == CheckUpdates);
+        u.local_input(DownInput, 0);
+        assert(u.local_input(ActivateInput, 0) == ToggleAutoUpdates);
+        u.updater.phase = UpdatePhase::Available;
+        u.updater.latest = "3.6.0";
+        u.local_input(DownInput, 0);
+        assert(!u.local_input(ActivateInput, 0) && u.updater.prompt);
+        draw();
+        renderer.tap(u, .02f, .01f);
+        assert(u.updater.prompt);
+        assert(!renderer.tap(u, 460.f/1440, 501.f/810) && !u.updater.prompt);
+        u.view = View::Library;
+        u.updater.prompt = true;
+        u.updater.later = false;
+        draw();
+        assert(renderer.tap(u, 910.f/1440, 504.f/810) == InstallUpdate && u.view == View::Updates);
+        u.updater.phase = UpdatePhase::Restarting;
+        assert(!u.local_input(BackInput, 0) && u.view == View::Updates);
+        u.updater.phase = UpdatePhase::RestartNeeded;
+        assert(u.local_input(ActivateInput, 0) == InstallUpdate);
+        u.updater.phase = UpdatePhase::Reopen;
+        assert(u.local_input(ActivateInput, 0) == ExitUpdatedApp);
+    }
     const auto original = s.selected();
     s.local_input(RightInput, 0);
     assert(s.game == 3);
@@ -347,6 +377,26 @@ int main(int argc, char** argv) {
     s.confirm_remove = true;
     capture(dir / "remove-720.ppm", s);
     s.confirm_remove = false;
+    {
+        State u = s;
+        u.view = View::Updates;
+        capture(dir / "updates-720.ppm", u);
+        u.updater.automatic = true;
+        u.updater.latest = "3.6.0";
+        u.updater.total = 4 * 1024 * 1024;
+        u.updater.phase = UpdatePhase::Available;
+        capture(dir / "updates-available-1080.ppm", u, 1920, 1080);
+        u.updater.prompt = true;
+        u.view = View::Library;
+        capture(dir / "updates-prompt-720.ppm", u);
+        u.updater.prompt = false;
+        u.view = View::Updates;
+        u.updater.phase = UpdatePhase::Downloading;
+        u.updater.received = u.updater.total / 3;
+        capture(dir / "updates-download-720.ppm", u);
+        u.updater.phase = UpdatePhase::Reopen;
+        capture(dir / "updates-reopen-720.ppm", u);
+    }
     for (const auto& [v, file] :
          std::vector<std::pair<View, const char*>>{{View::Settings, "settings"},
                                                    {View::Advanced, "advanced"},

@@ -7,7 +7,7 @@
 namespace moader_ui {
 using namespace moader::ipc;
 static constexpr View tabs[] = {View::Settings, View::Connection, View::Advanced, View::Controls,
-                                View::Credits};
+                                View::Credits, View::Updates};
 bool settings_view(View v) {
     return v != View::Library && v != View::Mods && v != View::Details && v != View::Store;
 }
@@ -18,7 +18,7 @@ unsigned tab_for(View v) {
         return 2;
     if (v == View::BrowserControls)
         return 3;
-    for (unsigned i = 0; i < 5; ++i)
+    for (unsigned i = 0; i < std::size(tabs); ++i)
         if (tabs[i] == v)
             return i;
     return 0;
@@ -32,6 +32,8 @@ bool State::has_store_mod(const StoreEntry& entry) const {
 }
 unsigned State::rows() const {
     switch (view) {
+    case View::Updates:
+        return updater.phase == UpdatePhase::Available ? 3 : 2;
     case View::Settings:
     case View::Advanced:
         return 5;
@@ -48,7 +50,7 @@ unsigned State::rows() const {
     }
 }
 uint32_t State::open_tab(unsigned index) {
-    view = tabs[std::min(index, 4u)];
+    view = tabs[std::min(index, unsigned(std::size(tabs) - 1))];
     settings_row = 0;
     nav_focus = false;
     confirm_remove = false;
@@ -61,6 +63,22 @@ uint32_t State::local_input(uint32_t b, unsigned limit) {
     preference_mask = 0;
     if (!b)
         return 0;
+    if (updater.prompt) {
+        if (b & (LeftInput | RightInput | UpInput | DownInput)) updater.later = !updater.later;
+        if (b & BackInput) updater.prompt = false;
+        else if (b & ActivateInput) {
+            updater.prompt = false;
+            if (!updater.later) {
+                if (!settings_view(view)) settings_return = view;
+                view = View::Updates;
+                tab_focus = nav_focus = false;
+                settings_row = 0;
+                return InstallUpdate;
+            }
+        }
+        return 0;
+    }
+    if (updater.installing() && !(updater.phase == UpdatePhase::Restarting && reload_error)) return 0;
     auto warn = [&](const std::string& text) {
         message = text;
         message_error = true;
@@ -273,7 +291,7 @@ uint32_t State::local_input(uint32_t b, unsigned limit) {
     if (tab_focus) {
         const int step = (b & DownInput) ? 1 : (b & UpInput) ? -1 : 0;
         if (step)
-            return open_tab((int(tab_for(view)) + step + 5) % 5);
+            return open_tab((int(tab_for(view)) + step + int(std::size(tabs))) % std::size(tabs));
         if (b & (RightInput | ActivateInput))
             tab_focus = false;
         return 0;
@@ -293,6 +311,7 @@ uint32_t State::local_input(uint32_t b, unsigned limit) {
     }
     const auto count = rows();
     if (count) {
+        settings_row = std::min(settings_row, count - 1);
         if (b & UpInput)
             settings_row = (settings_row + count - 1) % count;
         if (b & DownInput)
@@ -300,6 +319,18 @@ uint32_t State::local_input(uint32_t b, unsigned limit) {
     }
     if (!(b & ActivateInput))
         return 0;
+    if (view == View::Updates) {
+        if (settings_row == 1) return ToggleAutoUpdates;
+        if (settings_row == 2) {
+            updater.prompt = true;
+            updater.later = false;
+            return 0;
+        }
+        if (updater.phase == UpdatePhase::Recovery || updater.phase == UpdatePhase::RestartNeeded) return InstallUpdate;
+        if (updater.phase == UpdatePhase::Reopen) return ExitUpdatedApp;
+        if (updater.installing() || updater.phase == UpdatePhase::Checking) return 0;
+        return CheckUpdates;
+    }
     if (view == View::Controls || view == View::BrowserControls) {
         view = view == View::Controls ? View::BrowserControls : View::Controls;
         return 0;

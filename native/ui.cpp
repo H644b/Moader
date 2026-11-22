@@ -399,7 +399,7 @@ struct Renderer::Impl {
             notice = "Library refresh pending. Mod changes are paused until the next complete scan.";
         else if (s.view == View::Store && s.store.catalog_failed && !s.store.games.empty() && notice.empty())
             notice = "One or more community catalogs could not be loaded.";
-        else if (!s.connected && notice.empty())
+        else if (!s.connected && notice.empty() && s.updater.phase != UpdatePhase::Reopen)
             notice = "Service disconnected. Press Y to reconnect.";
         if (!notice.empty())
             c.text(720, 705, notice, 16, s.message_error || s.reload_shutdown_required ? bad : soft, Text, 1305,
@@ -417,6 +417,26 @@ struct Renderer::Impl {
             c.text(1031, 473, "X   Confirm removal", 20, bad, Strong, 290, Right);
             c.hit(389, 452, 245, 65, HitType::Key, BackInput);
             c.hit(785, 452, 268, 65, HitType::Key, RemoveInput);
+        }
+        if (s.updater.prompt) {
+            const auto& u = s.updater;
+            c.hits.clear();
+            c.alpha = .80f;
+            c.rect(0, 0, 1440, 810, base);
+            c.alpha = 1;
+            c.box(356, 244, 728, 319, 15, panel, rule, 1.5);
+            c.text(397, 285, "Moader v" + u.latest + " is available", 37, paper, Display, 646, Left, -1);
+            c.text(398, 349, "App and plugin   ·   " + size_text(u.total), 20, mint, Strong, 640);
+            c.paragraph(398, 390, "Install both files now? Moader will restart the plugin and let you know when to reopen the app.",
+                        20, 639, 2);
+            for (unsigned i = 0; i < 2; ++i) {
+                const bool later = i == 1, focused = u.later == later;
+                const float x = later ? 398 : 819, w = later ? 154 : 223;
+                c.box(x, 480, w, 48, 9, focused ? mint : panel, focused ? mint : rule, 1.5);
+                c.text(x + w / 2, 494, later ? "Later" : "Install update", 19, focused ? base : paper, Strong,
+                       w - 20, Center);
+                c.hit(x, 475, w, 60, HitType::UpdateChoice, later);
+            }
         }
     }
     const std::vector<std::string> empty_events;
@@ -442,12 +462,17 @@ void Renderer::draw(uint32_t* p, int w, int h, int stride, const State& s, float
     impl->render(s, dt);
 }
 uint32_t Renderer::tap(State& s, float xx, float yy) {
+    if (s.updater.installing()) return 0;
     const float x = xx * 1440, y = yy * 810;
     for (auto i = impl->c.hits.rbegin(); i != impl->c.hits.rend(); ++i) {
+        if (s.updater.prompt != (i->type == HitType::UpdateChoice)) continue;
         if (x < i->x || y < i->y || x >= i->x + i->w || y >= i->y + i->h)
             continue;
         const unsigned v = i->value;
         switch (i->type) {
+        case HitType::UpdateChoice:
+            s.updater.later = v;
+            return s.local_input(ActivateInput, 0);
         case HitType::Game:
         case HitType::Dot:
             if (v < s.games.size()) {

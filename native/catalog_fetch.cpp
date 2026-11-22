@@ -1,4 +1,9 @@
 #include "catalog_fetch.hpp"
+#include "sha256.hpp"
+#include "update.hpp"
+#include <cerrno>
+#include <cstdio>
+#include <unistd.h>
 #include "third_party/picojson.h"
 #include <curl/curl.h>
 #include <algorithm>
@@ -7,14 +12,6 @@
 #include <memory>
 #include <mutex>
 #include <stdexcept>
-#ifdef __SWITCH__
-#include <switch.h>
-#elif defined(__APPLE__)
-#include <CommonCrypto/CommonDigest.h>
-#else
-#include <openssl/evp.h>
-#endif
-
 namespace moader_ui {
 namespace {
 using Handle = std::unique_ptr<CURL, decltype(&curl_easy_cleanup)>;
@@ -59,6 +56,10 @@ int progress(void* p, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
     return static_cast<const std::atomic<bool>*>(p)->load(std::memory_order_relaxed);
 }
 using Write = size_t (*)(char*, size_t, size_t, void*);
+struct HttpError : std::runtime_error {
+    long status;
+    explicit HttpError(long code) : std::runtime_error("Download failed (HTTP " + std::to_string(code) + ")."), status(code) {}
+};
 void public_get(const std::string& url, size_t limit, const std::atomic<bool>& cancel, Write write, void* out,
                 bool package) {
     if (!url.starts_with("https://") || url.size() > 2048 || !limit || cancel)
@@ -90,12 +91,13 @@ void public_get(const std::string& url, size_t limit, const std::atomic<bool>& c
     curl_easy_setopt(c, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, progress);
     curl_easy_setopt(c, CURLOPT_XFERINFODATA, &cancel);
-    curl_easy_setopt(c, CURLOPT_USERAGENT, "Moader/3.5.0 catalog");
+    curl_easy_setopt(c, CURLOPT_USERAGENT, "Moader");
     auto rc = curl_easy_perform(c);
-    if (rc != CURLE_OK)
-        throw std::runtime_error(std::string("Download failed. ") + curl_easy_strerror(rc));
     long status = 0;
     curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &status);
+    if (rc == CURLE_HTTP_RETURNED_ERROR) throw HttpError(status);
+    if (rc != CURLE_OK)
+        throw std::runtime_error(std::string("Download failed. ") + curl_easy_strerror(rc));
     if (status != 200)
         throw std::runtime_error("The publisher did not return a complete download.");
 }
@@ -116,54 +118,6 @@ struct Buffer {
             return 0;
         }
         return n;
-    }
-};
-class Sha256 {
-#ifdef __SWITCH__
-    Sha256Context ctx;
-#elif defined(__APPLE__)
-    CC_SHA256_CTX ctx;
-#else
-    std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> ctx{EVP_MD_CTX_new(), EVP_MD_CTX_free};
-#endif
-  public:
-    Sha256() {
-#ifdef __SWITCH__
-        sha256ContextCreate(&ctx);
-#elif defined(__APPLE__)
-        CC_SHA256_Init(&ctx);
-#else
-        if (!ctx || !EVP_DigestInit_ex(ctx.get(), EVP_sha256(), nullptr))
-            throw std::runtime_error("SHA-256 is unavailable.");
-#endif
-    }
-    void update(const char* data, size_t n) {
-#ifdef __SWITCH__
-        sha256ContextUpdate(&ctx, data, n);
-#elif defined(__APPLE__)
-        CC_SHA256_Update(&ctx, data, static_cast<CC_LONG>(n));
-#else
-        if (!EVP_DigestUpdate(ctx.get(), data, n))
-            throw std::runtime_error("Could not verify download.");
-#endif
-    }
-    std::string finish() {
-        unsigned char digest[32];
-#ifdef __SWITCH__
-        sha256ContextGetHash(&ctx, digest);
-#elif defined(__APPLE__)
-        CC_SHA256_Final(digest, &ctx);
-#else
-        if (!EVP_DigestFinal_ex(ctx.get(), digest, nullptr))
-            throw std::runtime_error("Could not verify download.");
-#endif
-        constexpr char hex[] = "0123456789abcdef";
-        std::string out;
-        for (auto b : digest) {
-            out.push_back(hex[b >> 4]);
-            out.push_back(hex[b & 15]);
-        }
-        return out;
     }
 };
 class LocalImport {
@@ -277,6 +231,50 @@ std::string fetch_catalog_asset(const std::string& url, size_t limit, const std:
     } catch (const std::exception&) {
         return {};
     }
+}
+static constexpr char ReleaseRoot[] = "https://github.com/H644b/Moader/releases/";
+std::string latest_app_metadata(const std::atomic<bool>& cancel) {
+    Network network;
+    Buffer out{32 * 1024, false, {}};
+    try {
+        public_get(std::string(ReleaseRoot) + "latest/download/release-manifest.json", out.limit, cancel,
+                   Buffer::write, &out, false);
+        return std::move(out.bytes);
+    } catch (const HttpError& e) {
+        if (e.status != 404) throw;
+    }
+    // Releases uploaded directly to GitHub can use GitHub's own SHA-256 asset digests.
+    Buffer api{256 * 1024, false, {}};
+    public_get("https://api.github.com/repos/H644b/Moader/releases/latest", api.limit, cancel, Buffer::write, &api, false);
+    return std::move(api.bytes);
+}
+void download_app_asset(const AppRelease& release, bool plugin, const std::string& path,
+                        const std::atomic<bool>& cancel, std::atomic<uint64_t>& received) {
+    Network network;
+    const auto& asset = plugin ? release.plugin : release.app;
+    const auto url = std::string(ReleaseRoot) + "download/v" + release.version +
+                     (plugin ? "/moader.nso" : "/Moader.nro");
+    std::unique_ptr<FILE, decltype(&std::fclose)> file(std::fopen(path.c_str(), "wb"), std::fclose);
+    if (!file) throw std::runtime_error("Could not create the download on the SD card.");
+    struct Output { FILE* file; size_t remaining; std::atomic<uint64_t>& received; };
+    Output out{file.get(), asset.bytes, received};
+    auto write = +[](char* data, size_t size, size_t count, void* context) -> size_t {
+        auto& o = *static_cast<Output*>(context);
+        if (!size || count > o.remaining / size) return 0;
+        auto n = std::fwrite(data, 1, size * count, o.file);
+        o.remaining -= n;
+        o.received.fetch_add(n, std::memory_order_relaxed);
+        return n;
+    };
+    try {
+        public_get(url, asset.bytes, cancel, write, &out, true);
+    } catch (...) {
+        if (std::ferror(file.get())) throw std::runtime_error("Could not save the download. Check free space on the SD card.");
+        throw;
+    }
+    if (out.remaining || std::fflush(file.get()) ||
+        (fsync(fileno(file.get())) && errno != EINVAL && errno != ENOSYS) || std::fclose(file.release()))
+        throw std::runtime_error("The download was incomplete. Check the SD card and try again.");
 }
 void install_catalog_package(const Release& mod, const std::string& game, unsigned port,
                              const std::string& code, const std::atomic<bool>& cancel,
