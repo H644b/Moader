@@ -5,7 +5,7 @@ This experimental route needs a computer for initial setup. Later boots run on t
 ## Requirements and boundaries
 
 - A Switch 2 on [supported firmware](https://github.com/Malev0/seedsow-fs-kaihen), a mountable SD card, and a working Seedsow launcher save for your edition. Keep Demo and full-game saves separate.
-- The [v3.5.0 backend kit](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-backend-v3.5.0.zip), Python 3.10+, Git, Node.js 20+, and `luac`. The kit includes the standalone bootstrap. Host preparation was checked on macOS.
+- The [v4.0.0 backend kit](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip), Python 3.10+, Git, Node.js 20+, and `luac`. The kit includes the standalone bootstrap. Host preparation was checked on macOS.
 - The [qualified local filesystem capture](#obtain-and-check-the-fs-capture) for A. The kit omits the capture and its derived payload.
 - A working launcher save on a **second console profile** and backups for any saves you want to keep. The uploader changes the save of the profile running Seedsow. Confirm that profile on the Switch.
 
@@ -34,8 +34,8 @@ if not (manifest.get("session") == capture.parent.parent.name
         and manifest.get("sha256") == digest
         and capture.stat().st_size == 2416640
         and digest == expected):
-    raise SystemExit("This capture is not accepted by the v3.5.0 standalone A generator")
-print("Capture is eligible for the v3.5.0 standalone A generator")
+    raise SystemExit("This capture is not accepted by the v4.0.0 standalone A generator")
+print("Capture is eligible for the v4.0.0 standalone A generator")
 PY
 ```
 

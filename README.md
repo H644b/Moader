@@ -10,14 +10,14 @@ The console app opens from **hbmenu**. The resident plugin keeps the browser and
 2. [Pair a browser with your Switch](docs/USAGE.md#connect-a-browser).
 3. [Find a mod in the Store](docs/USAGE.md#browse-and-install-from-the-store) or [upload a ZIP](docs/USAGE.md#upload-your-first-mod), then enable it in your Library.
 
-| v3.5.0 download | What's inside |
+| v4.0.0 download | What's inside |
 | --- | --- |
-| [Moader app and plugin](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-v3.5.0.zip) | The two files to copy to SD when you already have a compatible backend. |
-| [Moader backend kit](https://github.com/H644b/Moader/releases/download/v3.5.0/Moader-backend-v3.5.0.zip) | The app and plugin plus the files for setting up the backend. Check the requirements for your method. |
+| [Moader app and plugin](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-v4.0.0.zip) | The two files to copy to SD when you already have a compatible backend. |
+| [Moader backend kit](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) | The app and plugin, the Moader Setup desktop app, and the files for setting up the backend. Check the requirements for your method. |
 
-[Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v3.5.0)
+[Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v4.0.0)
 
-Backend kits built from the in-review Setup branch include the [Moader Setup desktop app](docs/SETUP_GUI.md). The public v3.5.0 ZIP above predates that app.
+The v4.0.0 backend kit includes the [Moader Setup desktop app](docs/SETUP_GUI.md). The console app also has manual and optional automatic release checks under **Settings → Updates**.
 
 | Console app | Browser |
 | --- | --- |

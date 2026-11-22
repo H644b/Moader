@@ -2,7 +2,13 @@
 
 Moader supports [RomFS and ExeFS payloads](USAGE.md#upload-your-first-mod). The records below cover specific versions and actions. Game-launch compatibility and changes inside a running game are different tests.
 
-## Moader Setup GUI candidate (unpublished source branch)
+## v4.0.0 Setup and update release scope
+
+The v4.0.0 console app and resident plugin were cross-built from the release source with 4.0.0 version text. The source and binary identities are recorded in `config/release.json` and the downloadable release manifest. PRs #40, #41 and #42 passed all five CI jobs, including native update tests, setup controller tests, public-tree checks, and the Seedsow Linux source build. The native updater's host fixtures cover release selection, both file hashes, interrupted writes, recovery, plugin restart handoff, and input. No in-app update was run on a Switch 2 with these exact bytes.
+
+The backend kit includes the themed Moader Setup desktop app, pinned Node 24, uv and Electron runtimes, the matching app and resident, and the unchanged source-qualified kaiHEN and Seedsow standalone components. A v4 candidate ZIP passed the packager's member and CRC checks; independent inspection found all five desktop runtime targets, both matching binaries and no private FS capture. After extraction on this Mac, the packaged **Moader Setup.app** launcher started its local controller and served its health, verified kit state and themed UI over loopback. This checks the launch path without opening an Electron window. The earlier pre-release Mac desktop checks below used 3.5.0-labelled contents. A fresh native setup, exact v4.0.0 device connection, Linux or Windows desktop launch, and gameplay result remain unverified.
+
+## Moader Setup pre-release host checks
 
 ### Functional host checks
 

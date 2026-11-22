@@ -166,7 +166,7 @@ void refresh_reload_diagnostics(){
 }
 void save_debug(const moader_native::CoverLoader& covers){if(ui.connected)refresh_debug();refresh_reload_diagnostics();sync_reload_ui();
     std::ofstream file("sdmc:/moader/app-diagnostics.txt",std::ios::binary);
-    file<<"Moader 3.5.0\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
+    file<<"Moader "<<MOADER_APP_VERSION<<"\nMode: "<<(foreground?"foreground":"resident")<<"\nControl service reachable: "<<ui.connected<<"\nSummary freshness: "<<(ui.connected?"current":"last-known; service disconnected")<<"\nLibrary generation: "<<ui.summary.generation
         <<"\nFS acknowledged generation: "<<ui.summary.applied_generation<<"\nBackend channel connected (summary): "<<bool(ui.summary.flags&moader::ipc::BackendConnected)
         <<"\nRuntime result: 0x"<<std::hex<<ui.summary.last_result<<std::dec
         <<"\nLibrary inventory: "<<(ui.inventory_unavailable()?"unavailable or retained; changes paused":"current")

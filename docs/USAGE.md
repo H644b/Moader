@@ -115,6 +115,12 @@ Press the left stick on the console or open **Settings** in the browser. Console
 
 On the console, **Connection** shows listener status and pairing, **Advanced** contains runtime details, exports and service reload, and **Controls** lists console and browser actions. The browser’s Settings sidebar shows its connection status and **Disconnect**. **Credits** identifies the project and its dependencies. [Service reload guide](PLUGIN_RELOAD.md)
 
+### Update the app and resident plugin
+
+Open **Settings → Updates** in the console app and choose **Check for updates**. You can also turn on **Automatically check for updates** to check at launch and every six hours while Moader is open. Moader looks for the latest stable official release. When a newer version is available, choose **Install** or **Later**.
+
+Keep Moader open while it downloads and verifies both files, installs them on SD and restarts the resident plugin. If the update is interrupted, reopen Moader and use **Finish update**. After it reports **Update installed**, press **+** to exit and reopen Moader to run the new app. Updating these files does not start a backend on a new console boot. [Installation](INSTALLATION.md)
+
 ## Debugging and screenshots
 
 Press **ZL** in the app or open **Settings → Advanced → Current session** in the browser for the debug log. Library events show what you asked Moader to do. Native events can show what the filesystem accepted or read. Choose **Download debug log** in the browser’s **Advanced** section to save a copy, or press **−** on the console to save an app screenshot. Remove private details before sharing a report. [Reporting a problem](TROUBLESHOOTING.md#reporting-a-problem)

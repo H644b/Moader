@@ -21,8 +21,8 @@ body:
     id: version
     attributes:
       label: Moader version
-      description: Release tag or source commit used for this report (for example, v3.0.0).
-      placeholder: v3.0.0
+      description: Release tag or source commit used for this report (for example, v4.0.0).
+      placeholder: v4.0.0
     validations:
       required: true
   - type: textarea

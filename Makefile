@@ -1,5 +1,5 @@
 DEVKITPRO ?= $(CURDIR)/vendor/devkitpro
-MOADER_VERSION := 3.5.0
+MOADER_VERSION := 4.0.0
 export DEVKITPRO
 include $(DEVKITPRO)/libounce/switch2_cpu.mk
 PREFIX := $(DEVKITPRO)/devkitA64/bin/aarch64-none-elf-

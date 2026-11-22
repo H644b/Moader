@@ -1,6 +1,6 @@
 # Moader Setup in a backend kit
 
-This guide applies to backend kits generated from the source branch that includes **Moader Setup**. The public v3.5.0 ZIP linked in [Installation](INSTALLATION.md) predates this work and does not contain the launcher.
+The [v4.0.0 backend kit](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) includes **Moader Setup** and its pinned desktop runtimes. [Installation](INSTALLATION.md) also documents the command-line routes.
 
 Extract the whole backend ZIP and open the outer `Moader-backend-...` folder. On macOS, open **Moader Setup.app**. On Linux, open **Moader Setup** in the file manager and choose Run if asked. On Windows, open **Moader Setup Windows/Moader Setup.exe** and choose a WSL2 Linux distribution in its picker. Keep the complete extracted kit together. Moader Setup opens its own desktop window. Its private local controller performs the computer work; the separate **Open Moader in browser** task opens the page hosted by the Switch.
 
@@ -22,7 +22,7 @@ The support export offers a short text summary and advanced JSON. It includes re
 
 Seedsow PC setup targets Apple Silicon macOS and Linux x86_64, including WSL2 x86_64. mac2jb is a macOS route. Direct ns2jb uses native macOS or Linux Node. CivSwitch remains experimental and its host-tested workflow still needs console acceptance. Windows uses a chosen WSL2 distribution; it is not a native Windows backend. A WSL distro must have working network access and a reachable address for the chosen provider. The graphical WSL picker and Linux arm64 runtime are packaged, but have no live Windows/Linux acceptance from this development host.
 
-The macOS launcher in this source kit is unsigned and unnotarized. Distribution to a quarantined macOS download requires the project's normal signing and notarization release process. Setup does not ask you to disable platform security. CLI guides remain in [Installation](INSTALLATION.md) for advanced users.
+The macOS launcher in the v4.0.0 kit is unsigned and unnotarized. Distribution to a quarantined macOS download requires the project's normal signing and notarization release process. Setup does not ask you to disable platform security. CLI guides remain in [Installation](INSTALLATION.md) for advanced users.
 
 ## Verification boundary
 

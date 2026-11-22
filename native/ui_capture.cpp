@@ -22,7 +22,7 @@ constexpr uint64_t ids[] = {0x01006F8002326000, 0x0100F2C0115B6000, 0x0400F43008
                             0x010093801237C000};
 State fixture(const fs::path& assets) {
     State s;
-    s.updater.running_version = "3.5.0";
+    s.updater.running_version = "4.0.0";
     s.connected = true;
     s.preferences_available = true;
     s.address = "http://192.0.2.42:7712";
