@@ -160,6 +160,7 @@ jobs:
       - name: Installer and control safety with mocked transports
         run: |
           python3 tools/test-setup-backend.py
+          node --test setup/test-controller.cjs
           node tools/test-installers.cjs
           node tools/test-loader-observer.cjs
           node tools/test-loader-restoration.cjs

@@ -10,6 +10,22 @@ const crypto = require('node:crypto');
 const {spawn, spawnSync} = require('node:child_process');
 const hostPolicy = require('./host-policy.cjs');
 const hostTools = require('./host-tools.cjs');
+const launcherStatus = require('./launcher-status.cjs');
+
+// Finder-launched macOS apps receive a small system PATH. Homebrew and
+// MacPorts install zstd outside it, although macOS tar needs that executable
+// to unpack the pinned SDK archives.
+if (process.platform === 'darwin') {
+  for (const folder of ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin']) {
+    const executable = path.join(folder, 'zstd');
+    try {
+      fs.accessSync(executable, fs.constants.X_OK);
+      if (!(process.env.PATH || '').split(path.delimiter).includes(folder))
+        process.env.PATH = folder + path.delimiter + (process.env.PATH || '');
+      break;
+    } catch { /* Try the next standard package-manager path. */ }
+  }
+}
 
 const root = path.resolve(__dirname, '..');
 // The desktop window uses the same local identity assets as the paired browser.
@@ -106,8 +122,9 @@ function checkHostDependencies(method) {
   requireTrue(cmdVersion('git'), 'Git is needed to fetch the pinned provider. Open the operating system installer from Setup, then click Prepare and verify kit again.');
   if (method === 'seedsow') {
     requireTrue(cmdVersion('clang'), 'AArch64 source preparation needs clang. Open the operating system installer from Setup, then click Prepare and verify kit again.');
-    if (process.platform === 'linux')
-      requireTrue(cmdVersion('zstd'), 'The kit-scoped SDK needs zstd. Open your Linux software manager from Setup, then click Prepare and verify kit again.');
+    requireTrue(cmdVersion('zstd'), process.platform === 'darwin'
+      ? 'The kit-scoped SDK needs zstd to unpack its pinned archives. Install zstd with your macOS package manager, reopen Setup, then click Prepare and verify kit again.'
+      : 'The kit-scoped SDK needs zstd. Open your Linux software manager from Setup, then click Prepare and verify kit again.');
   }
 }
 function executableInPath(name) {
@@ -121,7 +138,7 @@ function executableInPath(name) {
 function missingHostTools(method) {
   return [!cmdVersion('git') && 'git', method === 'seedsow' &&
     !cmdVersion('clang') && 'clang', method === 'seedsow' &&
-    process.platform === 'linux' && !cmdVersion('zstd') && 'zstd'].filter(Boolean);
+    !cmdVersion('zstd') && 'zstd'].filter(Boolean);
 }
 async function installHostTools(method) {
   requireTrue(process.platform === 'linux' && supported(method),
@@ -450,7 +467,7 @@ function checkLauncher(address) {
           data += bytes.toString('utf8');
           if (data.length > 8192) request.destroy(Error('Launcher status reply was too large.'));
         });
-        response.on('end', () => response.statusCode === 200 && /^status: ok(?:\r?\n|$)/.test(data)
+        response.on('end', () => launcherStatus(response.statusCode, data)
           ? resolve({online: true, message: 'Seedsow launcher answered on this address. FS access is not verified yet.'})
           : reject(Error('Seedsow launcher did not return its expected status. Open the matching edition and press Y.')));
       });

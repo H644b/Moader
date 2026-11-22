@@ -26,6 +26,7 @@ def main():
             'setup/desktop-app/main.cjs': b'// desktop entry',
             'setup/desktop-app/package.json': b'{"main":"main.cjs"}',
             'setup/launch.sh': b'#!/bin/sh\n',
+            'setup/launcher-status.cjs': b'// launcher status fixture',
             'dist/Moader.nro': b'NRO0fixture',
             'vendor/kaihen-mo/hen/main': b'NSO0fixture',
             'host-runtimes/node-v24.22.3/LICENSE': b'Node notice',
@@ -68,6 +69,7 @@ def main():
                         assert root + ('Moader Setup.exe' if target == 'windows-x64' else 'Moader Setup') in names
                     assert built.read(resources + 'app/main.cjs') == b'// desktop entry'
                     assert built.read(resources + 'kit/branding/setup-icon.png') == b'rounded png fixture'
+                    assert built.read(resources + 'kit/setup/launcher-status.cjs') == b'// launcher status fixture'
                     assert built.read(resources + 'kit/dist/Moader.nro') == b'NRO0fixture'
                     assert len([n for n in names if n.endswith('/node')]) == 1
                     assert len([n for n in names if n.endswith('/uv')]) == 1
