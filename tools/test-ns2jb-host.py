@@ -339,8 +339,9 @@ def paired_setup_checks(node, work):
     with zipfile.ZipFile(output/'Moader-backend-v0.0.0-fixture.zip') as archive:
         prefix='Moader-backend-v0.0.0-fixture/'
         require(archive.read(prefix+'vendor/kaihen-mo/hen/main')==hen and archive.read(prefix+'vendor/kaihen-mo/bootstrap.bin')==bootstrap,'Host ZIP omitted or changed paired binary')
-        require(b'Moader-Setup-v0.0.0-fixture.zip' in archive.read(prefix+'START_HERE.txt'),
-                'Command-line kit did not direct users to the separate Setup asset')
+        require(b'/releases/tag/v0.0.0-fixture' in archive.read(prefix+'START_HERE.txt') and
+                b'Moader Setup download' in archive.read(prefix+'START_HERE.txt'),
+                'Command-line kit did not direct users to the separate Setup downloads')
     with zipfile.ZipFile(output/'Moader-Setup-v0.0.0-fixture.zip') as archive:
         prefix='Moader-Setup-v0.0.0-fixture/'
         require(archive.read(prefix+'vendor/kaihen-mo/hen/main')==hen and

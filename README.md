@@ -13,7 +13,7 @@ The console app opens from **hbmenu**. The resident plugin keeps the browser and
 | v4.0.0 download | What's inside |
 | --- | --- |
 | [Moader app and plugin](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-v4.0.0.zip) | The two files to copy to SD when you already have a compatible backend. |
-| [Moader Setup](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0.zip) | Guided desktop app with its own complete backend files and runtimes. |
+| [Moader Setup apps](https://github.com/H644b/Moader/releases/tag/v4.0.0) | Choose the prebuilt macOS, Linux or Windows download for your computer. Each app contains its matching backend files. |
 | [Moader backend kit](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) | Smaller command-line kit with the app, plugin and backend files. |
 
 [Release notes and checksums](https://github.com/H644b/Moader/releases/tag/v4.0.0)

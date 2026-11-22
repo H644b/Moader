@@ -501,9 +501,10 @@ This kit has the matched app, resident service, patched kaiHEN files, and
 computer-side tools. It supports the command-line routes in docs/INSTALLATION.md.
 Open that guide and follow the method for your console and computer.
 
-For a guided desktop setup instead, download the separate self-contained
-Moader-Setup-{tag}.zip asset. It includes this backend and its own runtimes;
-you do not need to download both ZIPs.
+For guided desktop setup, choose the separate Moader Setup download for your
+computer at https://github.com/{spec['repository']}/releases/tag/{tag}.
+Each prebuilt app includes this backend and its matching runtime; you do not
+need to download both ZIPs.
 
 The on-console Seedsow A route requires a qualified local FS capture. No
 console capture, derived payload, or private runtime state is included.

@@ -40,7 +40,9 @@ jobs:
       - name: Scan clean public checkout
         run: python3 tools/check-public-tree.py .
       - name: Generate GitHub Wiki from public guides
-        run: python3 tools/build-wiki.py
+        run: |
+          python3 tools/build-wiki.py
+          python3 tools/test-package-setup-platform.py
 
   host-core:
     name: Host core and HTTP
