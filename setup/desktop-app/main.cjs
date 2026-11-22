@@ -80,7 +80,7 @@ function startController() {
 }
 function makeWindow() {
   window = new BrowserWindow({width: 1180, height: 790, minWidth: 380,
-    minHeight: 500, title: 'Moader Setup', backgroundColor: '#101a15',
+    minHeight: 500, title: 'Moader Setup', backgroundColor: '#121918',
     icon: fs.existsSync(logo) ? logo : undefined, autoHideMenuBar: true,
     webPreferences: {nodeIntegration: false, contextIsolation: true,
       sandbox: true, webSecurity: true}});
