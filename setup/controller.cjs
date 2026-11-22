@@ -242,9 +242,10 @@ function event(type, message, details = {}) {
   save();
   return row;
 }
-function operation(action, phase, message) {
+function operation(action, phase, message, method = null) {
   state.operation = {id: crypto.randomUUID(), action, phase, message, status: 'running',
-    started: now(), finished: null, firstError: null, run: null, nativeStarted: false};
+    started: now(), finished: null, firstError: null, run: null, nativeStarted: false,
+    method, eventStartId: state.sequence + 1};
   event('stage', message, {phase});
 }
 function phase(value, message) {
@@ -258,7 +259,8 @@ function finish(status, message, error = null) {
     status === 'uncertain' ? 'outcome-uncertain' : 'failed-before-device';
   state.operation.message = message;
   state.operation.finished = now();
-  state.operation.firstError = error ? String(error.message || error).slice(0, 1000) : null;
+  if (error && !state.operation.firstError)
+    state.operation.firstError = String(error.message || error).slice(0, 1000);
   if (status === 'uncertain') state.uncertain = {at: now(),
     method: state.operation.action, run: state.operation.run,
     reason: state.operation.firstError};
@@ -318,9 +320,21 @@ async function closeBoot(confirmed) {
   event('boot', 'A full Switch reboot was confirmed. Prior attempt records were kept.',
     {bootEpoch: state.bootEpoch});
 }
+function reportNativeFailure(source, message) {
+  const op = state.operation;
+  if (!op || op.status !== 'running' || !op.nativeStarted || op.detectedFailure) return;
+  const summary = String(message).trim().slice(0, 1000);
+  op.firstError ||= summary;
+  op.detectedFailure = {at: now(), source, message: summary};
+  event('reported-failure', 'Installer reported a failure: ' + summary, {source});
+}
+const nativeFailureLine = /^(?:[A-Za-z]*Error(?: \[[A-Z0-9_]+\])?:|INSTALL STOPPED:|KAIHEN ERROR:|Unhandled Seedsow rejection:|Uncaught Seedsow exception:|Seedsow (?:failure stop|listener result) (?:is uncertain|refused)[;:]|\[moader\] (?:Error:|process exited \([1-9]\d*\)))/i;
 function logLine(source, line) {
   if (!line) return;
   event('log', line.slice(0, 1800), {source});
+  if (['Seedsow installer', 'Moader combined installer'].includes(source) &&
+      nativeFailureLine.test(line.trim()))
+    reportNativeFailure(source, line);
   const match = /^MOADER_RUN (.+)$/.exec(line);
   if (match && state.operation) {
     const run = path.resolve(match[1]);
@@ -343,7 +357,10 @@ function watchInstallJournal(run) {
   const file = path.join(run, 'moader-install.json');
   if (!realFile(file) || fs.statSync(file).size > 256000) return;
   try {
-    const status = readJson(file).status;
+    const journal = readJson(file);
+    const status = journal.status;
+    if (status === 'stopped')
+      reportNativeFailure('Installation journal', journal.error || 'Installation journal stopped.');
     const messages = {
       'installing-filesystem': 'The installer is writing the matched filesystem runtime.',
       'starting-kaihen': 'The filesystem step finished; the installer is starting the matched backend.',
@@ -358,23 +375,30 @@ function watchInstallJournal(run) {
 }
 function command(exe, args, {label, native = false, env = {}, timeoutMs = 600000, cwd = root} = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(exe, args, {cwd, env: {...process.env, ...env}, windowsHide: true,
+    const operationId = state.operation?.id;
+    const child = spawn(exe, args, {cwd, env: {...process.env, PYTHONUNBUFFERED: '1', ...env}, windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe']});
     activeChild = child;
     if (native) preventSleep(child);
-    let output = '', last = '', total = 0, timer = null;
+    let output = '', last = '', total = 0, overLimit = false, timer = null;
     const progress = native ? setInterval(() => watchInstallJournal(state.operation?.run), 1200) : null;
     const consume = (stream, source) => {
       let pending = '';
+      stream.setEncoding('utf8');
       stream.on('data', bytes => {
-        total += bytes.length;
+        total += Buffer.byteLength(bytes);
         if (total > 4 * 1024 * 1024) {
-          logLine(source, 'Output limit reached; full native outcome is uncertain.');
+          if (!overLimit) {
+            overLimit = true;
+            logLine(label || source, 'Output limit reached; full native outcome is uncertain.');
+            if (native) reportNativeFailure(label || source,
+              'Output limit reached; full native outcome is uncertain.');
+          }
           return;
         }
-        pending += bytes.toString('utf8');
+        pending += bytes;
         if (pending.length > 8192) pending = pending.slice(-8192);
-        const lines = pending.split(/\r?\n/);
+        const lines = pending.split(/\r\n|\r|\n/);
         pending = lines.pop();
         for (const line of lines) {
           if (source === 'stdout') output += line + '\n';
@@ -382,7 +406,12 @@ function command(exe, args, {label, native = false, env = {}, timeoutMs = 600000
           logLine(label || source, line);
         }
       });
-      stream.on('end', () => { if (pending) logLine(label || source, pending); });
+      stream.on('end', () => {
+        if (!pending) return;
+        if (source === 'stdout') output += pending;
+        last = pending;
+        logLine(label || source, pending);
+      });
     };
     consume(child.stdout, 'stdout');
     consume(child.stderr, 'stderr');
@@ -391,12 +420,18 @@ function command(exe, args, {label, native = false, env = {}, timeoutMs = 600000
       if (progress) clearInterval(progress);
       reject(error);
     });
-    child.on('exit', (code, signal) => {
+    child.on('close', (code, signal) => {
       if (timer) clearTimeout(timer);
       if (progress) { clearInterval(progress); watchInstallJournal(state.operation?.run); }
       activeChild = null;
       holdSleep = null;
-      if (code === 0 && !signal && total <= 4 * 1024 * 1024) resolve({output, last});
+      if (code === 0 && !signal && total <= 4 * 1024 * 1024 &&
+          !(native && state.operation?.id === operationId && state.operation.detectedFailure))
+        resolve({output, last});
+      else if (code === 0 && native && state.operation?.id === operationId &&
+          state.operation.detectedFailure)
+        reject(Error('Installer reported a failure despite exit code 0: ' +
+          state.operation.detectedFailure.message));
       else reject(Error((label || filename(exe)) + ' stopped (' + (signal || code) + '). ' + last));
     });
     if (!native && timeoutMs) timer = setTimeout(() => {
@@ -592,20 +627,23 @@ async function startHost(method, address) {
   save();
   const started = Date.now();
   const args = method === 'ns2jb' ? [runner, '--rpc', address] : [runner, address];
-  const child = spawn(node24(), args, {cwd: directory, env: process.env,
+  const child = spawn(node24(), args, {cwd: directory,
+    env: {...process.env, PYTHONUNBUFFERED: '1'},
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true});
   hostChild = child;
   preventSleep(child);
   let settled = false;
   const consume = stream => {
     let pending = '';
+    stream.setEncoding('utf8');
     stream.on('data', bytes => {
-      pending += bytes.toString('utf8');
+      pending += bytes;
       if (pending.length > 8192) pending = pending.slice(-8192);
-      const rows = pending.split(/\r?\n/);
+      const rows = pending.split(/\r\n|\r|\n/);
       pending = rows.pop();
       rows.forEach(row => logLine(method + ' provider', row));
     });
+    stream.on('end', () => { if (pending) logLine(method + ' provider', pending); });
   };
   consume(child.stdout);
   consume(child.stderr);
@@ -798,7 +836,8 @@ function methodMessage(method) {
 async function runOperation(action, input) {
   requireTrue(!active, 'Another setup operation is already running.');
   active = true;
-  operation(action, 'checking', 'Checking the selected setup task.');
+  operation(action, 'checking', 'Checking the selected setup task.',
+    action === 'seedsow-install' ? 'seedsow' : input.method || null);
   try {
     if (['seedsow-install', 'start-host', 'install-held', 'upload-standalone'].includes(action))
       checkNativeAttemptBeforeContact(action, input);
@@ -871,6 +910,8 @@ function supportReport() {
     method: op?.action || null, phase: op?.phase || 'not-started',
     selectedEdition: op?.edition || null,
     nativeOutcome: op?.nativeStarted ? op.status : 'never-started',
+    reportedFailure: op?.detectedFailure && {...op.detectedFailure,
+      message: redact(op.detectedFailure.message)},
     uncertain: state.uncertain && {at: state.uncertain.at,
       method: state.uncertain.method, reason: redact(state.uncertain.reason)},
     launcher: state.launcher && {at: state.launcher.at,

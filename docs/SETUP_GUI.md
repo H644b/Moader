@@ -26,6 +26,10 @@ Each prebuilt Setup app includes the matching console app, resident plugin, HEN,
 
 The controller continues if the app window closes. Reopen the same launcher to reconnect. It keeps original journals. If a native action stops or the controller restarts without a verified result, Setup records the outcome as uncertain and blocks another native attempt on that boot. Keep the original reports, inspect the device state, and fully reboot before confirming a new boot record. Closing the window does not cancel a console operation.
 
+While a Seedsow, SmileBASIC or experimental CivSwitch setup step runs, the activity area shows its current stage and a live log from this Setup controller. It follows new lines automatically until you scroll up, and shows the time since the last update while the step is waiting. The log stays available after the step finishes. For mac2jb, Setup shows its own session checks and installer output; the separate mac2jb app keeps its own acquisition log. **Technical details and recent events** retains the broader controller history.
+
+If the native installer prints an explicit failure or writes a stopped installation journal, Setup highlights that failure immediately, even when the owner process is still running. Wait for the final result and keep its evidence. An exit code of zero cannot turn a reported native failure into a successful setup.
+
 The support export offers a short text summary and advanced JSON. It includes release identities, method and provider revisions, the first error, recent events and small relevant receipts. It excludes save data and binary captures. Address, credential and personal-path redaction is best effort; review the file before sharing it.
 
 ## Platform and release limits

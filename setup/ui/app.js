@@ -6,7 +6,8 @@ const toast = document.getElementById('toast');
 const announcer = document.getElementById('announcer');
 let snapshot = null, task = 'home', method = 'seedsow', renderKey = '',
   sdHandle = null, sdExisting = [], lastPlanId = null, initialRefreshDone = false,
-  lastAnnouncedOperation = null;
+  lastAnnouncedOperation = null, lastAnnouncedPhase = null, liveLogSignature = '',
+  liveLogOperationId = null, liveLogFollow = true, liveLogUserScrollUntil = 0;
 const draft = {edition: 'demo', console: '', hostAddress: '', statusCommand: '',
   gameReady: false, profileConfirmed: false, backupConfirmed: false,
   civCartridge: false, civFirmware: false, civLoader: false, bootRebooted: false};
@@ -19,6 +20,10 @@ const taskNames = {
 const methodNames = {
   seedsow: 'Seedsow through this computer', mac2jb: 'SmileBASIC through mac2jb',
   ns2jb: 'SmileBASIC through direct ns2jb', civswitch: 'Experimental CivSwitch'
+};
+const logMethodNames = {
+  seedsow: 'Seedsow', mac2jb: 'SmileBASIC · mac2jb',
+  ns2jb: 'SmileBASIC · direct ns2jb', civswitch: 'Civilization VII'
 };
 const safe = value => String(value ?? '').replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -98,9 +103,11 @@ const operationView = () => {
   const op = snapshot.operation;
   if (!op || !belongsToTask(op)) return '';
   const cls = op.status === 'complete' ? 'success' : op.status === 'uncertain' ||
-    op.status === 'failed' ? 'error' : 'warning';
+    op.status === 'failed' || op.detectedFailure ? 'error' : 'warning';
   let body = safe(op.message);
   if (op.firstError) body += '<br><strong>First error:</strong> ' + safe(op.firstError);
+  if (op.detectedFailure && op.status === 'running')
+    body += '<br>The installer reported a failure while its process is still active. Keep the original session and wait for the final result; do not start another attempt on this boot.';
   if (op.status === 'running' || op.status === 'waiting')
     body += '<br>Keep this window open if convenient. The controller continues if the window closes; reopen Moader Setup to reconnect.';
   if (op.status === 'uncertain')
@@ -217,7 +224,7 @@ function seedsowSteps(ready) {
       'The computer checks only the launcher first; this is not an FS check.') +
     '<div class="button-row">' + button('Check launcher connection', 'check-launcher', 'secondary', !ready) +
     '</div>' + launcherNote + '</section>';
-  out += '<section class="step"><h2>Review and install once</h2><p>This attempt performs one qualified FS acquisition, installs the matched Moader backend including app and resident files, starts HEN, checks the service, and retires its owned listener. It may take time with no percentage shown.</p>' +
+  out += '<section class="step"><h2>Review and install once</h2><p>This attempt performs one qualified FS acquisition, installs the matched Moader backend including app and resident files, starts HEN, checks the service, and retires its owned listener. Watch the live setup log below; some steps have no percentage.</p>' +
     (checked ? '<p class="hint">The launcher last replied for this selection. Setup will check it again.</p>' :
       '<p class="hint">The current launcher has not replied here yet. Check its address above.</p>') +
     check('gameReady', 'I fully rebooted, opened the correct edition and profile, pressed Y, and have not used another backend on this boot.') +
@@ -266,7 +273,7 @@ function directSteps(ready, civ) {
       !ready || !!host || civ && !(draft.civCartridge && draft.civFirmware && draft.civLoader)) +
     '</div>' + (host ? note(host.status === 'held' ? 'Verified held session' : 'Provider state',
       host.status === 'held' ? 'The pinned provider has a qualified run. Keep this host and the game open.' :
-      'The provider is ' + safe(host.status) + '. Watch the waiting message and advanced events.') : '') +
+      'The provider is ' + safe(host.status) + '. Watch the live setup log below for new lines.') : '') +
     '</section><section class="step"><h2>Prepare Moader for that session</h2><p>Moader verifies the provider family, run evidence and matched files before making a unique snapshot. This is computer preparation.</p><div class="button-row">' +
     button('Check held session and prepare installer', 'prepare-held', 'primary',
       !host || host.status !== 'held') + '</div></section><section class="step"><h2>Review and install once</h2>' +
@@ -449,13 +456,17 @@ function activity() {
   } else {
     sourceTask = op && operationTask(op);
     title = op ?
-    (op.status === 'running' ? 'Working on ' : op.status === 'complete' ? 'Completed ' :
+    (op.status === 'running' && op.detectedFailure ? 'Failure reported · ' :
+      op.status === 'running' ? 'Working on ' : op.status === 'complete' ? 'Completed ' :
       op.status === 'uncertain' ? 'Outcome uncertain · ' : 'Stopped · ') +
       op.action.replaceAll('-', ' ') : 'No task running';
-    message = op?.firstError || op?.message || '';
-    labelText = op?.phase.replaceAll('-', ' ') || '';
+    message = op?.detectedFailure && op.status === 'running' ?
+      'Installer reported a failure. Keep this session; wait for the final result.' :
+      op?.firstError || op?.message || '';
+    labelText = op?.detectedFailure && op.status === 'running' ?
+      'failure reported' : op?.phase.replaceAll('-', ' ') || '';
     labelClass = !op ? '' : op.status === 'complete' ? 'good' :
-    op.status === 'uncertain' || op.status === 'failed' ? 'bad' : 'wait';
+    op.status === 'uncertain' || op.status === 'failed' || op.detectedFailure ? 'bad' : 'wait';
   }
   if (sourceTask && task !== sourceTask && task !== 'home') {
     title = 'Recent task · ' + taskNames[sourceTask];
@@ -476,6 +487,47 @@ function activity() {
     '<div class="event"><time>' + safe(new Date(row.at).toLocaleTimeString()) +
     '</time><span>' + safe(row.message) + '</span></div>').join('') ||
     '<p class="hint">No setup events yet.</p>';
+  liveLog(op, events);
+}
+function elapsed(from, to = Date.now()) {
+  const seconds = Math.max(0, Math.floor((to - new Date(from).getTime()) / 1000)) || 0;
+  return seconds < 60 ? seconds + 's' : Math.floor(seconds / 60) + 'm ' +
+    String(seconds % 60).padStart(2, '0') + 's';
+}
+function liveLog(op, events) {
+  const panel = document.getElementById('liveLog');
+  const visible = op && (op.status === 'running' || belongsToTask(op));
+  panel.hidden = !visible;
+  if (!visible) return;
+  const list = document.getElementById('liveLogLines');
+  if (liveLogOperationId !== op.id) {
+    liveLogOperationId = op.id;
+    liveLogFollow = true;
+  }
+  document.getElementById('liveLogTitle').textContent = 'Setup log · ' +
+    (logMethodNames[op.method] || op.action.replaceAll('-', ' '));
+  const rows = events.filter(row => Number.isInteger(op.eventStartId)
+    ? row.id >= op.eventStartId : new Date(row.at) >= new Date(op.started)).slice(-80);
+  const lastUpdate = rows.at(-1)?.at || op.started;
+  document.getElementById('liveLogTiming').textContent = op.status === 'running' ?
+    (op.detectedFailure ? 'Failure reported · ' : 'Running ') + elapsed(op.started) +
+    ' · Last update ' + elapsed(lastUpdate) + ' ago' :
+    (op.status === 'complete' ? 'Completed' : 'Stopped') + ' after ' +
+      elapsed(op.started, new Date(op.finished || Date.now()).getTime());
+  const signature = op.id + ':' + rows.map(row => row.id).join(',');
+  if (signature !== liveLogSignature) {
+    list.innerHTML = rows.map(row => {
+      const kind = row.type === 'log' ? 'log' : row.type === 'failed' ||
+        row.type === 'uncertain' || row.type === 'reported-failure' ? 'failed' : 'status';
+      const source = kind === 'log' && row.source ?
+        '<span class="log-source">' + safe(row.source) + ' · </span>' : '';
+      return '<div class="live-log-row ' + kind + '"><time datetime="' + safe(row.at) +
+        '">' + safe(new Date(row.at).toLocaleTimeString()) + '</time><span class="log-message">' +
+        source + safe(row.message) + '</span></div>';
+    }).join('') || '<p class="hint">Waiting for the first setup update.</p>';
+    liveLogSignature = signature;
+  }
+  if (liveLogFollow) list.scrollTop = list.scrollHeight;
 }
 async function refresh(force = false) {
   try {
@@ -489,11 +541,18 @@ async function refresh(force = false) {
     if (!draft.console && data.prefs.console) draft.console = data.prefs.console;
     if (!draft.listenerPort) draft.listenerPort = data.prefs.listenerPort || 31337;
     const key = JSON.stringify([task, method, data.operation?.id, data.operation?.phase,
-      data.operation?.status, data.prepared, data.selectedSession, data.selectedCapture,
+      data.operation?.status, data.operation?.detectedFailure, data.prepared,
+      data.selectedSession, data.selectedCapture,
       data.host, data.sdPlan?.at, data.sdResult, data.uncertain, data.bootAttempts,
       data.standaloneReady, data.launcher, data.system]);
     if (force || key !== renderKey) { renderKey = key; render(); }
     activity();
+    const phaseKey = data.operation?.status === 'running' ?
+      data.operation.id + ':' + data.operation.phase : null;
+    if (initialRefreshDone && phaseKey && phaseKey !== lastAnnouncedPhase) {
+      announcer.textContent = data.operation.message;
+      lastAnnouncedPhase = phaseKey;
+    }
     if (initialRefreshDone && data.operation &&
         data.operation.status !== 'running' &&
         data.operation.id !== lastAnnouncedOperation &&
@@ -744,6 +803,14 @@ document.getElementById('helpButton').addEventListener('click', () => {
   const target = document.getElementById('stepHelp');
   if (target) { target.open = true; target.scrollIntoView({block: 'nearest'}); }
   else show('The task instructions on this page are the current help.');
+});
+const liveLogLines = document.getElementById('liveLogLines');
+for (const kind of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
+  liveLogLines.addEventListener(kind, () => { liveLogUserScrollUntil = Date.now() + 2000; });
+liveLogLines.addEventListener('scroll', () => {
+  if (Date.now() <= liveLogUserScrollUntil)
+    liveLogFollow = liveLogLines.scrollHeight - liveLogLines.scrollTop -
+      liveLogLines.clientHeight < 28;
 });
 refresh(true).then(() => {
   if (!snapshot) {

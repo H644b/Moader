@@ -81,6 +81,58 @@ test('Seedsow launcher status accepts the current read-only banner', () => {
   assert.equal(launcherStatus(404, banner), false);
 });
 
+test('setup events identify the current method and start of its live log', async t => {
+  const api = await startController(t);
+  assert.equal((await api.post('/api/operation',
+    {action: 'install-held', method: 'ns2jb'})).status, 202);
+  const first = await untilDone(api);
+  assert.equal(first.operation.method, 'ns2jb');
+  assert.equal(first.operation.status, 'failed');
+  assert.equal(first.operation.nativeStarted, false);
+  assert.equal(first.events.find(row => row.id === first.operation.eventStartId)?.type, 'stage');
+  assert.equal((await api.post('/api/operation',
+    {action: 'install-held', method: 'civswitch'})).status, 202);
+  const second = await untilDone(api);
+  assert.equal(second.operation.method, 'civswitch');
+  assert.ok(second.operation.eventStartId > first.operation.eventStartId);
+  const current = second.events.filter(row => row.id >= second.operation.eventStartId);
+  assert.equal(current[0].type, 'stage');
+  assert.equal(current.at(-1).type, 'failed');
+  assert.ok(current.every(row => row.id > first.operation.eventStartId));
+});
+
+test('native installer failure is visible before exit and stays uncertain after exit zero', async t => {
+  const run = await fsp.mkdtemp(path.join(os.tmpdir(), 'moader-setup-native-failure-'));
+  t.after(() => fsp.rm(run, {recursive: true, force: true}));
+  const shim = path.join(run, 'installer-shim');
+  const manifest = path.join(run, 'manifest.json');
+  await fsp.writeFile(manifest, '{}');
+  await fsp.writeFile(shim,
+    '#!/bin/sh\nprintf "Error: fixture-native-failure\\n" >&2\nsleep 1\nexit 0\n',
+    {mode: 0o755});
+  const seed = {schema: 1, prefs: {lastMethod: 'ns2jb', console: '', listenerPort: 31337},
+    operation: null, nativeHistory: [], events: [], sequence: 0, prepared: {},
+    selectedCapture: null, standalonePayloadDir: null,
+    selectedSession: {method: 'ns2jb', run, manifest, command: [shim]},
+    host: null, sdPlan: null, sdResult: null, bootEpoch: 1, uncertain: null};
+  const api = await startController(t, seed);
+  assert.equal((await api.post('/api/operation',
+    {action: 'install-held', method: 'ns2jb'})).status, 202);
+  let detected;
+  for (let i = 0; i < 40; i++) {
+    detected = await (await api.get('/api/state')).json();
+    if (detected.operation.detectedFailure) break;
+    await sleep(50);
+  }
+  assert.equal(detected.operation.status, 'running');
+  assert.match(detected.operation.firstError, /fixture-native-failure/);
+  assert.ok(detected.events.some(row => row.type === 'reported-failure'));
+  const done = await untilDone(api);
+  assert.equal(done.operation.status, 'uncertain');
+  assert.match(done.operation.firstError, /fixture-native-failure/);
+  assert.equal(done.bootAttempts.length, 1);
+});
+
 test('Finder-style macOS PATH discovers installed zstd for SDK preparation', async t => {
   if (process.platform !== 'darwin' ||
       !['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin'].some(folder =>

@@ -246,6 +246,20 @@ details[open] > summary { margin-bottom: 12px; }
 .activity summary { font-size: var(--small); padding: 5px 2px; }
 .activity details[open] { grid-column: 1/-1; grid-row: 3; margin-top: 8px; }
 .activity:has(details[open]) .activity-top { grid-column: 1/-1; }
+.activity:has(.live-log:not([hidden])) { max-height: min(44dvh, 410px); }
+.live-log { grid-column: 1/-1; grid-row: 3; min-width: 0; min-height: 0; margin-top: 10px; border-top: 1px solid var(--rule); }
+.live-log-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; padding: 10px 2px 7px; }
+.live-log-head strong { font-size: var(--label); font-weight: 630; }
+.live-log-head span { color: var(--soft); font-size: var(--caption); font-variant-numeric: tabular-nums; }
+.live-log-lines { height: clamp(110px, 21dvh, 210px); min-height: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--rule); border-radius: 8px; background: var(--panel); scrollbar-width: thin; }
+.live-log-row { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 12px; padding: 6px 10px; font-size: var(--caption); line-height: 1.4; overflow-wrap: anywhere; }
+.live-log-row + .live-log-row { border-top: 1px solid var(--rule); }
+.live-log-row time { color: var(--soft); font-variant-numeric: tabular-nums; }
+.live-log-row .log-source { color: var(--mint); font-weight: 630; }
+.live-log-row .log-message { min-width: 0; white-space: pre-wrap; }
+.live-log-row.status .log-message { color: var(--paper); }
+.live-log-row.failed .log-message, .live-log-row.uncertain .log-message { color: var(--error); }
+.activity:has(.live-log:not([hidden])) details { grid-column: 1/-1; grid-row: 4; }
 .event-list { max-height: 20vh; overflow: auto; }
 .event { display: flex; gap: 12px; padding: 8px 2px; border-top: 1px solid var(--rule); color: var(--soft); font-size: var(--caption); overflow-wrap: anywhere; }
 .event time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -313,6 +327,7 @@ details[open] > summary { margin-bottom: 12px; }
     .shell { height: auto; min-height: 100vh; grid-template-rows: auto 1fr auto; }
     .workspace, .rail, main, .activity { overflow: visible; }
     .activity { max-height: none; }
+    .activity:has(.live-log:not([hidden])) { max-height: none; }
 }
 @media (prefers-reduced-motion: no-preference) {
     .nav-item, .task-row, .quiet, .primary, .secondary, .method {

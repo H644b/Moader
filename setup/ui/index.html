@@ -77,6 +77,13 @@
         <span id="activityState" class="state-label"></span>
       </div>
       <button id="activityRoute" class="activity-link" type="button" hidden></button>
+      <section id="liveLog" class="live-log" aria-label="Live setup log" hidden>
+        <div class="live-log-head">
+          <strong id="liveLogTitle">Live setup log</strong>
+          <span id="liveLogTiming"></span>
+        </div>
+        <div id="liveLogLines" class="live-log-lines" role="log" aria-label="Current setup activity" aria-live="off" tabindex="0"></div>
+      </section>
       <details id="technicalDetails">
         <summary>Technical details and recent events</summary>
         <div id="eventList" class="event-list"></div>
