@@ -11,6 +11,7 @@ const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 const policy = require('./host-policy.cjs');
 const hostTools = require('./host-tools.cjs');
+const launcherStatus = require('./launcher-status.cjs');
 
 const root = path.resolve(__dirname, '..');
 const releaseSpec = JSON.parse(fs.readFileSync(path.join(root, 'config/release.json')));
@@ -67,6 +68,25 @@ test('host policy rejects unbundled architectures and native Windows', () => {
   assert.equal(policy.supported('ns2jb', 'linux', 'riscv64'), false);
 });
 
+test('Seedsow launcher status accepts the current read-only banner', () => {
+  const banner = 'n2h HTTP server (seedsow)\nPOST /eval body=<lua>\n' +
+    'PUT|POST /save?path=<name> body=<file>\nDELETE /delete?path=<name>\n';
+  assert.equal(launcherStatus(200, banner), true);
+  assert.equal(launcherStatus(200, 'status: ok\n'), true);
+  assert.equal(launcherStatus(200, 'n2h HTTP server (other)\n'), false);
+  assert.equal(launcherStatus(404, banner), false);
+});
+
+test('Finder-style macOS PATH discovers installed zstd for SDK preparation', async t => {
+  if (process.platform !== 'darwin' ||
+      !['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin'].some(folder =>
+        fs.existsSync(path.join(folder, 'zstd'))))
+    return t.skip('requires macOS with a standard zstd installation');
+  const api = await startController(t, null, {PATH: '/usr/bin:/bin:/usr/sbin:/sbin'});
+  const state = await (await api.get('/api/state')).json();
+  assert.match(state.system.zstd, /Zstandard|zstd/i);
+});
+
 test('Linux tool handoff keeps WSL names and executable paths as arguments', () => {
   const apt = hostTools.managers.find(item => item.name === 'apt');
   const steps = hostTools.plan({wsl: true, distro: 'Ubuntu é test',
@@ -92,7 +112,8 @@ test('wrong component hash is shown before a device action', async t => {
   const kit = await fsp.mkdtemp(path.join(os.tmpdir(), 'moader-setup-kit-'));
   t.after(() => fsp.rm(kit, {recursive: true, force: true}));
   const release = JSON.parse(await fsp.readFile(path.join(root, 'config/release.json')));
-  const files = ['config/release.json', 'setup/controller.cjs', 'setup/host-policy.cjs',
+  const files = ['config/release.json', 'setup/controller.cjs', 'setup/launcher-status.cjs',
+    'setup/host-policy.cjs',
     'setup/host-tools.cjs',
     ...Object.values(release.binaries).map(x => x.source),
     release.patched_hen.source, release.patched_ro.source,
@@ -115,7 +136,7 @@ test('wrong component hash is shown before a device action', async t => {
     {action: 'export-sd', kind: 'app'})).status, 202);
   const failed = await untilDone(noTools);
   assert.equal(failed.operation.status, 'failed');
-  assert.match(failed.operation.firstError, /Python preparation helper is missing/i);
+  assert.match(failed.operation.firstError, /app and resident do not match this release/i);
 });
 
 test('loopback token, origin, kit identity, SD export and support copy', async t => {

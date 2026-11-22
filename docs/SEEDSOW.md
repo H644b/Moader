@@ -8,7 +8,7 @@ Download the [v4.0.0 backend ZIP](https://github.com/H644b/Moader/releases/downl
 
 - A Switch 2 with Seedsow Lullaby Demo or the full game and a working launcher save for **that edition**. The full game's save format differs from the Demo's; do not restore a Demo launcher save over a full-game save. Follow the [upstream Seedsow setup](https://github.com/Malev0/seedsow-fs-kaihen#setup-once) if you do not already have that entrypoint. This guide does not change or replace your save.
 - An Apple Silicon Mac or Linux x86_64 host, including WSL2, able to reach the Switch on the local network. The game's HTTP launcher must be reachable from that host after you press **Y**.
-- Python 3.10 or newer, native POSIX Node.js **24**, Git, AArch64 capable `clang`, and room for the local SDK. Linux also needs `zstd` for the pinned packages. `tools/setup-devkit.py` installs the native SDK inside the kit without changing system packages. A source rebuild additionally needs `make`.
+- Python 3.10 or newer, native POSIX Node.js **24**, Git, AArch64 capable `clang`, `zstd` for the pinned packages, and room for the local SDK. `tools/setup-devkit.py` installs the native SDK inside the kit without changing system packages. A source rebuild additionally needs `make`.
 - A native Switch 2 game you can use for the documented hold-R hbmenu entry after installation.
 
 Extract the backend ZIP and run the remaining commands from its outer folder, the one containing `START_HERE.txt` and `tools/`. Developers rebuilding from source can use the [repository](https://github.com/H644b/Moader) and [build guide](BUILDING.md).

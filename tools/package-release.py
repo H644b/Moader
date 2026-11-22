@@ -155,7 +155,7 @@ def public_source(root):
                      'Moader Setup.app/Contents/MacOS/Moader Setup',
                      'Moader Setup.app/Contents/Info.plist',
                      'setup/launch.sh', 'setup/windows-launch.ps1', 'setup/wsl-entry.sh',
-                     'setup/controller.cjs', 'setup/host-policy.cjs',
+                     'setup/controller.cjs', 'setup/launcher-status.cjs', 'setup/host-policy.cjs',
                      'setup/host-tools.cjs',
                      'setup/desktop-app/package.json', 'setup/desktop-app/main.cjs',
                      'setup/bridge.cjs', 'setup/export-sd.py',

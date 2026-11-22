@@ -18,7 +18,7 @@ Existing optional files in `vendor/kaihen-mo/programs`, including Moader diagnos
 
 ## Build from a clean source checkout
 
-The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114 into the checkout. Linux needs `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
+The bundled SDK setup targets **Apple Silicon macOS and Linux x86_64**, including WSL2 x86_64. It provisions checksum-pinned, host-specific devkitA64 GCC 16.1.0, switch-tools 1.13.1 and ounce-devkit 20261114 into the checkout. Both hosts need `zstd` to extract the packages. Intel macOS and Linux arm64 cross-builds are not configured by these scripts. Install Python 3.10+, Node 22+ and `make`; use native POSIX Node 24 for the later live installation.
 
 If devkitPro's official endpoint returns HTTP 403 for the architecture-independent `dkp-toolchain-vars` 1.0.5 package, `setup-devkit.py` tries one [alternate host](https://wii.leseratte10.de/devkitPro/other-stuff/dkp-toolchain-vars-1.0.5-1-any.pkg.tar.zst). This exception applies only to that exact URL and SHA-256 `e6e26af3147061090572b61c576114ee9a45d5ed8c77c7d93cc5f5559198c288`; the downloaded bytes must match before extraction.
 

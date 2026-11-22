@@ -170,14 +170,17 @@ function boot() {
 function prepareStep(ready) {
   const s = snapshot.system;
   const missing = [!s.git && 'Git', method === 'seedsow' && !s.clang && 'clang',
-    method === 'seedsow' && s.os === 'linux' && !s.zstd && 'zstd'].filter(Boolean);
+    method === 'seedsow' && !s.zstd && 'zstd'].filter(Boolean);
+  const macToolchainMissing = s.os === 'darwin' && missing.some(name => name !== 'zstd');
   const handoff = missing.length ? note('Computer tool needed',
     'Setup needs ' + safe(missing.join(', ')) + ' for this method. ' +
-    (s.os === 'darwin' ? 'Open the macOS tools installer, finish its prompts, then return here.' :
+    (s.os === 'darwin' ? (macToolchainMissing ? 'Open the macOS tools installer for Git and clang. ' : '') +
+      (missing.includes('zstd') ? 'Install zstd with your macOS package manager, then reopen Setup. ' : '') +
+      'Return here when the named tools are available.' :
       s.wsl ? 'Install them into the selected WSL2 distribution through its signed package manager. This changes that distribution’s system packages; no Switch action starts.' :
         'Install them through the signed Linux package manager. A graphical administrator prompt may appear. No Switch action starts.'),
     'warning') + '<div class="button-row">' +
-    (s.os === 'darwin' ? button('Open macOS tools installer', 'dependency-handoff', 'secondary') :
+    (s.os === 'darwin' ? (macToolchainMissing ? button('Open macOS tools installer', 'dependency-handoff', 'secondary') : '') :
       button(s.wsl ? 'Install tools in WSL2' : 'Install missing Linux tools',
         'install-host-tools', 'secondary') + (s.wsl ? '' :
         button('Open Linux Software app', 'dependency-handoff', 'quiet'))) +
