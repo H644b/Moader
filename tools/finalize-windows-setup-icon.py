@@ -85,14 +85,15 @@ def main():
         revised.replace(path)
     manifest['assets'][name] = {'bytes': path.stat().st_size, 'sha256': sha(path)}
     manifest['windowsIconEmbedded'] = True
-    manifest_path.write_text(json.dumps(manifest, indent=2) + '\n')
+    manifest_path.write_bytes((json.dumps(manifest, indent=2) + '\n').encode('utf-8'))
     checksums = directory / 'SHA256SUMS.txt'
     listed = [f'Moader-{manifest["tag"]}.zip', f'Moader-backend-{manifest["tag"]}.zip',
               *manifest['setupGuiAssets'].values(), 'Moader.nro', 'moader.nso',
               'release-manifest.json']
     require(set(listed) == set(manifest['assets']) | {'release-manifest.json'},
             'Final release asset list differs from the manifest')
-    checksums.write_text(''.join(sha(directory / item) + '  ' + item + '\n' for item in listed))
+    checksums.write_bytes(''.join(sha(directory / item) + '  ' + item + '\n'
+                                  for item in listed).encode('ascii'))
     for item in listed:
         asset = directory / item
         require(asset.is_file(), 'Final release asset is missing: ' + item)
