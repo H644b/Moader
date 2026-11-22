@@ -326,8 +326,14 @@ def paired_setup_checks(node, work):
         require(command==[sys.executable,str(root/'tools/package-homebrew.py')] and kwargs.get('check') is True,'Unexpected package child')
         (root/'dist/Moader-homebrew.zip').write_bytes(zipped({'switch/Moader.nro':(root/'dist/Moader.nro').read_bytes(),
                                                             'kaihen/plugins/moader.nso':(root/'dist/moader.nso').read_bytes()}))
+    # This fixture validates the paired native ZIP and manifest. Keep unrelated
+    # desktop-runtime downloads out of its isolated, offline source tree.
     with patch.object(package,'ROOT',root),patch.object(package,'public_source',return_value=('0'*40,exported)),\
          patch.object(package,'git',return_value=b'1700000000'),patch.object(package.subprocess,'run',side_effect=app_zip),\
+         patch.object(package,'host_node_runtimes',return_value={}),\
+         patch.object(package,'host_uv_runtimes',return_value={}),\
+         patch.object(package,'host_electron_runtimes',return_value={}),\
+         patch.object(package.urllib.request,'urlopen',side_effect=AssertionError('Paired fixture must remain offline')),\
          patch.object(sys,'argv',['package-release.py','--output',str(output)]):
         package.main()
     with zipfile.ZipFile(output/'Moader-backend-v0.0.0-fixture.zip') as archive:
