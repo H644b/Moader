@@ -2,7 +2,7 @@
 
 ## v4.0.0 — Setup and in-app updates
 
-- Add **Moader Setup** to the backend ZIP with desktop launchers for macOS, Linux and Windows with WSL2. It guides host preparation, SD copying, connection checks and support export using the existing checked installers.
+- Publish **Moader Setup** as a separate, self-contained ZIP with desktop launchers for macOS, Linux and Windows with WSL2. The smaller backend ZIP retains the command-line tools and matched native files. Setup guides host preparation, SD copying, connection checks and support export using the existing checked installers.
 - Add **Settings → Updates** to the console app for manual checks and optional checks at launch and every six hours. Updates verify both app and resident downloads before installation and can resume after interruption.
 - Match the Setup window to Moader's console and browser theme. Keep the pinned kaiHEN and Seedsow A/B components. The new Setup and update flows have host validation; the exact v4.0.0 release pair and desktop kit have no Switch 2 installation result. [Release notes](docs/releases/v4.0.0.md).
 

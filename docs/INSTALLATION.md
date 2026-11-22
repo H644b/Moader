@@ -2,12 +2,13 @@
 
 Choose a download based on what is already running on your Switch. Use the app and resident plugin from the same release.
 
-The v4.0.0 backend ZIP includes [Moader Setup](SETUP_GUI.md), a desktop app for guided installation, SD copying, connection checks and support export. Extract the whole ZIP and open **Moader Setup.app** on macOS, **Moader Setup** on Linux, or **Moader Setup Windows/Moader Setup.exe** on Windows with WSL2. The command-line routes below remain available.
+For guided installation, SD copying, connection checks and support export, download the separate, self-contained [Moader Setup ZIP](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0.zip). Extract it and open **Moader Setup.app** on macOS, **Moader Setup** on Linux, or **Moader Setup Windows/Moader Setup.exe** on Windows with WSL2. The smaller backend ZIP provides the command-line routes below. [Setup guide](SETUP_GUI.md)
 
 | What you need | Download |
 | --- | --- |
 | Install or update Moader on an existing compatible backend | [Moader-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-v4.0.0.zip) |
-| Set up the backend for this boot | [Moader-backend-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) |
+| Guided setup for this boot | [Moader-Setup-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-Setup-v4.0.0.zip) |
+| Command-line backend kit | [Moader-backend-v4.0.0.zip](https://github.com/H644b/Moader/releases/download/v4.0.0/Moader-backend-v4.0.0.zip) |
 
 ## Copy or update the console app
 
@@ -24,7 +25,7 @@ Copying the plugin puts the new file on SD. If Moader is already running in the 
 
 ## Start the backend for this boot
 
-Choose the method you use to start homebrew. Use the v4.0.0 backend ZIP from the download table.
+Choose the method you use to start homebrew. The Setup and command-line ZIPs each include the matching backend files; download only the one you intend to use.
 
 | Method | Computer | Guide |
 | --- | --- | --- |

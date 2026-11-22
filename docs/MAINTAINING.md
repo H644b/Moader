@@ -4,13 +4,14 @@ Package a clean, committed source tree with the exact binaries recorded in `conf
 
 ## Release layout
 
-**v4.0.0** adds the Moader Setup desktop app and in-app updates to the Store and Seedsow standalone backend kit. The v3.0.0 release introduced the source-qualified standalone implementation and prebuilt bootstrap. Use `sourceCommit` in the v4.0.0 [release manifest](https://github.com/H644b/Moader/releases/download/v4.0.0/release-manifest.json) to identify the exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
+**v4.0.0** adds the separate Moader Setup desktop download and in-app updates to the Store and Seedsow standalone backend kit. The v3.0.0 release introduced the source-qualified standalone implementation and prebuilt bootstrap. Use `sourceCommit` in the v4.0.0 [release manifest](https://github.com/H644b/Moader/releases/download/v4.0.0/release-manifest.json) to identify the exact source. The protected v0.2.0 tag predates the installed-icon asset refresh; its GitHub source archive is the original v0.2.0 source. The v0.1.3 tag also predates its final refreshed assets; that older release manifest identifies their later source commit.
 
 | Artifact | Contents |
 | --- | --- |
 | Public source | Audited source allowlist, tests, documentation, license notices and portable native prebuilt assets |
 | `Moader-v4.0.0.zip` | SD layout: `switch/Moader.nro`, `kaihen/plugins/moader.nso`, release docs/licenses/manifest |
-| `Moader-backend-v4.0.0.zip` | Public host source, Moader Setup launchers and pinned Node/uv/Electron desktop runtimes, matched Moader/kaiHEN binaries, pinned official kaiHEN archive, complete regular bundle, and `prebuilt/standalone-bootstrap/{bootstrap.bin,proof.json}`; outer folder includes `START_HERE.txt` |
+| `Moader-backend-v4.0.0.zip` | Smaller command-line host kit: public source and tools, matched Moader/kaiHEN binaries, pinned official kaiHEN archive, complete regular bundle, and `prebuilt/standalone-bootstrap/{bootstrap.bin,proof.json}`; no Setup app or desktop runtimes |
+| `Moader-Setup-v4.0.0.zip` | Self-contained guided desktop kit: the backend files plus Moader Setup launchers and pinned Node/uv/Electron runtimes for supported hosts |
 | `Moader.nro`, `moader.nso` | Standalone copies of the matched app and resident |
 | `SHA256SUMS.txt` | Checksums of the packaged release assets |
 
@@ -51,7 +52,7 @@ For a matching release checkout, audit and commit the source before packaging:
 python3 tools/package-release.py
 ```
 
-The packager reads the source from `HEAD`, verifies the component proof and checks the exported public tree. It writes both ZIPs, the standalone programs, `release-manifest.json` and `SHA256SUMS.txt` under `dist/releases/`. Use an empty output directory. Review the final bytes before release and record the source commit with the downloads. When refreshing assets on an existing tag, retain the tag and disclose that the ZIP source commit differs from GitHub's automatic source archives.
+The packager reads the source from `HEAD`, verifies the component proof and checks the exported public tree. It writes the app, backend and Setup ZIPs, the standalone programs, `release-manifest.json` and `SHA256SUMS.txt` under `dist/releases/`. Use an empty output directory. Review the final bytes before release and record the source commit with the downloads. When refreshing assets on an existing tag, retain the tag and disclose that the ZIP source commit differs from GitHub's automatic source archives.
 
 ## Native changes
 
@@ -70,7 +71,7 @@ When changing runtime log layout, keep `include/moader/runtime_log_wire.h`, the 
 
 ## Verify the exported artifacts
 
-The in-review Moader Setup source adds a local controller, a dedicated Electron desktop window, graphical launchers, pinned Node 24 executables for macOS/Linux arm64/x86_64, and uv for kit-scoped Python. `tools/package-release.py` verifies the official Node, uv and Electron runtime archives and includes their license notices. It lists the desktop app in `START_HERE.txt`. Keep `setup/desktop-app/`, `setup/host-policy.cjs`, `setup/host-tools.cjs`, `setup/launch.sh`, `setup/windows-launch.ps1`, `setup/wsl-entry.sh`, the `Moader Setup` launchers, `setup/licenses/` and `docs/SETUP_GUI.md` in public source. Do not commit `host-runtimes/` binaries to Git; the packager inserts them into the backend ZIP. A public macOS release still needs project signing and notarization. Test the extracted ZIP by opening its app from a moved folder, including a path with spaces or non-ASCII characters, and by inspecting its support export. Preserve the CLI fallback and the existing native proof gates.
+Moader Setup uses a local controller, a dedicated Electron desktop window, graphical launchers, pinned Node 24 executables for macOS/Linux arm64/x86_64, and uv for kit-scoped Python. `tools/package-release.py` verifies the official Node, uv and Electron runtime archives and includes their license notices. It lists the desktop app in the Setup ZIP's `START_HERE.txt`. Keep `setup/desktop-app/`, `setup/host-policy.cjs`, `setup/host-tools.cjs`, `setup/launch.sh`, `setup/windows-launch.ps1`, `setup/wsl-entry.sh`, the `Moader Setup` launchers, `setup/licenses/` and `docs/SETUP_GUI.md` in public source. Do not commit `host-runtimes/` binaries to Git; the packager inserts them into the separate Setup ZIP. The command-line backend ZIP omits the Setup app and its runtimes. A public macOS release still needs project signing and notarization. Test the extracted Setup ZIP by opening its app from a moved folder, including a path with spaces or non-ASCII characters, and by inspecting its support export. Preserve the CLI fallback and the existing native proof gates.
 
 Run `node --test setup/test-controller.cjs` against matched kit inputs for host-only token, restart, uncertainty, SD-export, hash and redaction checks. Use `tools/test-ns2jb-host.py --online --node /absolute/path/to/node24` for the existing source-qualified SmileBASIC path. Keep host-only and actual-console results in separate validation headings.
 

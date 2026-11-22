@@ -339,9 +339,26 @@ def paired_setup_checks(node, work):
     with zipfile.ZipFile(output/'Moader-backend-v0.0.0-fixture.zip') as archive:
         prefix='Moader-backend-v0.0.0-fixture/'
         require(archive.read(prefix+'vendor/kaihen-mo/hen/main')==hen and archive.read(prefix+'vendor/kaihen-mo/bootstrap.bin')==bootstrap,'Host ZIP omitted or changed paired binary')
+        require(b'Moader-Setup-v0.0.0-fixture.zip' in archive.read(prefix+'START_HERE.txt'),
+                'Command-line kit did not direct users to the separate Setup asset')
+    with zipfile.ZipFile(output/'Moader-Setup-v0.0.0-fixture.zip') as archive:
+        prefix='Moader-Setup-v0.0.0-fixture/'
+        require(archive.read(prefix+'vendor/kaihen-mo/hen/main')==hen and
+                b'Open Moader Setup' in archive.read(prefix+'START_HERE.txt'),
+                'Standalone Setup archive omitted the matched backend or entry instructions')
+    require(all(package.setup_only_member(name) for name in (
+                'Moader Setup', 'Moader Setup.app/Contents/Info.plist',
+                'Moader Setup Windows/Moader Setup.exe', 'setup/controller.cjs',
+                'host-runtimes/node-v24.22.3/linux-x64/node')) and
+            not package.setup_only_member('tools/setup-backend.py') and
+            not package.setup_only_member('setup/licenses/uv-LICENSE-MIT.txt'),
+            'Setup-only archive partition changed')
     recorded=json.loads((output/'release-manifest.json').read_text())
     require(recorded['patchedBootstrapSha256']==sha(bootstrap) and recorded['kaihenProtocolVersion']==7 and
-            recorded['kaihenConsoleRetestPassed'] is False and recorded['appAndResidentHardwareTested'] is False,'Release manifest overstates pair/hardware validation')
+            recorded['kaihenConsoleRetestPassed'] is False and recorded['appAndResidentHardwareTested'] is False and
+            recorded['setupGuiBundled'] is False and recorded['setupGuiSelfContained'] is True and
+            recorded['setupGuiAsset']=='Moader-Setup-v0.0.0-fixture.zip',
+            'Release manifest overstates pair/hardware validation or misidentifies Setup')
     with patch.dict(globals(),{'ROOT':work/'missing candidate root'}),\
          patch.object(urllib.request,'urlopen',side_effect=AssertionError('Candidate mode must not download a baseline')):
         try:release_binaries(root,work);raise AssertionError('Missing candidate silently accepted')

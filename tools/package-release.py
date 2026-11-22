@@ -45,6 +45,15 @@ HOST_ELECTRON_ARCHIVES = {
     'win32-x64': '2ba6223afa9121f42831fefe92c434334907540165294fc56697449d12e7cfe9',
 }
 
+SETUP_SOURCE_LAUNCHERS = {'Moader Setup', 'Moader Setup Windows.cmd'}
+
+
+def setup_only_member(name):
+    return (name in SETUP_SOURCE_LAUNCHERS or name.startswith(('Moader Setup.app/',
+                                                               'Moader Setup Windows/',
+                                                               'host-runtimes/')) or
+            name.startswith('setup/') and not name.startswith('setup/licenses/'))
+
 
 class ArchiveMember(NamedTuple):
     archive: Path
@@ -408,7 +417,8 @@ def main():
     timestamp = datetime.datetime.fromtimestamp(int(git(root, 'show', '-s', '--format=%ct', 'HEAD')), datetime.timezone.utc).timetuple()[:6]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    names = [f'Moader-{tag}.zip', f'Moader-backend-{tag}.zip', 'Moader.nro', 'moader.nso',
+    names = [f'Moader-{tag}.zip', f'Moader-backend-{tag}.zip',
+             f'Moader-Setup-{tag}.zip', 'Moader.nro', 'moader.nso',
              'release-manifest.json', 'SHA256SUMS.txt']
     require(not any((output / name).exists() for name in names), 'Use an empty release output directory')
     # The existing app packager supplies its user instructions and notices.
@@ -416,29 +426,28 @@ def main():
     with zipfile.ZipFile(root / 'dist/Moader-homebrew.zip') as packaged:
         app_files = {name: (packaged.read(name), 0o100644) for name in packaged.namelist()}
     write_zip(output / names[0], app_files, timestamp)
-    prefix = f'Moader-backend-{tag}/'
-    host = {prefix + name: value for name, value in source.items()}
+    host = dict(source)
     for name, value in host_node_runtimes(root).items():
-        host[prefix + name] = value
+        host[name] = value
     for name, value in host_uv_runtimes(root).items():
-        host[prefix + name] = value
+        host[name] = value
     for name, value in host_electron_runtimes(root).items():
-        host[prefix + name] = value
-    host[prefix + 'vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
+        host[name] = value
+    host['vendor/kaihen-mo/hen/main'] = (hen, 0o100644)
     if bootstrap is not None:
-        host[prefix + 'vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
+        host['vendor/kaihen-mo/bootstrap.bin'] = (bootstrap, 0o100644)
     if ro is not None:
-        host[prefix + 'vendor/kaihen-mo/ro/main'] = (ro, 0o100644)
-    host[prefix + 'dist/Moader.nro'] = (app, 0o100644)
-    host[prefix + 'dist/moader.nso'] = (service, 0o100644)
+        host['vendor/kaihen-mo/ro/main'] = (ro, 0o100644)
+    host['dist/Moader.nro'] = (app, 0o100644)
+    host['dist/moader.nso'] = (service, 0o100644)
     full_kaihen, full_count = full_kaihen_bundle(root, app, service, ro, hen, bootstrap, timestamp)
-    host[prefix + 'research/artifacts/kaiHEN-20261114c.zip'] = (
+    host['research/artifacts/kaiHEN-20261114c.zip'] = (
         (root / 'research/artifacts/kaiHEN-20261114c.zip').read_bytes(), 0o100644)
-    host[prefix + 'bundles/kaiHEN-Moader-20261114c.zip'] = (full_kaihen, 0o100644)
+    host['bundles/kaiHEN-Moader-20261114c.zip'] = (full_kaihen, 0o100644)
     if standalone is not None:
-        host[prefix + 'prebuilt/standalone-bootstrap/bootstrap.bin'] = (standalone[0], 0o100644)
-        host[prefix + 'prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
-    start_here = f'''Moader backend kit {tag}
+        host['prebuilt/standalone-bootstrap/bootstrap.bin'] = (standalone[0], 0o100644)
+        host['prebuilt/standalone-bootstrap/proof.json'] = (standalone[1], 0o100644)
+    start_here = f'''Moader Setup {tag}
 
 Open Moader Setup in this folder. Its desktop app checks the computer and guides you through
 the current-boot backend, standalone preparation, SD copies and support export.
@@ -483,12 +492,32 @@ Mod layout and controls: docs/USAGE.md
 Test results: docs/VALIDATION.md
 Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
 '''
-    host[prefix + 'START_HERE.txt'] = (start_here.encode(), 0o100644)
-    write_zip(output / names[1], host, timestamp)
+    setup_host = dict(host)
+    setup_host['START_HERE.txt'] = (start_here.encode(), 0o100644)
+    backend_host = {name: value for name, value in host.items() if not setup_only_member(name)}
+    backend_host['START_HERE.txt'] = (f'''Moader backend kit {tag}
+
+This kit has the matched app, resident service, patched kaiHEN files, and
+computer-side tools. It supports the command-line routes in docs/INSTALLATION.md.
+Open that guide and follow the method for your console and computer.
+
+For a guided desktop setup instead, download the separate self-contained
+Moader-Setup-{tag}.zip asset. It includes this backend and its own runtimes;
+you do not need to download both ZIPs.
+
+The on-console Seedsow A route requires a qualified local FS capture. No
+console capture, derived payload, or private runtime state is included.
+
+Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
+'''.encode(), 0o100644)
+    write_zip(output / names[1], {f'Moader-backend-{tag}/' + name: value
+                                  for name, value in backend_host.items()}, timestamp)
+    write_zip(output / names[2], {f'Moader-Setup-{tag}/' + name: value
+                                  for name, value in setup_host.items()}, timestamp)
     (output / 'Moader.nro').write_bytes(app)
     (output / 'moader.nso').write_bytes(service)
     records = {name: {'bytes': (output / name).stat().st_size,
-                      'sha256': sha((output / name).read_bytes())} for name in names[:4]}
+                      'sha256': sha((output / name).read_bytes())} for name in names[:5]}
     (output / 'release-manifest.json').write_text(json.dumps({
         'schema': 1, 'version': spec['version'], 'tag': tag, 'prerelease': spec['prerelease'],
         'repository': spec['repository'], 'sourceCommit': commit,
@@ -505,7 +534,9 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         'patchedFullKaihenEntries': full_count,
         'standaloneBootstrapBundled': standalone is not None,
         'standaloneFsPayloadBundled': False,
-        'setupGuiBundled': True,
+        'setupGuiBundled': False,
+        'setupGuiAsset': names[2],
+        'setupGuiSelfContained': True,
         'setupGuiType': 'desktop-app',
         'setupNodeVersion': HOST_NODE_VERSION,
         'setupUvVersion': HOST_UV_VERSION,
@@ -518,7 +549,7 @@ Corresponding source: https://github.com/{spec['repository']}/tree/{commit}
         'assets': records, 'validation': 'docs/VALIDATION.md',
     }, indent=2) + '\n')
     (output / 'SHA256SUMS.txt').write_text(''.join(
-        sha((output / name).read_bytes()) + '  ' + name + '\n' for name in names[:5]))
+        sha((output / name).read_bytes()) + '  ' + name + '\n' for name in names[:6]))
     print('Packaged and verified ' + tag + ' from source commit ' + commit)
     print('Release assets: ' + str(output))
 
